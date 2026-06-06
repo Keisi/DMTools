@@ -49,6 +49,35 @@ contract is its `Models/*` + `Entities/Enums/*`.
 - A clean fix for both would be a backend PATCH/partial-update endpoint or exposing the
   stored addition deltas on `CharacterResponse`.
 
+## Done — INCOMING #4 (level-up Phase 3: Fighting Style / Expertise / Metamagic)
+Implemented + **live-verified** (Paladin 1→2: picked Dueling via the new picker →
+`fightingStyles:[{name:"Dueling"}]`, sheet shows it). All gates green (build, lint,
+`oby verify` delta 0).
+- **types.ts:** `SelectionType` 4/5/6; `FightingStyleResponse`/`MetamagicResponse`;
+  `CharacterRequest.fightingStyleIds`/`metamagicIds`; `CharacterResponse.fightingStyles`/
+  `metamagics`; plan `featureChoices[]` (`FeatureChoiceResponse`); apply `featureChoices[]`
+  (`FeatureChoiceApply`).
+- **endpoints.ts:** `reference.fightingStyles()` / `reference.metamagics()`.
+- **LevelUpDialog.tsx:** renders a `FeatureChoice` picker per plan entry (type 4/6 from
+  `selection.options`; type 5 Expertise from the character's proficient skills — new
+  `skills` prop); validation + "still needed" wiring; echoes `featureChoices` on apply.
+- **CharacterSheet.tsx:** new self-hiding `SubFeaturesBlock` (Fighting Styles / Metamagic);
+  passes `skills` to the dialog. **HP/AC breakdown tooltips** now render the real component
+  math from `hitPointBreakdown`/`armorClassBreakdown` (closes the #3 leftover TODO).
+- **CharacterBuilder.tsx:** edit-mode carries `fightingStyleIds`/`metamagicIds` from the
+  loaded character so a PUT doesn't wipe them (same pattern as spells/status effects).
+
+### New caveat (pre-existing, now more impactful)
+Edit mode resubmits `skillProficiencies` all as **Proficient**, so editing a character that
+has **Expertise** (now reachable via level-up Rogue/Bard) downgrades those skills to
+Proficient. Documented deferral (see "Edit-mode deferrals"); the clean fix is the same
+backend partial-update/delta exposure noted there.
+
+### Not built (deferred, optional)
+Create-time Fighting Style / Metamagic in the builder (the `fightingStyleIds`/`metamagicIds`
+request fields exist + edit preserves them, but there's no wizard picker). Backend frames
+this as an edge case (a Fighter built directly at L3); level-up is the primary path.
+
 ## TODO — next session (newest first)
 - [ ] **Bug: wizard Back button not working** in New Character and Edit Character.
   Investigate `BuilderNav`'s `onBack` (`CharacterBuilder.steps.tsx`) /
@@ -70,11 +99,6 @@ contract is its `Models/*` + `Entities/Enums/*`.
   and surface what's missing — candidates: subclass-per-class (partially shown),
   background feature, HP/AC preview, proficiencies summary, narrative/appearance if
   added, edit-mode "what changed" hints. Decide what's genuinely useful vs. noise.
-- [ ] **HP & AC breakdown tooltips (was in-flight).** `types.ts` now carries
-  `hitPointBreakdown` / `armorClassBreakdown` on `CharacterResponse` (backend shipped
-  the fields). The sheet's `hpTip` / `acTip` in `src/routes/CharacterSheet.tsx` are
-  **still the partial versions** — upgrade them to render the real component math from
-  those fields.
 
 ## Still open / never-started (from FRONTEND-CONTEXT next-steps)
 - Homebrew `*CreateRequest` DTOs + POST flows when the Compendium gains "add homebrew".
@@ -99,9 +123,9 @@ contract is its `Models/*` + `Entities/Enums/*`.
 
 ## Coordination files
 - `FRONTEND-REQUEST-class-proficiencies.md` (backend repo) — DONE.
-- `FRONTEND-REQUEST-hp-ac-breakdown.md` (backend repo) — fields shipped; frontend
-  tooltip wiring still TODO (above).
-- `INCOMING-FROM-BACKEND.md` (here) — backend's callback log.
+- `FRONTEND-REQUEST-hp-ac-breakdown.md` (backend repo) — DONE (tooltips now render
+  the real breakdown math).
+- `INCOMING-FROM-BACKEND.md` (here) — backend's callback log. #1–#4 all consumed.
 
 ## Not verified live this session
 The builder/edit/inventory/level-up changes passed `tsc` + eslint + `oby verify`

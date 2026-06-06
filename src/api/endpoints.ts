@@ -12,6 +12,7 @@ import type {
   CharacterResponse,
   ClassResponse,
   FeatResponse,
+  FightingStyleResponse,
   InventoryAddRequest,
   InventoryAttunementRequest,
   InventoryConsumeRequest,
@@ -20,6 +21,7 @@ import type {
   LevelUpApplyRequest,
   LevelUpPlanRequest,
   LevelUpPlanResponse,
+  MetamagicResponse,
   RaceResponse,
   SkillResponse,
   SpellResponse,
@@ -74,6 +76,9 @@ export const reference = {
   feats: () => api.get<FeatResponse[]>("/api/feats"),
   backgrounds: () => api.get<BackgroundResponse[]>("/api/backgrounds"),
   languages: () => api.get<LanguageResponse[]>("/api/languages"),
+  fightingStyles: () =>
+    api.get<FightingStyleResponse[]>("/api/fightingstyles"),
+  metamagics: () => api.get<MetamagicResponse[]>("/api/metamagics"),
   // ...armorcategories, weaponcategories, editions, statuseffects
 };
 

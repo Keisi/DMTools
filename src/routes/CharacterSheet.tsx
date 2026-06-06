@@ -13,6 +13,7 @@ import {
   type CharacterStatusEffectResponse,
   type EncumbranceResponse,
   type ItemResponse,
+  type NamedRef,
   type SpellRef,
   type SpellcastingResponse,
   type WeaponAttackResponse,
@@ -103,16 +104,27 @@ export default function CharacterSheet() {
   // Vital breakdown tooltips (from data already in the response).
   const dex = c.abilityScores.find((a) => a.name === "Dexterity");
   const perception = c.skills.find((s) => s.name === "Perception");
+  // Component math from the server-supplied breakdowns (always the DERIVED
+  // components, independent of any override — so the tooltip can show "derived
+  // would be X" even when an override is set).
+  const hb = c.hitPointBreakdown;
+  const hpDerivedLine = `Hit dice ${hb.fromHitDice} + CON ${fmtMod(
+    hb.fromConstitution,
+  )}${hb.other !== 0 ? ` + other ${fmtMod(hb.other)}` : ""} = ${hb.total}`;
   const hpTip =
     typeof c.hitPointsOverride === "number"
-      ? `Custom override ${c.maxHitPoints} (derived would be ${c.derivedMaxHitPoints})`
-      : "Derived from your hit dice + CON modifier per level";
+      ? `Custom override ${c.maxHitPoints} (derived ${c.derivedMaxHitPoints}: ${hpDerivedLine})`
+      : hpDerivedLine;
+  const ab = c.armorClassBreakdown;
+  const acDerivedLine = `${ab.source}: base ${ab.base} + DEX ${fmtMod(
+    ab.dexterity,
+  )}${ab.shield !== 0 ? ` + shield ${fmtMod(ab.shield)}` : ""}${
+    ab.other !== 0 ? ` + other ${fmtMod(ab.other)}` : ""
+  } = ${ab.total}`;
   const acTip =
     typeof c.armorClassOverride === "number"
-      ? `Custom override ${c.armorClass} (derived would be ${c.derivedArmorClass})`
-      : c.equippedArmor
-        ? `From ${c.equippedArmor.name}${c.equippedShield ? ` + ${c.equippedShield.name}` : ""}`
-        : "Unarmored: 10 + DEX modifier";
+      ? `Custom override ${c.armorClass} (derived ${c.derivedArmorClass}: ${acDerivedLine})`
+      : acDerivedLine;
   const initTip = dex
     ? `Initiative = Dexterity modifier (${fmtMod(abilityMod(dex.effective))})`
     : "Initiative = your Dexterity modifier";
@@ -268,6 +280,10 @@ export default function CharacterSheet() {
 
       <div className="sheet__cols">
         <FeaturesBlock features={c.features} />
+        <SubFeaturesBlock
+          fightingStyles={c.fightingStyles}
+          metamagics={c.metamagics}
+        />
         <TraitsBlock character={c} />
       </div>
 
@@ -281,6 +297,7 @@ export default function CharacterSheet() {
           characterId={c.id}
           classes={c.classes}
           abilityScores={c.abilityScores}
+          skills={c.skills}
           onClose={() => setLevelingUp(false)}
           onApplied={(updated) => {
             setC(updated);
@@ -535,6 +552,38 @@ function FeaturesBlock({ features }: { features: CharacterFeatureResponse[] }) {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+// Chosen sub-features (Fighting Styles / Metamagic) from level-up or creation.
+// Expertise is NOT here — it appears in the Skills block as a doubled bonus.
+function SubFeaturesBlock({
+  fightingStyles,
+  metamagics,
+}: {
+  fightingStyles: NamedRef[];
+  metamagics: NamedRef[];
+}) {
+  if (fightingStyles.length === 0 && metamagics.length === 0) return null;
+  return (
+    <section className="panel sheet__block">
+      <h3 className="sheet__block-title">Sub-features</h3>
+      <hr className="rule" />
+      <dl className="sheet__traits">
+        {fightingStyles.length > 0 && (
+          <>
+            <dt>Fighting Styles</dt>
+            <dd>{fightingStyles.map((f) => f.name).join(", ")}</dd>
+          </>
+        )}
+        {metamagics.length > 0 && (
+          <>
+            <dt>Metamagic</dt>
+            <dd>{metamagics.map((m) => m.name).join(", ")}</dd>
+          </>
+        )}
+      </dl>
     </section>
   );
 }

@@ -523,6 +523,14 @@ export default function CharacterBuilder() {
             source: s.source ?? undefined,
           }))
         : undefined;
+      // Sub-features (the wizard doesn't pick these — level-up does); preserve so
+      // a PUT doesn't drop a character's chosen fighting styles / metamagic.
+      payload.fightingStyleIds = original.fightingStyles.length
+        ? original.fightingStyles.map((f) => f.id)
+        : undefined;
+      payload.metamagicIds = original.metamagics.length
+        ? original.metamagics.map((m) => m.id)
+        : undefined;
       payload.personalityTraits = original.personalityTraits ?? undefined;
       payload.ideals = original.ideals ?? undefined;
       payload.bonds = original.bonds ?? undefined;

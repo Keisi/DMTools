@@ -4,13 +4,17 @@ import { characters, reference } from "../api/endpoints";
 import { ApiError } from "../api/client";
 import {
   LevelUpHitPointMode,
+  SelectionType,
+  SkillProficiencyLevel,
   type AbilityScoreResponse,
   type CharacterClassResponse,
   type CharacterResponse,
   type FeatResponse,
+  type FeatureChoiceResponse,
   type LevelUpApplyRequest,
   type LevelUpPlanResponse,
   type LevelUpSpellPoolEntryResponse,
+  type SkillBonusResponse,
 } from "../api/types";
 import "./LevelUpDialog.css";
 
@@ -28,12 +32,14 @@ export default function LevelUpDialog({
   characterId,
   classes,
   abilityScores,
+  skills,
   onClose,
   onApplied,
 }: {
   characterId: string;
   classes: CharacterClassResponse[];
   abilityScores: AbilityScoreResponse[];
+  skills: SkillBonusResponse[];
   onClose: () => void;
   onApplied: (updated: CharacterResponse) => void;
 }) {
@@ -57,6 +63,10 @@ export default function LevelUpDialog({
   const [subclassId, setSubclassId] = useState<string | null>(null);
   const [cantripIds, setCantripIds] = useState<string[]>([]);
   const [spellIds, setSpellIds] = useState<string[]>([]);
+  // Sub-feature picks (Fighting Style / Expertise / Metamagic), keyed by selectionId.
+  const [featureChoices, setFeatureChoices] = useState<Record<string, string[]>>(
+    {},
+  );
 
   // Feat catalog for the "take a feat instead of an ASI" choice (loaded once).
   const [feats, setFeats] = useState<FeatResponse[]>([]);
@@ -86,6 +96,7 @@ export default function LevelUpDialog({
         setSubclassId(null);
         setCantripIds([]);
         setSpellIds([]);
+        setFeatureChoices({});
       })
       .catch((err) => {
         if (!active) return;
@@ -136,8 +147,19 @@ export default function LevelUpDialog({
   const spellsOk =
     isUnset(plan?.spellChoices?.newSpells) ||
     spellIds.length === plan?.spellChoices?.newSpells;
+  // Each sub-feature picker must have exactly `choose` picks.
+  const featuresOk = (plan?.featureChoices ?? []).every(
+    (fc) => (featureChoices[fc.selection.id]?.length ?? 0) === fc.selection.choose,
+  );
   const canApply =
-    !!plan && hpOk && asiOk && subclassOk && cantripsOk && spellsOk && !busy;
+    !!plan &&
+    hpOk &&
+    asiOk &&
+    subclassOk &&
+    cantripsOk &&
+    spellsOk &&
+    featuresOk &&
+    !busy;
 
   // What's still required before Apply works — surfaced next to the button so a
   // disabled Apply (e.g. no subclass picked) isn't silent.
@@ -156,6 +178,18 @@ export default function LevelUpDialog({
         !spellsOk
           ? `${plan.spellChoices?.newSpells} spell(s) (${spellIds.length} chosen)`
           : null,
+        ...plan.featureChoices
+          .filter(
+            (fc) =>
+              (featureChoices[fc.selection.id]?.length ?? 0) !==
+              fc.selection.choose,
+          )
+          .map(
+            (fc) =>
+              `${fc.featureName}: ${fc.selection.choose} (${
+                featureChoices[fc.selection.id]?.length ?? 0
+              } chosen)`,
+          ),
       ].filter(Boolean)
     : [];
 
@@ -165,6 +199,17 @@ export default function LevelUpDialog({
       if (amount <= 0) delete next[statId];
       else next[statId] = amount;
       return next;
+    });
+  }
+
+  // Toggle a sub-feature option, capping the pick count at the selection's `choose`.
+  function toggleFeature(selectionId: string, optionId: string, choose: number) {
+    setFeatureChoices((prev) => {
+      const cur = prev[selectionId] ?? [];
+      if (cur.includes(optionId))
+        return { ...prev, [selectionId]: cur.filter((x) => x !== optionId) };
+      if (cur.length >= choose) return prev;
+      return { ...prev, [selectionId]: [...cur, optionId] };
     });
   }
 
@@ -193,6 +238,12 @@ export default function LevelUpDialog({
       subclassId: subclassId ?? undefined,
       cantripIds: cantripIds.length ? cantripIds : undefined,
       spellIds: spellIds.length ? spellIds : undefined,
+      featureChoices: plan.featureChoices.length
+        ? plan.featureChoices.map((fc) => ({
+            selectionId: fc.selection.id,
+            optionIds: featureChoices[fc.selection.id] ?? [],
+          }))
+        : undefined,
     };
     try {
       const updated = await characters.levelUpApply(characterId, req);
@@ -288,6 +339,18 @@ export default function LevelUpDialog({
                 onToggle={(id) => toggle(setSpellIds, id, plan.spellChoices!.newSpells)}
               />
             )}
+
+            {plan.featureChoices.map((fc) => (
+              <FeatureChoice
+                key={fc.selection.id}
+                choice={fc}
+                skills={skills}
+                selected={featureChoices[fc.selection.id] ?? []}
+                onToggle={(optionId) =>
+                  toggleFeature(fc.selection.id, optionId, fc.selection.choose)
+                }
+              />
+            ))}
 
             {plan.gainedFeatures.length > 0 && (
               <GainsList plan={plan} />
@@ -544,6 +607,62 @@ function SubclassChoice({
             {o.name}
           </button>
         ))}
+      </div>
+    </section>
+  );
+}
+
+// A sub-feature picker (Fighting Style / Metamagic / Expertise). For type 4/6 the
+// options come from the plan's selection; for Expertise (5) the pool is empty over
+// the wire — it's the character's already-proficient skills (not yet expertise).
+function FeatureChoice({
+  choice,
+  skills,
+  selected,
+  onToggle,
+}: {
+  choice: FeatureChoiceResponse;
+  skills: SkillBonusResponse[];
+  selected: string[];
+  onToggle: (optionId: string) => void;
+}) {
+  const sel = choice.selection;
+  const options =
+    sel.type === SelectionType.Expertise
+      ? skills
+          .filter(
+            (s) => s.isProficient && s.level !== SkillProficiencyLevel.Expertise,
+          )
+          .map((s) => ({ optionId: s.skillId, name: s.name }))
+      : sel.options;
+  return (
+    <section className="lvl__block">
+      <h3 className="lvl__block-title">
+        {choice.featureName} — choose {sel.choose} ({selected.length}/{sel.choose})
+      </h3>
+      <p className="text-faint lvl__hint">{choice.source}</p>
+      <div className="lvl__options">
+        {options.map((o) => {
+          const on = selected.includes(o.optionId);
+          const atCap = !on && selected.length >= sel.choose;
+          return (
+            <button
+              key={o.optionId}
+              className={"lvl__option" + (on ? " lvl__option--on" : "")}
+              disabled={atCap}
+              onClick={() => onToggle(o.optionId)}
+            >
+              {o.name}
+            </button>
+          );
+        })}
+        {options.length === 0 && (
+          <span className="text-faint">
+            {sel.type === SelectionType.Expertise
+              ? "No proficient skills available for expertise."
+              : "No options offered."}
+          </span>
+        )}
       </div>
     </section>
   );

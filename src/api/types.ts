@@ -96,6 +96,9 @@ export const SelectionType = {
   Skill: 1,
   Subclass: 2,
   Language: 3,
+  FightingStyle: 4,
+  Expertise: 5,
+  Metamagic: 6,
 } as const;
 export type SelectionType = (typeof SelectionType)[keyof typeof SelectionType];
 
@@ -377,6 +380,20 @@ export interface ToolResponse {
   toolCategory?: string | null;
 }
 
+// Sub-feature catalogs (GET /api/fightingstyles, /api/metamagics). The level-up
+// plan already carries the relevant options inline; fetch these only for a
+// standalone "browse" view.
+export interface FightingStyleResponse {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+export interface MetamagicResponse {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
 // ---- Character: request (CharacterContracts.cs / CharacterRequest) ----
 
 export interface CharacterClassRequest {
@@ -468,6 +485,11 @@ export interface CharacterRequest extends CharacterDetails {
   languageIds?: string[] | null;
   allowHomebrewSelections?: boolean;
   inventory?: InventoryItemRequest[] | null;
+  // Sub-feature picks settable at creation (e.g. a Fighter built directly at a
+  // level that already has a style). Existence-checked; expertise is set via
+  // skillProficiencies[].level = 2, not here.
+  fightingStyleIds?: string[] | null;
+  metamagicIds?: string[] | null;
   copperPieces?: number;
   silverPieces?: number;
   electrumPieces?: number;
@@ -696,6 +718,10 @@ export interface CharacterResponse extends CharacterDetails {
   spellcasting: SpellcastingResponse[];
   spells: SpellRef[];
   feats: FeatRef[];
+  // Chosen sub-features ([] when none). Expertise is NOT here — it shows up in
+  // skills[] as level === Expertise (2).
+  fightingStyles: NamedRef[];
+  metamagics: NamedRef[];
   maxHitPoints: number;
   derivedMaxHitPoints: number;
   hitPointsOverride?: number | null;
@@ -760,6 +786,18 @@ export interface LevelUpSpellChoicesResponse {
   spellPool: LevelUpSpellPoolEntryResponse[];
 }
 
+/**
+ * A sub-feature choice forced by a feature gained at the new level (Fighting
+ * Style / Expertise / Metamagic). `selection.type` is 4/5/6. For type 4/6 the
+ * picker uses `selection.options[]`; for Expertise (5) `options[]` is EMPTY and
+ * the pool is the character's already-proficient skills (skills[].isProficient).
+ */
+export interface FeatureChoiceResponse {
+  featureName: string;
+  source: string; // class/subclass that granted it (display)
+  selection: SelectionResponse;
+}
+
 export interface LevelUpPlanResponse {
   classId: string;
   className: string;
@@ -770,6 +808,7 @@ export interface LevelUpPlanResponse {
   abilityScoreImprovementDue: boolean;
   subclassChoice?: SelectionResponse | null;
   spellChoices?: LevelUpSpellChoicesResponse | null;
+  featureChoices: FeatureChoiceResponse[];
   gainedFeatures: CharacterFeatureResponse[];
   gainedResources: CharacterResourceResponse[];
   newSpellSlots: SpellSlotResponse[];
@@ -783,6 +822,13 @@ export interface AbilityImprovementChoice {
   statId: string;
   amount: number; // 1 or 2; per ASI the amounts must sum to 2
 }
+/** One echoed sub-feature pick. For FightingStyle/Metamagic `optionIds` are the
+ *  chosen `optionId`s from the plan; for Expertise they are Skill ids the
+ *  character is already proficient in. `selectionId` must match a plan entry. */
+export interface FeatureChoiceApply {
+  selectionId: string;
+  optionIds: string[];
+}
 export interface LevelUpApplyRequest {
   classId: string;
   hitPoints: LevelUpHitPointChoice;
@@ -791,5 +837,6 @@ export interface LevelUpApplyRequest {
   subclassId?: string | null;
   cantripIds?: string[] | null;
   spellIds?: string[] | null;
+  featureChoices?: FeatureChoiceApply[] | null;
   allowHomebrewSelections?: boolean;
 }
