@@ -415,6 +415,23 @@ export interface CharacterStatusEffectRequest {
   source?: string | null;
 }
 
+/** PHB "Character Details" + appearance — free-text, pure narrative (no rules
+ *  effect), round-tripped on both request and response. All optional/nullable.
+ *  Short-text fields (height/weight/eyes/skin/hair) reject > 50 chars with 400
+ *  on the request; the long-text fields are unbounded. */
+export interface CharacterDetails {
+  personalityTraits?: string | null;
+  ideals?: string | null;
+  bonds?: string | null;
+  flaws?: string | null;
+  backstory?: string | null;
+  height?: string | null;
+  weight?: string | null;
+  eyes?: string | null;
+  skin?: string | null;
+  hair?: string | null;
+}
+
 /**
  * The create/update payload. Minimum to create: name, raceId, >=1 classes
  * (levels summing to <=20), >=1 abilityScores (every IsDefault stat present).
@@ -422,7 +439,7 @@ export interface CharacterStatusEffectRequest {
  * (defaults to the only class when single-classed). Everything else is optional.
  * Derived values (level, modifiers, HP, AC, ...) are NOT submitted.
  */
-export interface CharacterRequest {
+export interface CharacterRequest extends CharacterDetails {
   name: string;
   description?: string | null;
   raceId: string;
@@ -628,7 +645,26 @@ export interface ToolProficienciesResponse {
   tools: NamedRef[];
 }
 
-export interface CharacterResponse {
+// Always present. Components behind derivedMaxHitPoints / derivedArmorClass —
+// always the DERIVED components, independent of the *Override fields (so a tooltip
+// can show "derived would be X" even when an override is set). Sums reconcile to
+// `total`, which equals the derived value (pre-override).
+export interface HitPointBreakdownResponse {
+  fromHitDice: number; // starting class's die maxed at L1 + average/recorded rolls after
+  fromConstitution: number; // CON modifier x total level
+  other: number; // passive HP effects (e.g. Tough +2/level)
+  total: number; // = derivedMaxHitPoints (pre-override)
+}
+export interface ArmorClassBreakdownResponse {
+  base: number; // worn-armor base AC, or 10 when unarmored
+  dexterity: number; // DEX bonus actually applied (after the armor's max-dex cap)
+  shield: number; // shield bonus (0 if none)
+  other: number; // passive AC effects (feats / status effects); 0 if none
+  total: number; // = base + dexterity + shield + other = derivedArmorClass (pre-override)
+  source: string; // tooltip label: "Chain Mail", "Unarmored", ...
+}
+
+export interface CharacterResponse extends CharacterDetails {
   id: string;
   name: string;
   description?: string | null;
@@ -663,9 +699,11 @@ export interface CharacterResponse {
   maxHitPoints: number;
   derivedMaxHitPoints: number;
   hitPointsOverride?: number | null;
+  hitPointBreakdown: HitPointBreakdownResponse;
   armorClass: number;
   derivedArmorClass: number;
   armorClassOverride?: number | null;
+  armorClassBreakdown: ArmorClassBreakdownResponse;
   equippedArmor?: NamedRef | null;
   equippedShield?: NamedRef | null;
   // Whether the character is proficient with the worn armor/shield (null = none equipped).

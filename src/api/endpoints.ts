@@ -7,13 +7,16 @@ import type {
   ArmorResponse,
   AuthRequest,
   AuthResponse,
+  BackgroundResponse,
   CharacterRequest,
   CharacterResponse,
   ClassResponse,
+  FeatResponse,
   InventoryAddRequest,
   InventoryAttunementRequest,
   InventoryConsumeRequest,
   ItemResponse,
+  LanguageResponse,
   LevelUpApplyRequest,
   LevelUpPlanRequest,
   LevelUpPlanResponse,
@@ -68,7 +71,10 @@ export const reference = {
   items: () => api.get<ItemResponse[]>("/api/items"),
   armors: () => api.get<ArmorResponse[]>("/api/armors"),
   weapons: () => api.get<WeaponResponse[]>("/api/weapons"),
-  // ...armorcategories, weaponcategories, languages, feats, backgrounds, editions, statuseffects
+  feats: () => api.get<FeatResponse[]>("/api/feats"),
+  backgrounds: () => api.get<BackgroundResponse[]>("/api/backgrounds"),
+  languages: () => api.get<LanguageResponse[]>("/api/languages"),
+  // ...armorcategories, weaponcategories, editions, statuseffects
 };
 
 export const health = () =>

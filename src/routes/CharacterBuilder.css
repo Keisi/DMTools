@@ -335,3 +335,72 @@
   color: var(--c-crimson-400);
   border-color: var(--c-crimson-600);
 }
+
+/* ---- Subclass picker on a class row ---- */
+.builder__subclass {
+  flex: 0 0 180px;
+  font-size: var(--fs-sm);
+}
+.builder__subclass-locked {
+  flex: 0 0 auto;
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+}
+
+/* ---- Background step ---- */
+.builder__bg-detail {
+  margin-top: var(--sp-4);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  border-top: 1px solid var(--border);
+  padding-top: var(--sp-3);
+}
+.builder__bg-langs {
+  margin-top: var(--sp-4);
+}
+
+/* ---- Feats step ---- */
+.builder__feat-prereq {
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+}
+
+/* ---- Inventory + currency (Equipment step) ---- */
+.builder__inventory,
+.builder__currency {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.builder__cart {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.builder__cart-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.builder__cart-name {
+  flex: 1;
+}
+.builder__cart-qty .btn {
+  width: 28px;
+}
+.builder__coins {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: var(--sp-3);
+}
+.builder__coin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}

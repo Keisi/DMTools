@@ -1,6 +1,6 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useParams } from "react-router-dom";
-import { characters } from "../api/endpoints";
+import { characters, reference } from "../api/endpoints";
 import {
   EncumbranceLevel,
   ResistanceKind,
@@ -12,6 +12,7 @@ import {
   type CharacterResponse,
   type CharacterStatusEffectResponse,
   type EncumbranceResponse,
+  type ItemResponse,
   type SpellRef,
   type SpellcastingResponse,
   type WeaponAttackResponse,
@@ -56,6 +57,7 @@ export default function CharacterSheet() {
   const [c, setC] = useState<CharacterResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [levelingUp, setLevelingUp] = useState(false);
+  const [items, setItems] = useState<ItemResponse[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -70,6 +72,11 @@ export default function CharacterSheet() {
         ),
       );
   }, [id]);
+
+  // The item catalog backs the inventory "add" picker (loaded once, optional).
+  useEffect(() => {
+    reference.items().then(setItems).catch(() => setItems([]));
+  }, []);
 
   if (error)
     return (
@@ -159,12 +166,17 @@ export default function CharacterSheet() {
           <p className="text-muted">
             {c.race?.name} · {classLine} · Level {c.level}
           </p>
-          <button
-            className="btn btn--primary sheet__levelup"
-            onClick={() => setLevelingUp(true)}
-          >
-            Level Up
-          </button>
+          <div className="sheet__actions">
+            <button
+              className="btn btn--primary sheet__levelup"
+              onClick={() => setLevelingUp(true)}
+            >
+              Level Up
+            </button>
+            <Link to={`/character/${c.id}/edit`} className="btn">
+              Edit
+            </Link>
+          </div>
         </div>
         <div className="sheet__vitals">
           <Vital label="HP" value={c.maxHitPoints} tooltip={hpTip} />
@@ -238,41 +250,7 @@ export default function CharacterSheet() {
         </section>
 
         {/* ---- Inventory ---- */}
-        <section className="panel sheet__block">
-          <h3 className="sheet__block-title">Inventory</h3>
-          <hr className="rule" />
-          <p className="text-faint sheet__weight">
-            {c.totalCarriedWeight} lb · {c.totalCurrencyInGold} gp ·{" "}
-            {c.attunedItemCount} attuned
-          </p>
-          <ul className="prof-list">
-            {c.inventory.map((it) => (
-              <li
-                key={it.itemId}
-                className="prof-list__row tip"
-                data-tooltip={[
-                  `${it.weight} lb`,
-                  `${it.cost} gp`,
-                  it.isMagic ? "magic" : null,
-                  it.requiresAttunement ? "requires attunement" : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              >
-                <span className="prof-list__name">
-                  {it.name}
-                  {it.quantity > 1 && (
-                    <span className="text-faint"> ×{it.quantity}</span>
-                  )}
-                </span>
-                {it.isAttuned && <span className="badge badge--accent">attuned</span>}
-              </li>
-            ))}
-            {c.inventory.length === 0 && (
-              <li className="text-faint">Empty pack.</li>
-            )}
-          </ul>
-        </section>
+        <InventoryBlock character={c} items={items} onMutated={setC} />
       </div>
 
       {/* ---- Combat / class detail ---- */}
@@ -623,6 +601,187 @@ function EncumbranceBlock({
         {e.carriedWeight} / {e.carryingCapacity} lb
         {e.speedPenalty !== 0 && <> · speed {e.speedPenalty}ft</>}
       </p>
+    </section>
+  );
+}
+
+// Surface ASP.NET problem-details field errors from a failed inventory op.
+function describeOpError(err: unknown): string {
+  if (err instanceof ApiError) {
+    const body = err.body as { errors?: Record<string, string[]> } | undefined;
+    const msgs = body?.errors ? Object.values(body.errors).flat() : [];
+    return msgs.length
+      ? `${err.status}: ${msgs.join("; ")}`
+      : `${err.status}: ${err.message}`;
+  }
+  return "Backend unreachable.";
+}
+
+// The inventory panel with live add/consume/attune controls. Each op posts to the
+// matching endpoint and swaps in the returned (re-derived) character — weight,
+// currency-in-gold, attunement count, and encumbrance all update with it.
+function InventoryBlock({
+  character,
+  items,
+  onMutated,
+}: {
+  character: CharacterResponse;
+  items: ItemResponse[];
+  onMutated: (updated: CharacterResponse) => void;
+}) {
+  const c = character;
+  const [busy, setBusy] = useState(false);
+  const [opError, setOpError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+
+  const owned = useMemo(
+    () => new Set(c.inventory.map((i) => i.itemId)),
+    [c.inventory],
+  );
+  // Catalog search for adding new items (the catalog is large — match on demand).
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return items
+      .filter((i) => i.name.toLowerCase().includes(q) && !owned.has(i.id))
+      .slice(0, 20);
+  }, [query, items, owned]);
+
+  async function run(fn: () => Promise<CharacterResponse>) {
+    setBusy(true);
+    setOpError(null);
+    try {
+      onMutated(await fn());
+    } catch (err) {
+      setOpError(describeOpError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel sheet__block">
+      <h3 className="sheet__block-title">Inventory</h3>
+      <hr className="rule" />
+      <p className="text-faint sheet__weight">
+        {c.totalCarriedWeight} lb · {c.totalCurrencyInGold} gp ·{" "}
+        {c.attunedItemCount} attuned
+      </p>
+      {opError && <p className="sheet__op-error">{opError}</p>}
+      <ul className="prof-list">
+        {c.inventory.map((it) => (
+          <li
+            key={it.itemId}
+            className="prof-list__row sheet__inv-row tip"
+            data-tooltip={[
+              `${it.weight} lb`,
+              `${it.cost} gp`,
+              it.isMagic ? "magic" : null,
+              it.requiresAttunement ? "requires attunement" : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          >
+            <span className="prof-list__name sheet__inv-name">
+              {it.name}
+              {it.quantity > 1 && (
+                <span className="text-faint"> ×{it.quantity}</span>
+              )}
+            </span>
+            {it.requiresAttunement && (
+              <button
+                type="button"
+                className={
+                  "badge sheet__attune" + (it.isAttuned ? " badge--accent" : "")
+                }
+                disabled={busy}
+                onClick={() =>
+                  run(() =>
+                    characters.setAttunement(c.id, it.itemId, {
+                      isAttuned: !it.isAttuned,
+                    }),
+                  )
+                }
+              >
+                {it.isAttuned ? "attuned" : "attune"}
+              </button>
+            )}
+            <span className="sheet__inv-qty">
+              <button
+                type="button"
+                className="btn sheet__qty-btn"
+                disabled={busy}
+                title="Use one"
+                onClick={() =>
+                  run(() =>
+                    characters.inventoryConsume(c.id, {
+                      itemId: it.itemId,
+                      quantity: 1,
+                    }),
+                  )
+                }
+              >
+                −
+              </button>
+              <button
+                type="button"
+                className="btn sheet__qty-btn"
+                disabled={busy}
+                title="Add one"
+                onClick={() =>
+                  run(() =>
+                    characters.inventoryAdd(c.id, {
+                      itemId: it.itemId,
+                      quantity: 1,
+                    }),
+                  )
+                }
+              >
+                +
+              </button>
+            </span>
+          </li>
+        ))}
+        {c.inventory.length === 0 && <li className="text-faint">Empty pack.</li>}
+      </ul>
+
+      {items.length > 0 && (
+        <div className="sheet__inv-add">
+          <input
+            className="input"
+            placeholder="Search items to add…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {query.trim() && (
+            <div className="sheet__inv-matches">
+              {matches.length === 0 ? (
+                <span className="text-faint">No matches.</span>
+              ) : (
+                matches.map((it) => (
+                  <button
+                    key={it.id}
+                    type="button"
+                    className="btn sheet__inv-match"
+                    disabled={busy}
+                    onClick={() =>
+                      run(() =>
+                        characters.inventoryAdd(c.id, {
+                          itemId: it.id,
+                          quantity: 1,
+                        }),
+                      ).then(() => setQuery(""))
+                    }
+                  >
+                    + {it.name}
+                    {it.isMagic && <span className="text-faint"> · magic</span>}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }

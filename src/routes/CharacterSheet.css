@@ -152,6 +152,55 @@
 .sheet__levelup {
   margin-top: var(--sp-3);
 }
+.sheet__actions {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+/* ---- Inventory management ---- */
+.sheet__op-error {
+  color: var(--c-crimson-400);
+  font-size: var(--fs-sm);
+  margin-bottom: var(--sp-2);
+}
+.sheet__inv-row {
+  gap: var(--sp-2);
+}
+.sheet__inv-name {
+  flex: 1;
+}
+.sheet__attune {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+.sheet__inv-qty {
+  display: inline-flex;
+  gap: var(--sp-1);
+  flex-shrink: 0;
+}
+.sheet__qty-btn {
+  width: 26px;
+  padding: 0;
+  text-align: center;
+  line-height: 1.6;
+}
+.sheet__inv-add {
+  margin-top: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.sheet__inv-matches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.sheet__inv-match {
+  font-size: var(--fs-sm);
+}
 
 /* ---- Rich sheet blocks ---- */
 .sheet__caster {

@@ -30,6 +30,14 @@ export default function App() {
           }
         />
         <Route
+          path="/character/:id/edit"
+          element={
+            <RequireAuth>
+              <CharacterBuilder />
+            </RequireAuth>
+          }
+        />
+        <Route
           path="/character/:id"
           element={
             <RequireAuth>

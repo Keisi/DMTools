@@ -1,24 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { characters } from "../api/endpoints";
+import { characters, reference } from "../api/endpoints";
 import { ApiError } from "../api/client";
 import {
   LevelUpHitPointMode,
   type AbilityScoreResponse,
   type CharacterClassResponse,
   type CharacterResponse,
+  type FeatResponse,
   type LevelUpApplyRequest,
   type LevelUpPlanResponse,
   type LevelUpSpellPoolEntryResponse,
 } from "../api/types";
 import "./LevelUpDialog.css";
 
+// At an ASI level a character either bumps ability scores or takes a feat — never both.
+type AsiMode = "asi" | "feat";
+
 /**
  * Drives the two-phase level-up engine: POST .../levelup/plan to preview the
  * gains + forced choices for advancing one class, collect those choices, then
  * POST .../levelup/apply. On success it hands the updated character back so the
- * sheet re-renders. Feat-based ASIs are not yet supported (ability improvements
- * only); everything else the plan surfaces (HP, subclass, spells) is handled.
+ * sheet re-renders. At an ASI level the player chooses between distributing two
+ * ability points or taking a feat; HP, subclass, and spell picks are all handled.
  */
 export default function LevelUpDialog({
   characterId,
@@ -47,10 +51,18 @@ export default function LevelUpDialog({
     LevelUpHitPointMode.Average,
   );
   const [rolled, setRolled] = useState<number | "">("");
+  const [asiMode, setAsiMode] = useState<AsiMode>("asi");
   const [asi, setAsi] = useState<Record<string, number>>({});
+  const [featId, setFeatId] = useState<string | null>(null);
   const [subclassId, setSubclassId] = useState<string | null>(null);
   const [cantripIds, setCantripIds] = useState<string[]>([]);
   const [spellIds, setSpellIds] = useState<string[]>([]);
+
+  // Feat catalog for the "take a feat instead of an ASI" choice (loaded once).
+  const [feats, setFeats] = useState<FeatResponse[]>([]);
+  useEffect(() => {
+    reference.feats().then(setFeats).catch(() => setFeats([]));
+  }, []);
 
   // Fetch the plan whenever the chosen class changes. All state writes happen in
   // the async callbacks (never synchronously in the effect body); `loading` is
@@ -68,7 +80,9 @@ export default function LevelUpDialog({
         // Reset collected choices for the new plan.
         setHpMode(LevelUpHitPointMode.Average);
         setRolled("");
+        setAsiMode("asi");
         setAsi({});
+        setFeatId(null);
         setSubclassId(null);
         setCantripIds([]);
         setSpellIds([]);
@@ -111,7 +125,10 @@ export default function LevelUpDialog({
       plan !== null &&
       rolled >= plan.hitPoints.rollMin &&
       rolled <= plan.hitPoints.rollMax);
-  const asiOk = !plan?.abilityScoreImprovementDue || asiPoints === 2;
+  // At an ASI level: either distribute exactly 2 ability points, or pick one feat.
+  const asiOk =
+    !plan?.abilityScoreImprovementDue ||
+    (asiMode === "asi" ? asiPoints === 2 : !!featId);
   const subclassOk = !plan?.subclassChoice || !!subclassId;
   const cantripsOk =
     isUnset(plan?.spellChoices?.newCantrips) ||
@@ -127,7 +144,11 @@ export default function LevelUpDialog({
   const applyMissing = plan
     ? [
         !hpOk ? "a hit-point roll in range" : null,
-        !asiOk ? `2 ability points (${asiPoints}/2)` : null,
+        !asiOk
+          ? asiMode === "asi"
+            ? `2 ability points (${asiPoints}/2)`
+            : "a feat"
+          : null,
         !subclassOk ? (plan.subclassChoice?.name ?? "a subclass") : null,
         !cantripsOk
           ? `${plan.spellChoices?.newCantrips} cantrip(s) (${cantripIds.length} chosen)`
@@ -160,9 +181,15 @@ export default function LevelUpDialog({
             ? rolled
             : undefined,
       },
-      abilityImprovements: plan.abilityScoreImprovementDue
-        ? Object.entries(asi).map(([statId, amount]) => ({ statId, amount }))
-        : undefined,
+      // At an ASI level send exactly one of improvements / featId (backend rejects both).
+      abilityImprovements:
+        plan.abilityScoreImprovementDue && asiMode === "asi"
+          ? Object.entries(asi).map(([statId, amount]) => ({ statId, amount }))
+          : undefined,
+      featId:
+        plan.abilityScoreImprovementDue && asiMode === "feat"
+          ? (featId ?? undefined)
+          : undefined,
       subclassId: subclassId ?? undefined,
       cantripIds: cantripIds.length ? cantripIds : undefined,
       spellIds: spellIds.length ? spellIds : undefined,
@@ -224,9 +251,14 @@ export default function LevelUpDialog({
             {plan.abilityScoreImprovementDue && (
               <AsiChoice
                 abilityScores={abilityScores}
+                mode={asiMode}
+                onMode={setAsiMode}
                 asi={asi}
                 points={asiPoints}
                 onSet={setAsiPoint}
+                feats={feats}
+                featId={featId}
+                onFeat={setFeatId}
               />
             )}
 
@@ -376,55 +408,114 @@ function HpChoice({
 
 function AsiChoice({
   abilityScores,
+  mode,
+  onMode,
   asi,
   points,
   onSet,
+  feats,
+  featId,
+  onFeat,
 }: {
   abilityScores: AbilityScoreResponse[];
+  mode: AsiMode;
+  onMode: (m: AsiMode) => void;
   asi: Record<string, number>;
   points: number;
   onSet: (statId: string, amount: number) => void;
+  feats: FeatResponse[];
+  featId: string | null;
+  onFeat: (id: string) => void;
 }) {
   return (
     <section className="lvl__block">
-      <h3 className="lvl__block-title">
-        Ability Score Improvement ({points}/2 points)
-      </h3>
-      <p className="text-faint lvl__hint">
-        Allocate 2 points (max +2 to one). Feat-based ASI not yet supported.
-      </p>
-      <div className="lvl__asi">
-        {abilityScores.map((a) => {
-          const v = asi[a.statId] ?? 0;
-          const atCap = points >= 2 && v === 0;
-          return (
-            <div key={a.statId} className="lvl__asi-row">
-              <span className="lvl__asi-name">{a.name}</span>
-              <span className="lvl__asi-score">
-                {a.effective}
-                {v > 0 && ` → ${a.effective + v}`}
-              </span>
-              <div className="lvl__stepper">
-                <button
-                  className="btn"
-                  disabled={v <= 0}
-                  onClick={() => onSet(a.statId, v - 1)}
-                >
-                  −
-                </button>
-                <span className="lvl__asi-val">+{v}</span>
-                <button
-                  className="btn"
-                  disabled={v >= 2 || atCap}
-                  onClick={() => onSet(a.statId, v + 1)}
-                >
-                  +
-                </button>
-              </div>
-            </div>
-          );
-        })}
+      <h3 className="lvl__block-title">Ability Score Improvement</h3>
+      <div className="lvl__asi-modes">
+        <button
+          type="button"
+          className={"lvl__option" + (mode === "asi" ? " lvl__option--on" : "")}
+          onClick={() => onMode("asi")}
+        >
+          Improve abilities
+        </button>
+        <button
+          type="button"
+          className={"lvl__option" + (mode === "feat" ? " lvl__option--on" : "")}
+          onClick={() => onMode("feat")}
+        >
+          Take a feat
+        </button>
       </div>
+
+      {mode === "asi" ? (
+        <>
+          <p className="text-faint lvl__hint">
+            Allocate 2 points (max +2 to one) — {points}/2 chosen.
+          </p>
+          <div className="lvl__asi">
+            {abilityScores.map((a) => {
+              const v = asi[a.statId] ?? 0;
+              const atCap = points >= 2 && v === 0;
+              return (
+                <div key={a.statId} className="lvl__asi-row">
+                  <span className="lvl__asi-name">{a.name}</span>
+                  <span className="lvl__asi-score">
+                    {a.effective}
+                    {v > 0 && ` → ${a.effective + v}`}
+                  </span>
+                  <div className="lvl__stepper">
+                    <button
+                      className="btn"
+                      disabled={v <= 0}
+                      onClick={() => onSet(a.statId, v - 1)}
+                    >
+                      −
+                    </button>
+                    <span className="lvl__asi-val">+{v}</span>
+                    <button
+                      className="btn"
+                      disabled={v >= 2 || atCap}
+                      onClick={() => onSet(a.statId, v + 1)}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : feats.length === 0 ? (
+        <p className="text-faint lvl__hint">No feats loaded (is the API running?).</p>
+      ) : (
+        <div className="lvl__options lvl__feats">
+          {feats.map((f) => {
+            const mods = f.abilityModifiers
+              .map(
+                (m) =>
+                  `${m.stat ?? "ability"} ${m.modifier >= 0 ? "+" : ""}${m.modifier}`,
+              )
+              .join(", ");
+            return (
+              <button
+                key={f.id}
+                className={
+                  "lvl__option lvl__feat" + (f.id === featId ? " lvl__option--on" : "")
+                }
+                title={
+                  [f.prerequisite ? `Prerequisite: ${f.prerequisite}` : null, f.description]
+                    .filter(Boolean)
+                    .join("\n") || undefined
+                }
+                onClick={() => onFeat(f.id)}
+              >
+                <span className="lvl__feat-name">{f.name}</span>
+                {mods && <span className="text-faint"> · {mods}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
@@ -471,19 +562,34 @@ function SpellChoice({
   selected: string[];
   onToggle: (id: string) => void;
 }) {
+  const [query, setQuery] = useState("");
   if (pool.length === 0) return null;
+  const informational = isUnset(count);
+  const q = query.trim().toLowerCase();
+  // Filter the pool by name; always keep already-selected entries visible so a
+  // search can't hide a pick. Casting pools get large, so a filter matters here.
+  const shown = q
+    ? pool.filter((s) => selected.includes(s.id) || s.name.toLowerCase().includes(q))
+    : pool;
   return (
     <section className="lvl__block">
       <h3 className="lvl__block-title">
         {title}
-        {!isUnset(count)
+        {!informational
           ? ` — choose ${count} (${selected.length}/${count})`
           : " (known list)"}
       </h3>
+      {pool.length > 8 && (
+        <input
+          className="input lvl__spell-search"
+          placeholder={`Search ${pool.length} ${title.toLowerCase()}…`}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      )}
       <div className="lvl__options">
-        {pool.map((s) => {
+        {shown.map((s) => {
           const on = selected.includes(s.id);
-          const informational = isUnset(count);
           return (
             <button
               key={s.id}
@@ -496,6 +602,7 @@ function SpellChoice({
             </button>
           );
         })}
+        {shown.length === 0 && <span className="text-faint">No matches.</span>}
       </div>
     </section>
   );

@@ -150,6 +150,29 @@
   cursor: default;
 }
 
+/* ---- ASI vs feat toggle + feat picker ---- */
+.lvl__asi-modes {
+  display: flex;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+.lvl__feats {
+  max-height: 240px;
+  overflow-y: auto;
+}
+.lvl__feat {
+  text-align: left;
+}
+.lvl__feat-name {
+  font-weight: var(--fw-bold);
+}
+
+/* ---- Spell pool search ---- */
+.lvl__spell-search {
+  width: 100%;
+  margin-bottom: var(--sp-3);
+}
+
 .lvl__gains {
   list-style: none;
   padding: 0;

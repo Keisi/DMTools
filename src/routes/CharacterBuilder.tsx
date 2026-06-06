@@ -1,70 +1,69 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { characters, reference } from "../api/endpoints";
-import { ApiError } from "../api/client";
 import {
   Alignment,
   SelectionType,
   SkillProficiencyLevel,
   type ArmorResponse,
+  type BackgroundResponse,
   type CharacterClassRequest,
   type CharacterRequest,
+  type CharacterResponse,
   type ClassResponse,
+  type FeatResponse,
+  type InventoryItemRequest,
+  type ItemResponse,
   type RaceResponse,
   type SelectionResponse,
   type SkillResponse,
   type StatResponse,
   type WeaponResponse,
 } from "../api/types";
+import {
+  AbilitiesStep,
+  BackgroundStep,
+  BuilderDetails,
+  BuilderNav,
+  ClassStep,
+  describeError,
+  EquipmentStep,
+  FeatsStep,
+  MANUAL_DEFAULT,
+  MAX_TOTAL_LEVEL,
+  PickList,
+  POINT_BUDGET,
+  POINT_MAX,
+  POINT_MIN,
+  pointCost,
+  Review,
+  SkillsStep,
+  STEPS,
+  StepNav,
+  toggleCapped,
+  ZERO_COINS,
+  type AbilityMode,
+  type Coins,
+} from "./CharacterBuilder.steps";
 import "./CharacterBuilder.css";
 
-const STEPS = ["Race", "Class", "Abilities", "Skills", "Equipment", "Review"] as const;
-const MAX_TOTAL_LEVEL = 20;
-
-// 5e point-buy: 27 points, scores 8–15. Manual mode allows the backend's full 1–30.
-type AbilityMode = "pointbuy" | "manual";
-const POINT_BUDGET = 27;
-const POINT_MIN = 8;
-const POINT_MAX = 15;
-// Manual mode's neutral baseline (D&D average, +0 mod) — point-buy stays at POINT_MIN.
-const MANUAL_DEFAULT = 10;
-const POINT_COST: Record<number, number> = {
-  8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9,
-};
-const pointCost = (score: number) => POINT_COST[score] ?? 0;
-
-// Surface ASP.NET problem-details field errors, not just the title.
-function describeError(err: unknown): string {
-  if (err instanceof ApiError) {
-    const body = err.body as { errors?: Record<string, string[]> } | undefined;
-    const fieldMsgs = body?.errors ? Object.values(body.errors).flat() : [];
-    return fieldMsgs.length
-      ? `${err.status}: ${fieldMsgs.join("; ")}`
-      : `${err.status}: ${err.message}`;
-  }
-  return "Could not reach the server.";
-}
-
-const ALIGNMENTS: { value: Alignment; label: string }[] = [
-  { value: Alignment.LawfulGood, label: "Lawful Good" },
-  { value: Alignment.NeutralGood, label: "Neutral Good" },
-  { value: Alignment.ChaoticGood, label: "Chaotic Good" },
-  { value: Alignment.LawfulNeutral, label: "Lawful Neutral" },
-  { value: Alignment.TrueNeutral, label: "True Neutral" },
-  { value: Alignment.ChaoticNeutral, label: "Chaotic Neutral" },
-  { value: Alignment.LawfulEvil, label: "Lawful Evil" },
-  { value: Alignment.NeutralEvil, label: "Neutral Evil" },
-  { value: Alignment.ChaoticEvil, label: "Chaotic Evil" },
-];
-
 /**
- * Character creation wizard. Collects a CharacterRequest: name, race, one or more
- * classes (multiclass, levels summing to <=20, with a designated starting class),
- * base ability scores for every default stat, optional class skill choices, and
- * optional equipped armor/shield/weapons. POSTs via characters.create().
+ * Character create/edit wizard. Collects a CharacterRequest: name, race, one or
+ * more classes (multiclass, levels summing to <=20, with a designated starting
+ * class and an optional subclass once the class reaches its subclass level), base
+ * ability scores, optional class skill choices, an optional background (with its
+ * language choices), optional feats, and equipped armor/shield/weapons plus carried
+ * inventory + coin. POSTs via characters.create() at /character/new, or — when
+ * mounted at /character/:id/edit — loads the character, prefills, and PUTs via
+ * characters.update(). On edit it preserves fields the wizard doesn't expose (HP/AC
+ * overrides, known spells, status effects, character details, narrative) by carrying
+ * them through from the loaded response, and relaxes Selection budgets so re-submitting
+ * already-granted skills/languages isn't rejected.
  */
 export default function CharacterBuilder() {
   const navigate = useNavigate();
+  const { id: editId } = useParams<{ id: string }>();
+  const isEdit = !!editId;
   const [step, setStep] = useState(0);
 
   // Reference data.
@@ -74,9 +73,13 @@ export default function CharacterBuilder() {
   const [skills, setSkills] = useState<SkillResponse[]>([]);
   const [armors, setArmors] = useState<ArmorResponse[]>([]);
   const [weapons, setWeapons] = useState<WeaponResponse[]>([]);
+  const [feats, setFeats] = useState<FeatResponse[]>([]);
+  const [backgrounds, setBackgrounds] = useState<BackgroundResponse[]>([]);
+  const [items, setItems] = useState<ItemResponse[]>([]);
 
   // Selections.
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [age, setAge] = useState(0);
   const [alignment, setAlignment] = useState<Alignment>(Alignment.TrueNeutral);
   const [raceId, setRaceId] = useState<string | null>(null);
@@ -85,9 +88,17 @@ export default function CharacterBuilder() {
   const [abilities, setAbilities] = useState<Record<string, number>>({});
   const [abilityMode, setAbilityMode] = useState<AbilityMode>("pointbuy");
   const [skillIds, setSkillIds] = useState<string[]>([]);
+  const [backgroundId, setBackgroundId] = useState<string | null>(null);
+  const [languageIds, setLanguageIds] = useState<string[]>([]);
+  const [featIds, setFeatIds] = useState<string[]>([]);
   const [armorId, setArmorId] = useState<string | null>(null);
   const [shieldId, setShieldId] = useState<string | null>(null);
   const [weaponIds, setWeaponIds] = useState<string[]>([]);
+  const [inventory, setInventory] = useState<InventoryItemRequest[]>([]);
+  const [coins, setCoins] = useState<Coins>(ZERO_COINS);
+
+  // Edit mode: the loaded character (carries fields the wizard doesn't edit).
+  const [original, setOriginal] = useState<CharacterResponse | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,18 +111,83 @@ export default function CharacterBuilder() {
       .then((s) => {
         setStats(s);
         // Seed every default stat at the point-buy base so the budget starts full.
-        setAbilities((prev) => {
-          const next = { ...prev };
-          for (const st of s)
-            if (st.isDefault && next[st.id] === undefined) next[st.id] = POINT_MIN;
-          return next;
-        });
+        // Edit mode prefills real base scores instead (see the load effect below).
+        if (!editId)
+          setAbilities((prev) => {
+            const next = { ...prev };
+            for (const st of s)
+              if (st.isDefault && next[st.id] === undefined) next[st.id] = POINT_MIN;
+            return next;
+          });
       })
       .catch(() => setStats([]));
     reference.skills().then(setSkills).catch(() => setSkills([]));
     reference.armors().then(setArmors).catch(() => setArmors([]));
     reference.weapons().then(setWeapons).catch(() => setWeapons([]));
-  }, []);
+    reference.feats().then(setFeats).catch(() => setFeats([]));
+    reference.backgrounds().then(setBackgrounds).catch(() => setBackgrounds([]));
+    reference.items().then(setItems).catch(() => setItems([]));
+  }, [editId]);
+
+  // Edit mode: load the existing character and prefill every wizard-owned field.
+  // Backgrounds are fetched alongside so the chosen background-language picks can be
+  // recovered (the only languages the wizard re-submits) — all writes happen inside
+  // the promise callback, never synchronously in the effect body.
+  useEffect(() => {
+    if (!editId) return;
+    Promise.all([characters.get(editId), reference.backgrounds()])
+      .then(([ch, bgs]) => {
+        setOriginal(ch);
+        setName(ch.name);
+        setDescription(ch.description ?? "");
+        setAge(ch.age);
+        setAlignment(ch.alignment);
+        setRaceId(ch.race?.id ?? null);
+        setPicks(
+          ch.classes.map((c) => ({
+            classId: c.classId,
+            level: c.level,
+            subclassId: c.subclassId ?? undefined,
+          })),
+        );
+        setStartingClassId(ch.startingClassId ?? ch.classes[0]?.classId ?? null);
+        setAbilityMode("manual");
+        setAbilities(
+          Object.fromEntries(ch.abilityScores.map((a) => [a.statId, a.base])),
+        );
+        setSkillIds(ch.skills.filter((s) => s.isProficient).map((s) => s.skillId));
+        setBackgroundId(ch.background?.id ?? null);
+        setFeatIds(ch.feats.map((f) => f.id));
+        setArmorId(ch.equippedArmor?.id ?? null);
+        setShieldId(ch.equippedShield?.id ?? null);
+        setWeaponIds(ch.equippedWeapons.map((w) => w.id));
+        setInventory(
+          ch.inventory.map((i) => ({
+            itemId: i.itemId,
+            quantity: i.quantity,
+            isAttuned: i.isAttuned,
+          })),
+        );
+        setCoins({
+          cp: ch.copperPieces,
+          sp: ch.silverPieces,
+          ep: ch.electrumPieces,
+          gp: ch.goldPieces,
+          pp: ch.platinumPieces,
+        });
+        // Recover which of the character's languages were the background-Selection picks.
+        const sel = bgs
+          .find((b) => b.id === ch.background?.id)
+          ?.selections.find((s) => s.type === SelectionType.Language);
+        if (sel) {
+          const optionIds = new Set(sel.options.map((o) => o.optionId));
+          setLanguageIds(
+            ch.languages.filter((l) => optionIds.has(l.id)).map((l) => l.id),
+          );
+        }
+      })
+      .catch((err) => setError(describeError(err)));
+  }, [editId]);
 
   // skillId -> governing-ability label (stat code like "STR", else the ability name).
   const skillAbility = useMemo(() => {
@@ -136,6 +212,19 @@ export default function CharacterBuilder() {
     const cls = classes.find((c) => c.id === startId);
     return cls?.selections.find((s) => s.type === SelectionType.Skill) ?? null;
   }, [classes, startingClassId, picks]);
+
+  const selectedBackground = useMemo(
+    () => backgrounds.find((b) => b.id === backgroundId) ?? null,
+    [backgrounds, backgroundId],
+  );
+  // A background's "languages of your choice" Selection (e.g. Acolyte's two).
+  const bgLanguageSelection = useMemo(
+    () =>
+      selectedBackground?.selections.find(
+        (s) => s.type === SelectionType.Language,
+      ) ?? null,
+    [selectedBackground],
+  );
 
   // Proficiency grants unioned across the chosen classes (by category id + item id).
   const proficiency = useMemo(() => {
@@ -190,19 +279,27 @@ export default function CharacterBuilder() {
     totalLevel <= MAX_TOTAL_LEVEL &&
     (picks.length === 1 || !!startingClassId);
   // The class's skill choice must be fully made (exactly `choose`), if it has one.
+  // Edit re-submits already-granted skills with the homebrew flag, so don't gate it there.
   const skillsComplete =
-    !skillSelection || skillIds.length === skillSelection.choose;
+    isEdit || !skillSelection || skillIds.length === skillSelection.choose;
+  // A chosen background's language Selection must be satisfied (relaxed on edit).
+  const languagesComplete =
+    isEdit ||
+    !bgLanguageSelection ||
+    languageIds.length === bgLanguageSelection.choose;
 
   const canAdvance = [
     !!raceId, // Race
     classesValid, // Class
     abilitiesComplete, // Abilities
     skillsComplete, // Skills
+    languagesComplete, // Background (only the language pick can block)
+    true, // Feats (optional)
     true, // Equipment (optional)
-    false, // Review (uses Create)
+    false, // Review (uses Save)
   ][step];
 
-  // Everything that must hold before "Create".
+  // Everything that must hold before saving.
   const createMissing = [
     name.trim().length === 0 ? "a name" : null,
     !raceId ? "a race" : null,
@@ -221,16 +318,21 @@ export default function CharacterBuilder() {
     !skillsComplete
       ? `${skillSelection?.choose} skill${skillSelection?.choose === 1 ? "" : "s"} (${skillIds.length}/${skillSelection?.choose})`
       : null,
+    !languagesComplete
+      ? `${bgLanguageSelection?.choose} background language${bgLanguageSelection?.choose === 1 ? "" : "s"} (${languageIds.length}/${bgLanguageSelection?.choose})`
+      : null,
   ].filter(Boolean);
   const canCreate = createMissing.length === 0;
 
-  // Per-step validity (Equipment is optional → always satisfied). Drives the
-  // StepNav coloring: a prior step is only "done" (green) if it actually passes.
+  // Per-step validity (optional steps are always satisfied). Drives the StepNav
+  // coloring: a prior step is only "done" (green) if it actually passes.
   const stepValid = [
     !!raceId,
     classesValid,
     abilitiesComplete,
     skillsComplete,
+    languagesComplete,
+    true,
     true,
     canCreate,
   ];
@@ -253,11 +355,22 @@ export default function CharacterBuilder() {
     !skillsComplete && skillSelection
       ? `Choose ${skillSelection.choose} skill${skillSelection.choose === 1 ? "" : "s"} — ${skillIds.length}/${skillSelection.choose} selected.`
       : "",
+    !languagesComplete && bgLanguageSelection
+      ? `Choose ${bgLanguageSelection.choose} background language${bgLanguageSelection.choose === 1 ? "" : "s"} — ${languageIds.length}/${bgLanguageSelection.choose} selected.`
+      : "",
+    "",
     "",
     "",
   ][step];
 
   // ---- Class list handlers (multiclass) ----
+  function subclassSelectionFor(classId: string): SelectionResponse | null {
+    return (
+      classes
+        .find((c) => c.id === classId)
+        ?.selections.find((s) => s.type === SelectionType.Subclass) ?? null
+    );
+  }
   function addClass(id: string) {
     setPicks((prev) => {
       if (prev.some((p) => p.classId === id)) return prev;
@@ -274,8 +387,21 @@ export default function CharacterBuilder() {
       );
       const capped = Math.min(level, MAX_TOTAL_LEVEL - others);
       const clamped = Math.max(1, Math.min(20, capped));
-      return prev.map((p) => (p.classId === id ? { ...p, level: clamped } : p));
+      return prev.map((p) => {
+        if (p.classId !== id) return p;
+        // Drop a now-ineligible subclass if the level fell below its grant level.
+        const sel = subclassSelectionFor(id);
+        const keepSub = sel ? clamped >= sel.level : false;
+        return { ...p, level: clamped, subclassId: keepSub ? p.subclassId : undefined };
+      });
     });
+  }
+  function setClassSubclass(id: string, subclassId: string | null) {
+    setPicks((prev) =>
+      prev.map((p) =>
+        p.classId === id ? { ...p, subclassId: subclassId ?? undefined } : p,
+      ),
+    );
   }
   function removeClass(id: string) {
     setPicks((prev) => prev.filter((p) => p.classId !== id));
@@ -306,18 +432,55 @@ export default function CharacterBuilder() {
   function toggleSkill(id: string) {
     setSkillIds((prev) => toggleCapped(prev, id, skillSelection?.choose));
   }
+  function toggleLanguage(id: string) {
+    setLanguageIds((prev) => toggleCapped(prev, id, bgLanguageSelection?.choose));
+  }
+  function toggleFeat(id: string) {
+    setFeatIds((prev) => toggleCapped(prev, id, undefined));
+  }
   function toggleWeapon(id: string) {
     setWeaponIds((prev) => toggleCapped(prev, id, undefined));
   }
 
-  async function create() {
-    if (!canCreate || !raceId) return;
-    setBusy(true);
-    setError(null);
+  // ---- Inventory handlers ----
+  function addInventory(itemId: string) {
+    setInventory((prev) => {
+      const existing = prev.find((i) => i.itemId === itemId);
+      if (existing)
+        return prev.map((i) =>
+          i.itemId === itemId ? { ...i, quantity: (i.quantity ?? 1) + 1 } : i,
+        );
+      return [...prev, { itemId, quantity: 1, isAttuned: false }];
+    });
+  }
+  function setInventoryQty(itemId: string, quantity: number) {
+    setInventory((prev) =>
+      quantity <= 0
+        ? prev.filter((i) => i.itemId !== itemId)
+        : prev.map((i) => (i.itemId === itemId ? { ...i, quantity } : i)),
+    );
+  }
+  function toggleAttune(itemId: string) {
+    setInventory((prev) =>
+      prev.map((i) =>
+        i.itemId === itemId ? { ...i, isAttuned: !i.isAttuned } : i,
+      ),
+    );
+  }
+  function removeInventory(itemId: string) {
+    setInventory((prev) => prev.filter((i) => i.itemId !== itemId));
+  }
+
+  function buildPayload(): CharacterRequest {
     const payload: CharacterRequest = {
       name: name.trim(),
-      raceId,
-      classes: picks,
+      description: description.trim() || undefined,
+      raceId: raceId!,
+      classes: picks.map((p) => ({
+        classId: p.classId,
+        level: p.level,
+        subclassId: p.subclassId ?? undefined,
+      })),
       // Single-class: backend defaults the starting class; multiclass: required.
       startingClassId:
         picks.length > 1 ? (startingClassId ?? undefined) : undefined,
@@ -325,22 +488,68 @@ export default function CharacterBuilder() {
         statId: s.id,
         value: abilities[s.id],
       })),
-      spellSlots: 0,
+      spellSlots: original?.spellSlots ?? 0,
       alignment,
-      experience: 0,
+      experience: original?.experience ?? 0,
       age,
-      hasJackOfAllTrades: false,
+      hasJackOfAllTrades: original?.hasJackOfAllTrades ?? false,
       skillProficiencies: skillIds.map((id) => ({
         skillId: id,
         level: SkillProficiencyLevel.Proficient,
       })),
+      backgroundId: backgroundId ?? undefined,
+      languageIds: languageIds.length ? languageIds : undefined,
+      featIds: featIds.length ? featIds : undefined,
       armorId: armorId ?? undefined,
       shieldId: shieldId ?? undefined,
       equippedWeaponIds: weaponIds.length ? weaponIds : undefined,
+      inventory: inventory.length ? inventory : undefined,
+      copperPieces: coins.cp,
+      silverPieces: coins.sp,
+      electrumPieces: coins.ep,
+      goldPieces: coins.gp,
+      platinumPieces: coins.pp,
     };
+    if (isEdit && original) {
+      // Carry through everything the wizard doesn't expose so the PUT doesn't wipe it.
+      payload.hitPointsOverride = original.hitPointsOverride ?? undefined;
+      payload.armorClassOverride = original.armorClassOverride ?? undefined;
+      payload.spellIds = original.spells.length
+        ? original.spells.map((s) => s.id)
+        : undefined;
+      payload.statusEffects = original.statusEffects.length
+        ? original.statusEffects.map((s) => ({
+            statusEffectId: s.statusEffectId,
+            source: s.source ?? undefined,
+          }))
+        : undefined;
+      payload.personalityTraits = original.personalityTraits ?? undefined;
+      payload.ideals = original.ideals ?? undefined;
+      payload.bonds = original.bonds ?? undefined;
+      payload.flaws = original.flaws ?? undefined;
+      payload.backstory = original.backstory ?? undefined;
+      payload.height = original.height ?? undefined;
+      payload.weight = original.weight ?? undefined;
+      payload.eyes = original.eyes ?? undefined;
+      payload.skin = original.skin ?? undefined;
+      payload.hair = original.hair ?? undefined;
+      // Re-submitting class-granted skills/languages would bust the Selection budgets;
+      // the homebrew flag relaxes the subset/count checks (level gates still apply).
+      payload.allowHomebrewSelections = true;
+    }
+    return payload;
+  }
+
+  async function save() {
+    if (!canCreate || !raceId) return;
+    setBusy(true);
+    setError(null);
     try {
-      const created = await characters.create(payload);
-      navigate(`/character/${created.id}`);
+      const saved =
+        isEdit && editId
+          ? await characters.update(editId, buildPayload())
+          : await characters.create(buildPayload());
+      navigate(`/character/${saved.id}`);
     } catch (err) {
       setError(describeError(err));
       setBusy(false);
@@ -350,8 +559,11 @@ export default function CharacterBuilder() {
   return (
     <div className="container builder">
       <div className="builder__head">
-        <h1>New Character</h1>
-        <Link to="/vault" className="btn btn--ghost">
+        <h1>{isEdit ? "Edit Character" : "New Character"}</h1>
+        <Link
+          to={isEdit ? `/character/${editId}` : "/vault"}
+          className="btn btn--ghost"
+        >
           Cancel
         </Link>
       </div>
@@ -387,6 +599,8 @@ export default function CharacterBuilder() {
             onLevel={setClassLevel}
             onRemove={removeClass}
             onSetStart={setStartingClassId}
+            onSetSubclass={setClassSubclass}
+            subclassSelectionFor={subclassSelectionFor}
           />
         )}
 
@@ -415,6 +629,21 @@ export default function CharacterBuilder() {
         )}
 
         {step === 4 && (
+          <BackgroundStep
+            backgrounds={backgrounds}
+            selectedId={backgroundId}
+            onPick={setBackgroundId}
+            languageSelection={bgLanguageSelection}
+            chosenLanguages={languageIds}
+            onToggleLanguage={toggleLanguage}
+          />
+        )}
+
+        {step === 5 && (
+          <FeatsStep feats={feats} chosen={featIds} onToggle={toggleFeat} />
+        )}
+
+        {step === 6 && (
           <EquipmentStep
             armors={armors}
             weapons={weapons}
@@ -427,10 +656,18 @@ export default function CharacterBuilder() {
             hasClass={picks.length > 0}
             armorProficient={armorProficient}
             weaponProficient={weaponProficient}
+            items={items}
+            inventory={inventory}
+            onAddItem={addInventory}
+            onItemQty={setInventoryQty}
+            onToggleAttune={toggleAttune}
+            onRemoveItem={removeInventory}
+            coins={coins}
+            onCoins={setCoins}
           />
         )}
 
-        {step === 5 && (
+        {step === 7 && (
           <Review
             name={name}
             raceName={races.find((r) => r.id === raceId)?.name}
@@ -445,18 +682,29 @@ export default function CharacterBuilder() {
                 .filter((o) => skillIds.includes(o.optionId))
                 .map((o) => o.name) ?? []
             }
+            backgroundName={selectedBackground?.name}
+            languageNames={
+              bgLanguageSelection?.options
+                .filter((o) => languageIds.includes(o.optionId))
+                .map((o) => o.name) ?? []
+            }
+            featNames={feats
+              .filter((f) => featIds.includes(f.id))
+              .map((f) => f.name)}
             armorName={armors.find((a) => a.id === armorId)?.name}
             shieldName={armors.find((a) => a.id === shieldId)?.name}
             weaponNames={weapons
               .filter((w) => weaponIds.includes(w.id))
               .map((w) => w.name)}
+            itemCount={inventory.reduce((n, i) => n + (i.quantity ?? 1), 0)}
+            coins={coins}
           />
         )}
       </div>
 
       {error && <p className="builder__error">{error}</p>}
 
-      {/* Inline validation guidance: per-step block reason, or what's missing to create. */}
+      {/* Inline validation guidance: per-step block reason, or what's missing to save. */}
       {step === STEPS.length - 1
         ? !canCreate && (
             <p className="builder__validation">
@@ -468,718 +716,15 @@ export default function CharacterBuilder() {
 
       <BuilderNav
         isLast={step === STEPS.length - 1}
+        isEdit={isEdit}
         busy={busy}
         canAdvance={canAdvance}
         canCreate={canCreate}
         onBack={() => setStep((s) => s - 1)}
         onNext={() => setStep((s) => s + 1)}
-        onCreate={create}
+        onCreate={save}
         backDisabled={step === 0 || busy}
       />
-    </div>
-  );
-}
-
-// Toggle an id in a string[] respecting an optional max selection count.
-function toggleCapped(
-  prev: string[],
-  id: string,
-  max: number | null | undefined,
-): string[] {
-  if (prev.includes(id)) return prev.filter((x) => x !== id);
-  if (max !== null && max !== undefined && prev.length >= max) return prev;
-  return [...prev, id];
-}
-
-function BuilderNav({
-  isLast,
-  busy,
-  canAdvance,
-  canCreate,
-  onBack,
-  onNext,
-  onCreate,
-  backDisabled,
-}: {
-  isLast: boolean;
-  busy: boolean;
-  canAdvance: boolean;
-  canCreate: boolean;
-  onBack: () => void;
-  onNext: () => void;
-  onCreate: () => void;
-  backDisabled: boolean;
-}) {
-  return (
-    <div className="builder__nav">
-      <button className="btn" disabled={backDisabled} onClick={onBack}>
-        Back
-      </button>
-      {isLast ? (
-        <button
-          className="btn btn--primary"
-          disabled={!canCreate || busy}
-          onClick={onCreate}
-        >
-          {busy ? "Creating..." : "Create Character"}
-        </button>
-      ) : (
-        <button
-          className="btn btn--primary"
-          disabled={!canAdvance}
-          onClick={onNext}
-        >
-          Next
-        </button>
-      )}
-    </div>
-  );
-}
-
-function PickList({
-  label,
-  items,
-  selectedId,
-  onPick,
-}: {
-  label: string;
-  items: { id: string; name: string; description?: string | null }[];
-  selectedId: string | null;
-  onPick: (id: string) => void;
-}) {
-  if (items.length === 0)
-    return <p className="text-faint">No {label}s loaded (is the API running?).</p>;
-  return (
-    <div className="builder__picks">
-      {items.map((it) => (
-        <button
-          key={it.id}
-          type="button"
-          className={
-            "builder__pick" +
-            (it.id === selectedId ? " builder__pick--selected" : "")
-          }
-          onClick={() => onPick(it.id)}
-        >
-          <span className="builder__pick-name">{it.name}</span>
-          {it.description && (
-            <span className="builder__pick-desc text-faint">
-              {it.description}
-            </span>
-          )}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function BuilderDetails({
-  name,
-  onName,
-  age,
-  onAge,
-  alignment,
-  onAlignment,
-}: {
-  name: string;
-  onName: (v: string) => void;
-  age: number;
-  onAge: (v: number) => void;
-  alignment: Alignment;
-  onAlignment: (v: Alignment) => void;
-}) {
-  return (
-    <div className="builder__details">
-      <input
-        className="input"
-        placeholder="Character name"
-        value={name}
-        onChange={(e) => onName(e.target.value)}
-      />
-      <input
-        className="input builder__age"
-        type="number"
-        min={0}
-        placeholder="Age"
-        value={age || ""}
-        onChange={(e) => onAge(Math.max(0, Number(e.target.value) || 0))}
-      />
-      <select
-        className="input"
-        value={alignment}
-        onChange={(e) => onAlignment(Number(e.target.value) as Alignment)}
-      >
-        {ALIGNMENTS.map((a) => (
-          <option key={a.value} value={a.value}>
-            {a.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-function StepNav({
-  current,
-  valid,
-  onGo,
-}: {
-  current: number;
-  valid: boolean[];
-  onGo: (step: number) => void;
-}) {
-  return (
-    <ol className="builder__steps">
-      {STEPS.map((s, i) => {
-        const done = valid[i] && i < current; // a prior step that actually passes
-        const skipped = !valid[i] && i < current; // moved past, still incomplete
-        return (
-          <li
-            key={s}
-            className={
-              "builder__step" +
-              (i === current ? " builder__step--active" : "") +
-              (done ? " builder__step--done" : "") +
-              (skipped ? " builder__step--todo" : "")
-            }
-            onClick={() => onGo(i)}
-          >
-            <span className="builder__step-num">{i + 1}</span>
-            {s}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-function ClassStep({
-  classes,
-  picks,
-  totalLevel,
-  startingClassId,
-  onAdd,
-  onLevel,
-  onRemove,
-  onSetStart,
-}: {
-  classes: ClassResponse[];
-  picks: CharacterClassRequest[];
-  totalLevel: number;
-  startingClassId: string | null;
-  onAdd: (id: string) => void;
-  onLevel: (id: string, level: number) => void;
-  onRemove: (id: string) => void;
-  onSetStart: (id: string) => void;
-}) {
-  const added = new Set(picks.map((p) => p.classId));
-  const available = classes.filter((c) => !added.has(c.id));
-  return (
-    <>
-      <p className="text-muted builder__hint">
-        Add one or more classes (total level ≤ {MAX_TOTAL_LEVEL}). The{" "}
-        <strong>starting class</strong> grants saving-throw proficiencies and the
-        maxed first hit die.
-      </p>
-      {picks.length > 0 && (
-        <ul className="builder__classlist">
-          {picks.map((p) => {
-            const cls = classes.find((c) => c.id === p.classId);
-            return (
-              <li key={p.classId} className="builder__classrow">
-                <label className="builder__startradio">
-                  <input
-                    type="radio"
-                    name="startclass"
-                    checked={startingClassId === p.classId}
-                    onChange={() => onSetStart(p.classId)}
-                  />
-                  start
-                </label>
-                <span className="builder__classrow-name">{cls?.name ?? "?"}</span>
-                <input
-                  className="input builder__level"
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={p.level}
-                  onChange={(e) =>
-                    onLevel(p.classId, Number(e.target.value) || 1)
-                  }
-                />
-                <button
-                  className="btn btn--ghost"
-                  onClick={() => onRemove(p.classId)}
-                >
-                  remove
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      <p className="text-faint builder__total">
-        Total level: {totalLevel}/{MAX_TOTAL_LEVEL}
-      </p>
-      {totalLevel >= MAX_TOTAL_LEVEL ? (
-        <p className="text-faint">
-          At the level cap — lower a class's level to add another.
-        </p>
-      ) : (
-        <PickList
-          label="class"
-          items={available}
-          selectedId={null}
-          onPick={onAdd}
-        />
-      )}
-    </>
-  );
-}
-
-function AbilitiesStep({
-  mode,
-  onMode,
-  remaining,
-  stats,
-  abilities,
-  primaryStats,
-  onChange,
-}: {
-  mode: AbilityMode;
-  onMode: (m: AbilityMode) => void;
-  remaining: number;
-  stats: StatResponse[];
-  abilities: Record<string, number>;
-  primaryStats: Set<string>;
-  onChange: (statId: string, value: number) => void;
-}) {
-  if (stats.length === 0)
-    return (
-      <p className="text-faint">No default stats loaded (is the API running?).</p>
-    );
-  return (
-    <>
-      <div className="builder__abimode">
-        <div className="builder__chips">
-          <button
-            type="button"
-            className={"builder__chip" + (mode === "pointbuy" ? " builder__chip--on" : "")}
-            onClick={() => onMode("pointbuy")}
-          >
-            Point Buy
-          </button>
-          <button
-            type="button"
-            className={"builder__chip" + (mode === "manual" ? " builder__chip--on" : "")}
-            onClick={() => onMode("manual")}
-          >
-            Manual
-          </button>
-        </div>
-        {mode === "pointbuy" && (
-          <span
-            className={
-              "builder__points" + (remaining < 0 ? " builder__points--over" : "")
-            }
-          >
-            {remaining} / {POINT_BUDGET} points left
-          </span>
-        )}
-        {mode === "manual" && (
-          <span className="text-faint builder__abimode-hint">
-            Free entry 1–30 (homebrew / rolled stats; no budget).
-          </span>
-        )}
-      </div>
-
-      <div className="builder__abilities">
-        {stats.map((s) =>
-          mode === "pointbuy" ? (
-            <PointBuyStat
-              key={s.id}
-              name={s.code ?? s.name}
-              primary={primaryStats.has(s.id)}
-              value={abilities[s.id] ?? POINT_MIN}
-              remaining={remaining}
-              onChange={(v) => onChange(s.id, v)}
-            />
-          ) : (
-            <label key={s.id} className="builder__ability">
-              <span className="builder__ability-name">
-                {s.code ?? s.name}
-                {primaryStats.has(s.id) && <PrimaryTag />}
-              </span>
-              <input
-                className="input"
-                type="number"
-                min={1}
-                max={30}
-                value={abilities[s.id] ?? ""}
-                placeholder="10"
-                onChange={(e) => onChange(s.id, Number(e.target.value))}
-              />
-            </label>
-          ),
-        )}
-      </div>
-    </>
-  );
-}
-
-function PrimaryTag() {
-  return (
-    <span
-      className="builder__primary-tag tip"
-      data-tooltip="Primary ability for the chosen class — prioritise this score."
-    >
-      primary
-    </span>
-  );
-}
-
-function PointBuyStat({
-  name,
-  primary,
-  value,
-  remaining,
-  onChange,
-}: {
-  name: string;
-  primary: boolean;
-  value: number;
-  remaining: number;
-  onChange: (v: number) => void;
-}) {
-  const nextCost = pointCost(value + 1) - pointCost(value);
-  return (
-    <div className="builder__ability">
-      <span className="builder__ability-name">
-        {name}
-        {primary && <PrimaryTag />}
-      </span>
-      <div className="builder__stepper">
-        <button
-          type="button"
-          className="btn"
-          disabled={value <= POINT_MIN}
-          onClick={() => onChange(value - 1)}
-        >
-          −
-        </button>
-        <span className="builder__stepper-val">{value}</span>
-        <button
-          type="button"
-          className="btn"
-          disabled={value >= POINT_MAX || nextCost > remaining}
-          onClick={() => onChange(value + 1)}
-        >
-          +
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function SkillsStep({
-  selection,
-  chosen,
-  hasClass,
-  onToggle,
-  abilityFor,
-}: {
-  selection: SelectionResponse | null;
-  chosen: string[];
-  hasClass: boolean;
-  onToggle: (id: string) => void;
-  abilityFor: Map<string, string>;
-}) {
-  if (!selection || selection.options.length === 0)
-    return (
-      <p className="text-faint">
-        {hasClass
-          ? "The starting class defines no skill choices — skip ahead."
-          : "Pick a class first to see its skill choices."}
-      </p>
-    );
-  return (
-    <>
-      <p className="text-muted">
-        Choose {selection.choose} skill{selection.choose === 1 ? "" : "s"} (
-        {chosen.length}/{selection.choose} selected).
-      </p>
-      <div className="builder__chips">
-        {selection.options.map((o) => {
-          const ability = abilityFor.get(o.optionId);
-          return (
-            <button
-              key={o.optionId}
-              type="button"
-              className={
-                "builder__chip" +
-                (chosen.includes(o.optionId) ? " builder__chip--on" : "")
-              }
-              onClick={() => onToggle(o.optionId)}
-            >
-              {o.name}
-              {ability && <span className="text-faint"> ({ability})</span>}
-            </button>
-          );
-        })}
-      </div>
-    </>
-  );
-}
-
-function EquipmentStep({
-  armors,
-  weapons,
-  armorId,
-  shieldId,
-  weaponIds,
-  onArmor,
-  onShield,
-  onToggleWeapon,
-  hasClass,
-  armorProficient,
-  weaponProficient,
-}: {
-  armors: ArmorResponse[];
-  weapons: WeaponResponse[];
-  armorId: string | null;
-  shieldId: string | null;
-  weaponIds: string[];
-  onArmor: (id: string | null) => void;
-  onShield: (id: string | null) => void;
-  onToggleWeapon: (id: string) => void;
-  hasClass: boolean;
-  armorProficient: (a: ArmorResponse) => boolean;
-  weaponProficient: (w: WeaponResponse) => boolean;
-}) {
-  const armorOption = (a: ArmorResponse) => {
-    const prof = armorProficient(a);
-    const cat = a.armorCategory ?? "this armor";
-    return {
-      id: a.id,
-      name: a.name,
-      meta: a.isShield ? `+${a.baseArmorClass} AC` : armorMeta(a),
-      nonProficient: hasClass && !prof,
-      title: !hasClass
-        ? armorTip(a)
-        : prof
-          ? `Proficient with ${cat}.`
-          : `Not proficient with ${cat}: you can't cast spells and have disadvantage on STR/DEX checks, saves, and attacks while wearing it.`,
-    };
-  };
-  const bodyArmors = armors.filter((a) => !a.isShield).map(armorOption);
-  const shields = armors.filter((a) => a.isShield).map(armorOption);
-  return (
-    <div className="builder__equip">
-      <SingleChoice title="Armor" options={bodyArmors} selected={armorId} onPick={onArmor} />
-      <SingleChoice title="Shield" options={shields} selected={shieldId} onPick={onShield} />
-      <div>
-        <h4 className="builder__equip-title">Weapons</h4>
-        {weapons.length === 0 ? (
-          <p className="text-faint">No weapons loaded.</p>
-        ) : (
-          <div className="builder__chips">
-            {weapons.map((w) => {
-              const prof = weaponProficient(w);
-              const nonProficient = hasClass && !prof;
-              const cat = w.weaponCategory ?? "this weapon";
-              return (
-                <button
-                  key={w.id}
-                  type="button"
-                  data-tooltip={
-                    !hasClass
-                      ? weaponTip(w)
-                      : prof
-                        ? `Proficient with ${cat}.`
-                        : `Not proficient with ${cat}: attacks don't add your proficiency bonus.`
-                  }
-                  className={
-                    "builder__chip tip" +
-                    (weaponIds.includes(w.id) ? " builder__chip--on" : "") +
-                    (nonProficient ? " builder__chip--nonprof" : "")
-                  }
-                  onClick={() => onToggleWeapon(w.id)}
-                >
-                  {nonProficient && <span className="builder__nonprof-mark">⚠ </span>}
-                  {w.name}
-                  {weaponMeta(w) && (
-                    <span className="text-faint"> · {weaponMeta(w)}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-      <div className="builder__equip-note">
-        <p>
-          {hasClass ? (
-            <>
-              <strong>⚠ Items in red aren't in your class's proficiencies.</strong>{" "}
-              You can still equip them, but 5e penalties apply:
-            </>
-          ) : (
-            <>
-              <strong>Pick a class to see proficiency.</strong> Equipping
-              non-proficient gear is allowed, but carries 5e penalties:
-            </>
-          )}
-        </p>
-        <ul>
-          <li>
-            <strong>Armor</strong> you lack proficiency with: you{" "}
-            <strong>can't cast spells</strong> and have disadvantage on any STR/DEX
-            ability check, save, or attack while wearing it.
-          </li>
-          <li>
-            <strong>Weapons</strong> you lack proficiency with: attacks don't add
-            your proficiency bonus.
-          </li>
-        </ul>
-        <p className="text-faint">
-          The sheet shows the real (penalized) AC and attack bonuses after
-          creation. Hover an item for details.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function armorMeta(a: ArmorResponse): string {
-  const bits = [a.armorCategory, `AC ${a.baseArmorClass}`];
-  if (a.stealthDisadvantage) bits.push("stealth disadv");
-  return bits.filter(Boolean).join(" · ");
-}
-function armorTip(a: ArmorResponse): string {
-  return `${a.armorCategory ?? "Armor"}: if your class isn't proficient, you can't cast spells and have disadvantage on STR/DEX checks, saves, and attacks while wearing it.`;
-}
-function weaponMeta(w: WeaponResponse): string {
-  return [w.damage, w.isRanged ? "ranged" : null, w.isFinesse ? "finesse" : null]
-    .filter(Boolean)
-    .join(" · ");
-}
-function weaponTip(w: WeaponResponse): string {
-  return `${w.weaponCategory ?? "Weapon"}: if your class isn't proficient with it, your attacks don't add your proficiency bonus.`;
-}
-
-function SingleChoice({
-  title,
-  options,
-  selected,
-  onPick,
-}: {
-  title: string;
-  options: {
-    id: string;
-    name: string;
-    meta?: string;
-    title?: string;
-    nonProficient?: boolean;
-  }[];
-  selected: string | null;
-  onPick: (id: string | null) => void;
-}) {
-  return (
-    <div>
-      <h4 className="builder__equip-title">{title}</h4>
-      <div className="builder__chips">
-        <button
-          type="button"
-          className={"builder__chip" + (selected === null ? " builder__chip--on" : "")}
-          onClick={() => onPick(null)}
-        >
-          None
-        </button>
-        {options.map((o) => (
-          <button
-            key={o.id}
-            type="button"
-            data-tooltip={o.title}
-            className={
-              "builder__chip" +
-              (selected === o.id ? " builder__chip--on" : "") +
-              (o.title ? " tip" : "") +
-              (o.nonProficient ? " builder__chip--nonprof" : "")
-            }
-            onClick={() => onPick(o.id)}
-          >
-            {o.nonProficient && <span className="builder__nonprof-mark">⚠ </span>}
-            {o.name}
-            {o.meta && <span className="text-faint"> · {o.meta}</span>}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function Review({
-  name,
-  raceName,
-  picks,
-  classes,
-  startingClassId,
-  alignment,
-  stats,
-  abilities,
-  skillNames,
-  armorName,
-  shieldName,
-  weaponNames,
-}: {
-  name: string;
-  raceName?: string;
-  picks: CharacterClassRequest[];
-  classes: ClassResponse[];
-  startingClassId: string | null;
-  alignment: Alignment;
-  stats: StatResponse[];
-  abilities: Record<string, number>;
-  skillNames: string[];
-  armorName?: string;
-  shieldName?: string;
-  weaponNames: string[];
-}) {
-  const alignmentLabel =
-    ALIGNMENTS.find((a) => a.value === alignment)?.label ?? "—";
-  const classLine =
-    picks
-      .map((p) => {
-        const cls = classes.find((c) => c.id === p.classId);
-        const star = picks.length > 1 && p.classId === startingClassId ? "★" : "";
-        return `${cls?.name ?? "?"} ${p.level}${star}`;
-      })
-      .join(" / ") || "No class";
-  const gear = [
-    armorName,
-    shieldName ? `${shieldName} (shield)` : null,
-    ...weaponNames,
-  ].filter(Boolean);
-  return (
-    <div className="builder__review">
-      <h2 className="builder__review-name">{name || "Unnamed hero"}</h2>
-      <p className="text-muted">
-        {raceName ?? "No race"} · {classLine} · {alignmentLabel}
-      </p>
-      <div className="builder__review-abilities">
-        {stats.map((s) => (
-          <div key={s.id} className="builder__review-ability">
-            <span className="builder__ability-name">{s.code ?? s.name}</span>
-            <strong>{abilities[s.id] ?? "—"}</strong>
-          </div>
-        ))}
-      </div>
-      {skillNames.length > 0 && (
-        <p className="text-muted">Skills: {skillNames.join(", ")}</p>
-      )}
-      {gear.length > 0 && (
-        <p className="text-muted">Equipment: {gear.join(", ")}</p>
-      )}
     </div>
   );
 }
