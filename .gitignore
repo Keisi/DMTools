@@ -31,3 +31,9 @@ dist-ssr
 # Local code-intelligence / tooling (machine-local, never committed)
 .oby/
 .spectral/
+.codebridge/
+.critical-review-state.json
+# oby-init-generated project memory + references (regenerated locally;
+# distinct from the authored root CLAUDE.md, which stays tracked)
+.claude/CLAUDE.md
+.claude/references/
