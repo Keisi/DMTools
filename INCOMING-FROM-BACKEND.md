@@ -219,3 +219,147 @@ internal. Nothing to do on your side; noted only so the diff isn't a surprise.
 - codescan grade **A** (0 issues / 0 vulns), 0 cross-module duplicates.
 - IIS pool `DMTool` rebuilt + running; `/api/health` → ok. DB `DMTools_local` now **through migration 036**.
 - Commits on `origin/master`: `7e35c19` (backstory + folds), `b3c9a5f` (HP/AC breakdowns).
+
+---
+
+# INCOMING #4 — Level-up engine Phase 3: sub-feature choices (Fighting Style / Expertise / Metamagic)
+
+**Date:** 2026-06-07. Shipped, built, **live-verified**, committed + **pushed to `origin/master`** (`6395d3d`,
+migration **037**; DB `DMTools_local` now **through 037**). Test login unchanged: `dungeonmaster` / `Passw0rd!23`.
+**The level-up engine is now complete** (Plan + Apply + sub-feature choices). All additions below are **additive /
+non-breaking** — nothing existing changed shape.
+
+> **TL;DR for the LevelUpDialog:** the plan response gains a `featureChoices[]` array. Render each entry as a
+> "choose N" picker; on apply, echo the picks back in a `featureChoices[]` array. Two brand-new reference
+> catalogs (`/api/fightingstyles`, `/api/metamagics`) supply option names. Expertise is special — its picker is
+> populated from *the character's own proficient skills*, not from the selection's options (see below).
+
+## Background: the Selection source generalization (internal — **nothing to do**)
+Internally we replaced `Selection`'s `jobId`/`backgroundId` columns with a polymorphic `sourceType`/`sourceId`.
+**`SelectionResponse` never exposed those fields**, so `/api/classes` and `/api/backgrounds` selection shapes are
+**unchanged**. Mentioned only so the backend diff isn't a surprise.
+
+## New `SelectionType` enum values (enums are NUMBERS over the wire)
+```
+1 = Skill   2 = Subclass   3 = Language   4 = FightingStyle   5 = Expertise   6 = Metamagic
+```
+`SelectionResponse.type` can now be 4 / 5 / 6 in level-up plans (and on `/api/classes` if you ever inspect
+class-feature selections, though those aren't surfaced on `ClassResponse` today).
+
+## Two new reference catalogs (GET + homebrew POST)
+```jsonc
+GET /api/fightingstyles  ->  [ { "id": "...", "name": "Archery",  "description": "You gain a +2 bonus ..." }, ... ]   // 6 SRD styles
+GET /api/metamagics      ->  [ { "id": "...", "name": "Quickened Spell", "description": "..." }, ... ]                // 8 SRD options
+POST /api/fightingstyles { "name": "...", "description": "..." }   // homebrew, returns the created row
+POST /api/metamagics     { "name": "...", "description": "..." }
+```
+You usually won't need to fetch these directly for the level-up flow — the plan's `featureChoices[].selection.options[]`
+already carry `{ optionId, name }`. Fetch the catalogs only if you want a standalone "browse fighting styles" view.
+
+## `CharacterRequest` — two new optional fields (create/edit time)
+For setting these at character **creation** (e.g. a Fighter built directly at level 3 who already has a style):
+```jsonc
+"fightingStyleIds": ["<FightingStyle id>", ...],   // optional; existence-checked
+"metamagicIds":     ["<Metamagic id>", ...]         // optional; existence-checked
+```
+(Expertise at creation is unchanged — set it via `skillProficiencies[].level = 2` as you already can.)
+
+## `CharacterResponse` — two new always-present arrays
+```jsonc
+"fightingStyles": [ { "id": "<FightingStyle id>", "name": "Dueling" } ],   // NamedRef[]; [] when none
+"metamagics":     [ { "id": "<Metamagic id>", "name": "Subtle Spell" } ]    // NamedRef[]; [] when none
+```
+Render these on the sheet (e.g. under the class features panel). **Expertise** does **not** appear here — it shows
+up exactly as before in `skills[]`: the chosen skills' `level` becomes `2` (Expertise) and their `bonus` doubles
+the proficiency contribution. (`SkillProficiencyLevel`: `1` = Proficient, `2` = Expertise.)
+
+## Level-up **Plan** response — new `featureChoices[]`
+`POST /api/character/{id}/levelup/plan { "classId": "..." }` now returns, alongside the existing
+`subclassChoice` / `spellChoices` / etc.:
+```jsonc
+"featureChoices": [
+  {
+    "featureName": "Fighting Style",     // the granting class feature
+    "source": "Paladin",                 // class (or subclass) that granted it — for display
+    "selection": {                       // a standard SelectionResponse
+      "id": "<selectionId>",             // <-- echo this back on apply
+      "name": "Paladin Fighting Style",
+      "type": 4,                         // 4=FightingStyle, 5=Expertise, 6=Metamagic
+      "choose": 1,                       // how many to pick
+      "level": 2,
+      "options": [                       // present for FightingStyle (4) & Metamagic (6)
+        { "optionId": "<FightingStyle id>", "name": "Dueling" },
+        { "optionId": "<FightingStyle id>", "name": "Defense" },
+        { "optionId": "<FightingStyle id>", "name": "Protection" },
+        { "optionId": "<FightingStyle id>", "name": "Great Weapon Fighting" }
+      ]
+    }
+  }
+]
+```
+- `featureChoices` is `[]` when the level forces no sub-feature choice. It only appears for a feature **gained at
+  the new level** (e.g. Paladin/Ranger Fighting Style at L2, Sorcerer Metamagic at L3/L10/L17, Rogue/Bard
+  Expertise at their levels). A Fighter's L1 Fighting Style is a **create-time** choice (see `fightingStyleIds`),
+  not a level-up one.
+- **Expertise (`type: 5`) has an EMPTY `options[]` array** — its pool is *dynamic*: the character's
+  **already-proficient skills**. For the Expertise picker, list the character's proficient skills (from the
+  sheet's `skills[]` where `isProficient === true`) and let the DM pick `choose` of them.
+
+## Level-up **Apply** request — new `featureChoices[]`
+`POST /api/character/{id}/levelup/apply` gains one optional field (everything else as before):
+```jsonc
+{
+  "classId": "...",
+  "hitPoints": { "mode": 0 },
+  // ... subclassId / abilityImprovements / featId / cantripIds / spellIds as applicable ...
+  "featureChoices": [
+    { "selectionId": "<from plan>", "optionIds": ["<chosen optionId>", ...] }
+  ],
+  "allowHomebrewSelections": false
+}
+```
+- **FightingStyle / Metamagic:** `optionIds` = the chosen `optionId`s from the plan's `selection.options`.
+- **Expertise:** `optionIds` = **Skill ids the character is already proficient in** (pick `choose` of them).
+- One entry per plan choice; `selectionId` must match a `featureChoices[].selection.id` from the plan.
+- `allowHomebrewSelections: true` relaxes the count + subset gates (DM override), same semantics as the
+  subclass/spell picks.
+
+### Validation (all 400 on `featureChoices`)
+- More picks than `choose`, or a pick outside the pool (style not offered to this class / skill not proficient)
+  → 400. A `selectionId` not offered at this level → 400. Re-picking a fighting style/metamagic the character
+  already has is silently de-duped (no error, no duplicate).
+
+## Visible sheet cleanup (non-breaking, but you'll notice it)
+Previously, Fighter/Paladin/Ranger characters listed every fighting-style option as its own entry in
+`CharacterResponse.features` (e.g. "Fighting Style: Archery", "Fighting Style: Defense", …) — a data-import
+artifact. **Those are gone.** A character now shows a single `"Fighting Style"` feature, and the chosen style
+lives in the new `fightingStyles[]` array. If your sheet was rendering those `"Fighting Style: X"` rows, they'll
+simply stop appearing (correct behavior).
+
+## Suggested UI flow for the LevelUpDialog
+1. `POST .../levelup/plan` → read `featureChoices[]` (in addition to subclass/spell choices you already handle).
+2. For each entry, render a "choose `selection.choose`" picker:
+   - `type 4/6` → options from `selection.options[]` (`name` for label, `optionId` for value).
+   - `type 5` (Expertise) → options = the character's proficient skills (`skills[]` where `isProficient`).
+3. `POST .../levelup/apply` with `featureChoices: [{ selectionId, optionIds }]` for each.
+4. On success you get the updated `CharacterResponse` — read `fightingStyles[]` / `metamagics[]`, and for
+   Expertise the upgraded `skills[]` (`level: 2`).
+
+## Live-verified examples
+- **Paladin 1→2:** plan `featureChoices` = 1 entry, `type 4`, `choose 1`, options `Dueling/Defense/Protection/
+  Great Weapon Fighting` (correctly **no** Archery/Two-Weapon — Paladin's SRD subset). Applied Dueling →
+  `fightingStyles: [{ name: "Dueling" }]`.
+- **Sorcerer 2→3:** plan `featureChoices` = 1 entry, `type 6`, `choose 2`, 8 metamagic options. Applied 2 →
+  `metamagics: [{ name: "Heightened Spell" }, { name: "Subtle Spell" }]`.
+- **Rogue 5→6:** plan `featureChoices` = 1 entry, `type 5`, `choose 2`, `options: []` (dynamic). Applied 2
+  proficient skill ids → those `skills[]` entries now `level: 2`, bonus = ability mod + 2×proficiency.
+
+## Build / status
+- `dotnet build DMTool.slnx` → **0 errors**; `dotnet test` → **60/60 pass** (+1 planner test).
+- codescan grade **A** (0 issues / 0 vulns), 0 cross-module duplicates. Migration **037** idempotent.
+- IIS pool `DMTool` running; `/api/health` → ok. DB `DMTools_local` **through 037**.
+- Commits on `origin/master`: `6395d3d` (Phase 3), `eb4b19b` (CLAUDE.md migration-list refresh).
+- **Known simplifications (not blockers):** fighting-style/metamagic mechanical effects are description-only
+  (conditional bonuses applied at the table — show the `description`); metamagic isn't de-duped against
+  already-known across level-ups (DM picks new ones). Eldritch Invocations (Warlock) aren't seeded yet — same
+  recipe when wanted.
