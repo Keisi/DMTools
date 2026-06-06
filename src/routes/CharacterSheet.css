@@ -205,3 +205,13 @@
 .ability--help {
   cursor: help;
 }
+
+/* Equipped rows: 3-column grid so the "not proficient" warning aligns into its
+   own column (name | warning | slot) instead of sitting ragged after each name. */
+.prof-list__row--equip {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+}
+.prof-list__row--equip .prof-list__val {
+  justify-self: end;
+}

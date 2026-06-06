@@ -399,6 +399,30 @@ function AttacksBlock({
   );
 }
 
+function EquipRow({
+  name,
+  slot,
+  warning,
+}: {
+  name: string;
+  slot: string;
+  warning?: string;
+}) {
+  return (
+    <li className="prof-list__row prof-list__row--equip">
+      <span className="prof-list__name">{name}</span>
+      <span className="sheet__equip-warn">
+        {warning && (
+          <span className="sheet__warn tip" data-tooltip={warning}>
+            ⚠ not proficient
+          </span>
+        )}
+      </span>
+      <span className="prof-list__val text-faint">{slot}</span>
+    </li>
+  );
+}
+
 function EquippedBlock({ character }: { character: CharacterResponse }) {
   const c = character;
   const hasGear =
@@ -410,44 +434,29 @@ function EquippedBlock({ character }: { character: CharacterResponse }) {
       <hr className="rule" />
       <ul className="prof-list">
         {c.equippedArmor && (
-          <li className="prof-list__row">
-            <span className="prof-list__name">
-              {c.equippedArmor.name}
-              {c.equippedArmorProficient === false && (
-                <span
-                  className="sheet__warn tip"
-                  data-tooltip="Not proficient with this armor — you can't cast spells and have disadvantage on STR/DEX checks, saves, and attacks while wearing it."
-                >
-                  {" "}
-                  ⚠ not proficient
-                </span>
-              )}
-            </span>
-            <span className="prof-list__val text-faint">armor</span>
-          </li>
+          <EquipRow
+            name={c.equippedArmor.name}
+            slot="armor"
+            warning={
+              c.equippedArmorProficient === false
+                ? "Not proficient with this armor — you can't cast spells and have disadvantage on STR/DEX checks, saves, and attacks while wearing it."
+                : undefined
+            }
+          />
         )}
         {c.equippedShield && (
-          <li className="prof-list__row">
-            <span className="prof-list__name">
-              {c.equippedShield.name}
-              {c.equippedShieldProficient === false && (
-                <span
-                  className="sheet__warn tip"
-                  data-tooltip="Not proficient with shields — disadvantage on STR/DEX checks, saves, and attacks while using it."
-                >
-                  {" "}
-                  ⚠ not proficient
-                </span>
-              )}
-            </span>
-            <span className="prof-list__val text-faint">shield</span>
-          </li>
+          <EquipRow
+            name={c.equippedShield.name}
+            slot="shield"
+            warning={
+              c.equippedShieldProficient === false
+                ? "Not proficient with shields — disadvantage on STR/DEX checks, saves, and attacks while using it."
+                : undefined
+            }
+          />
         )}
         {c.equippedWeapons.map((w) => (
-          <li key={w.id} className="prof-list__row">
-            <span className="prof-list__name">{w.name}</span>
-            <span className="prof-list__val text-faint">weapon</span>
-          </li>
+          <EquipRow key={w.id} name={w.name} slot="weapon" />
         ))}
       </ul>
     </section>
