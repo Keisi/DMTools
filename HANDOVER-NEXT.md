@@ -1,82 +1,72 @@
-# Handover — what to do next (DMTool-FrontEnd)
+# Handover — DMTool-FrontEnd (for the next session)
 
-> **✅ FULLY COMPLETED 2026-06-06 by the frontend session — do NOT re-run STEP 1/2.**
-> - STEP 1 (CharacterSheet renames): done — build is GREEN (`tsc -b && vite build` ✓), lint clean.
-> - STEP 2 (CharacterBuilder create flow): done — working single-class wizard → `POST /api/character`, live-verified.
-> - Bonus: level-up UI (`routes/LevelUpDialog.tsx`) added + live-verified; `types.ts` reconciled.
-> The living status doc is now `FRONTEND-CONTEXT.md` ("Suggested next steps"). The notes below
-> are kept only as a record of the original ask. **Test login `dungeonmaster` was purged by the
-> backend's DB cleanup — register a fresh account via the Login screen.**
+Written 2026-06-06 at the end of a long build session. This is the authoritative
+"where things stand + what to do next" doc. Companion: `FRONTEND-CONTEXT.md`
+(architecture/API map) and `CLAUDE.md` (commands, constraints, spectral recipe,
+quality-gate notes). Backend lives at `C:\Users\keisi\source\repos\DMTool`
+(`DMTool.slnx`); the authoritative API contract is its `Models/*` + `Entities/Enums/*`.
 
-Written 2026-06-06 by the backend-dir session for the **frontend session**.
-Companion to `FRONTEND-CONTEXT.md` (stack, styling system, API map, gotchas).
-Source of truth for contracts: `..\DMTool\DMTool\Models\*` + `..\DMTool\DMTool.Entities\Enums\*`.
+## Current state
+- **Git:** repo on `main`, remote `origin` (Azure DevOps `DMTools-Frontend`). HEAD =
+  `5d6e705`. Working tree clean. All session work is committed + pushed.
+- **Gates:** `npm run build` (`tsc -b && vite build`) and `npm run lint` both GREEN.
+  There is **no test runner** — `tsc -b` + eslint are the correctness gates.
+- **Dev server:** `npm run dev` → http://localhost:5173 (proxies `/api` → backend
+  `:3501`). May not survive a context clear — restart with `npm run dev` if down.
+- **Backend:** IIS at `:3501`. Test login **`dungeonmaster` / `Passw0rd!23`**.
+  Characters are **owner-scoped** (IDOR fix) — you only see your own; another
+  account's id returns 404. The owner currently has one real character ("Keisi").
 
-## Status snapshot
-- **Done this session:** `src/api/types.ts` is now a full, faithful mirror of the
-  backend DTOs (reference + `CharacterRequest`/`CharacterResponse` + level-up);
-  `src/api/endpoints.ts` is fully typed; `Vault.tsx` + `CharacterBuilder.tsx`
-  reconciled to the new types. Auth/proxy verified live (9 races / 12 classes /
-  319 spells / 478 items / 0 characters through `:5173` → backend `:3501`).
-- **Build is RED.** `CharacterSheet.tsx` was NOT reconciled to the upgraded
-  `types.ts` — 8 TS errors, all in that one file. Fix it first (below), then the
-  build goes green again.
+## Done this session
+`types.ts` reconciled to the live backend contract; character **builder**
+(multiclass, equipment, point-buy + Manual ability modes, creation validations,
+non-proficient-gear red flags, primary-ability badge, skill governing-ability
+labels, StepNav valid/incomplete coloring); **level-up** dialog (plan→choose→apply,
+portal-centered, Escape-to-close, "Still needed" apply feedback, ASI shows current
+score, aligned ASI rows); rich **character sheet** (attacks, resources, spellcasting,
+features, traits, encumbrance, status, equipped gear) with custom token-driven
+**tooltips** (ability/save/skill/attack/spellcasting breakdowns; vitals; aligned
+equipped-row proficiency warnings). Backend IDOR/BOLA fix + class
+proficiency/primary-ability exposure were handed off and landed (see
+`INCOMING-FROM-BACKEND.md`).
 
-## STEP 1 (do first): make `CharacterSheet.tsx` compile
-The DTO field names changed when `types.ts` was upgraded. An `abilityMod()` helper
-was already added at the top of the file (currently unused — that's error #1).
-Apply these renames in the JSX:
+## ⏳ IN-FLIGHT — the one pending feature
+**Full HP & AC breakdown tooltips.** The HP/AC vital tooltips on the sheet are
+currently **partial** (HP = derived-vs-override; AC = source armor) because the API
+doesn't return the component math. A handoff was sent to the backend:
+`C:\Users\keisi\source\repos\DMTool\FRONTEND-REQUEST-hp-ac-breakdown.md`, asking for
+`hitPointBreakdown {fromHitDice, fromConstitution, total}` and
+`armorClassBreakdown {base, dexterity, shield, other, total, source}` on
+`CharacterResponse`.
 
-| Current (broken) | Replace with | Why |
-|---|---|---|
-| `c.raceName` | `c.race?.name` | `CharacterResponse.race` is a `RaceRef`, not a flat string |
-| `a.statCode` | `a.name` | `AbilityScoreResponse` has `name`, no `statCode` |
-| `a.modifier` | `abilityMod(a.effective)` | API does **not** return the modifier — derive `floor((effective-10)/2)` (helper already present) |
-| `s.proficient` (saves) | `s.isProficient` | renamed |
-| `s.statCode` (saves) | `s.name` | `SavingThrowResponse` has `name` |
-| `s.bonus` (saves) | `s.modifier` | `SavingThrowResponse.modifier` |
-| `s.proficient` (skills) | `s.isProficient` | `SkillBonusResponse.isProficient` |
-| `s.bonus` (skills) | `s.bonus` | unchanged (skills DO have `bonus`) |
+**Next session must:**
+1. Check `INCOMING-FROM-BACKEND.md` — has the backend shipped it? (The background
+   watcher from last session is gone after the context clear.) If not, relay the
+   request to the backend session.
+2. When it lands: add the two fields to `CharacterResponse` in `src/api/types.ts`,
+   then upgrade `hpTip` / `acTip` in `src/routes/CharacterSheet.tsx` (search for
+   `const hpTip` / `const acTip`) to render the real components.
 
-`npx tsc -b` should then be clean. (`Vault.tsx`/`CharacterBuilder.tsx` are
-already on the new shapes — use them as the pattern.)
+## Environment gotchas
+- **Quality-cascade Stop-hook:** the work-grade cascade (tests/causal-proof/
+  persistence/race) is inapplicable to this no-test-runner frontend. Break-glass
+  `CODEBRIDGE_SKIP_CASCADE=1` is committed in `.claude/settings.json` and loads at
+  **session start**, so a fresh session won't be blocked. (Last session was blocked
+  mid-run only because settings load at launch.)
+- **Spectral verification:** the per-call daemon dies between CLI calls here; use
+  `spectral batch` (single process) — full recipe in `CLAUDE.md` (inject JWT into
+  `localStorage['dmtool.jwt']`, navigate, `--screenshot`, read `C:\tmp\spectral-batch\final.png`).
+- `.oby/`, `.spectral/`, `.codebridge/`, `.critical-review-state.json`, `.env`, and
+  oby-generated `.claude/CLAUDE.md` + `.claude/references/` are gitignored.
 
-## STEP 2 (the actual feature): finish the CharacterBuilder create flow
-`routes/CharacterBuilder.tsx` is still a stub: only Race + Class steps load data;
-Abilities/Skills/Review show placeholder text. **This is NOT backend level-up
-Phase 3** — that's an unrelated *level-up* task. The create endpoint already
-exists: `POST /api/character` → `characters.create(payload: CharacterRequest)`.
+## Open / never-started (from FRONTEND-CONTEXT next-steps)
+- Builder: feats, background, subclass-at-creation, inventory items.
+- Level-up: feat-based ASI (ability improvements only today).
+- Sheet: inventory management (add/consume/attune — endpoints + DTOs exist).
+- Character **editing** via `PUT /api/character/{id}` (reuse the builder).
+- Homebrew `*CreateRequest` DTOs when the Compendium gains "add homebrew".
 
-Wire the wizard to assemble and submit a `CharacterRequest` (type already defined):
-1. **Race** — capture the picked `raceId` in builder state (list loads; `PickList`
-   buttons need an `onClick`/selection state).
-2. **Class** — pick class(es) + level → `classes: [{ classId, level }]`
-   (`CharacterClassRequest`). Single-class is fine for v1.
-3. **Abilities** — `reference.stats()` → render the stats; enter base scores →
-   `abilityScores: [{ statId, value }]` (`AbilityScoreRequest`, value = BASE 1–30).
-   **Every `StatResponse.isDefault === true` stat MUST be present** or the
-   controller 400s. Proposed UX: manual numeric entry (point-buy/std-array later).
-4. **Skills** — optional: `reference.skills()` → `skillProficiencies:
-   [{ skillId, level? }]` (`SkillProficiencyRequest`; level defaults to Proficient).
-5. **Review** — `name`, `alignment` (enum int, e.g. `Alignment.TrueNeutral`),
-   `experience`/`age`/`spellSlots` (default 0), `hasJackOfAllTrades: false`, then
-   `await characters.create(payload)` → `navigate(\`/character/${res.id}\`)`.
-
-Minimum required payload: `name` (≤200), `raceId`, `classes` (≥1, level sum ≤20),
-`abilityScores` (all default stats). Everything else optional. On `ApiError`
-(400) show `err.body` — cross-field rules (classes exist + distinct, level cap,
-required stats) are validated server-side.
-
-## Operational state (left running)
-- **Frontend dev server**: `npm run dev` → http://localhost:5173 (background; HMR live).
-- **Backend**: IIS pool `DMTool` running → `:3501`, `/api/health` ok. `/api` is proxied.
-- **Test login**: `dungeonmaster` / `Passw0rd!23` (created in `DMTools_local`;
-  the only non-SRD row vs the squash's 0-user curation — delete to restore).
-- Vault is empty until you create a character (0 in DB by design).
-
-## Gotchas (already baked into types.ts, but worth knowing)
-- JSON is **camelCase**; **enums are NUMBERS** (modeled as const-object + union —
-  `tsconfig` `erasableSyntaxOnly` forbids TS `enum`).
-- `GET /api/character` (list) returns **full `CharacterResponse[]`** (no summary DTO).
-- Ability **modifier is not returned** — derive it (`abilityMod`).
-- All reference routes are `[Authorize]` (only `/api/health` + `/api/auth/*` are open).
+## Coordination files (records of cross-session handoffs)
+- `FRONTEND-REQUEST-class-proficiencies.md` (backend repo) — DONE.
+- `FRONTEND-REQUEST-hp-ac-breakdown.md` (backend repo) — PENDING (see above).
+- `INCOMING-FROM-BACKEND.md` (here) — backend's callback log.
