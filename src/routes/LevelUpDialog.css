@@ -90,9 +90,10 @@
   gap: var(--sp-2);
 }
 .lvl__asi-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--sp-4);
 }
 .lvl__asi-name {
   color: var(--text-muted);
@@ -101,6 +102,9 @@
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
   color: var(--accent);
+  text-align: right;
+  min-width: 4.5rem; /* aligns the score column so "8" and "8 → 10" share a right edge */
+  white-space: nowrap;
 }
 .lvl__stepper {
   display: flex;

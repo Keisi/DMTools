@@ -88,6 +88,15 @@ export default function LevelUpDialog({
     };
   }, [classId, characterId]);
 
+  // Close on Escape.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const loading = classId !== null && plannedClassId !== classId;
 
   const asiPoints = useMemo(
@@ -390,12 +399,10 @@ function AsiChoice({
           const atCap = points >= 2 && v === 0;
           return (
             <div key={a.statId} className="lvl__asi-row">
-              <span className="lvl__asi-name">
-                {a.name}{" "}
-                <span className="lvl__asi-score">
-                  {a.effective}
-                  {v > 0 && ` → ${a.effective + v}`}
-                </span>
+              <span className="lvl__asi-name">{a.name}</span>
+              <span className="lvl__asi-score">
+                {a.effective}
+                {v > 0 && ` → ${a.effective + v}`}
               </span>
               <div className="lvl__stepper">
                 <button
