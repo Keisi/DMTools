@@ -1,0 +1,127 @@
+/* ============================================================================
+   DESIGN TOKENS — the single place to retune the whole look.
+   Everything visual (colors, type, spacing, motion) is a CSS custom property
+   here. Change a value once and it cascades everywhere. No values are
+   hard-coded in component CSS — they all reference these vars.
+   ========================================================================== */
+
+:root {
+  /* ---- Brand palette (Fight Club 5e inspired: ink + parchment + D&D red) ---- */
+  --c-ink-900: #14110d;      /* deepest background */
+  --c-ink-800: #1c1813;      /* app background */
+  --c-ink-700: #26211a;      /* raised surface */
+  --c-ink-600: #332b21;      /* card / panel */
+  --c-ink-500: #463a2c;      /* borders, dividers */
+
+  --c-parchment-100: #f4ecd8; /* primary text on dark */
+  --c-parchment-200: #e7dcc0;
+  --c-parchment-300: #cdbf9c; /* muted text */
+  --c-parchment-400: #a8966f; /* faint text / placeholders */
+
+  --c-crimson-600: #7a1216;   /* deep blood red */
+  --c-crimson-500: #a51c1c;   /* primary action */
+  --c-crimson-400: #c8302a;   /* hover */
+
+  --c-gold-500: #c9a24b;      /* accent / highlights */
+  --c-gold-400: #e0bd66;      /* accent hover */
+
+  --c-green-500: #4e7a3a;     /* positive (proficient, healthy) */
+  --c-blue-500: #3a5f7a;      /* info / arcane */
+
+  /* ---- Semantic surface tokens (components should prefer these) ---- */
+  --bg-app: var(--c-ink-800);
+  --bg-raised: var(--c-ink-700);
+  --bg-panel: var(--c-ink-600);
+  --border: var(--c-ink-500);
+  --border-strong: var(--c-gold-500);
+
+  --text: var(--c-parchment-100);
+  --text-muted: var(--c-parchment-300);
+  --text-faint: var(--c-parchment-400);
+
+  --accent: var(--c-gold-500);
+  --accent-hover: var(--c-gold-400);
+  --action: var(--c-crimson-500);
+  --action-hover: var(--c-crimson-400);
+
+  /* ---- Typography ---- */
+  --font-display: "Cinzel", "Libre Baskerville", Georgia, serif; /* headings */
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
+
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.875rem;
+  --fs-base: 1rem;
+  --fs-lg: 1.25rem;
+  --fs-xl: 1.5rem;
+  --fs-2xl: 2rem;
+  --fs-3xl: 2.75rem;
+
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-bold: 700;
+  --fw-black: 900;
+
+  --lh-tight: 1.15;
+  --lh-base: 1.5;
+
+  /* ---- Spacing scale (4px base) ---- */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.5rem;
+  --sp-6: 2rem;
+  --sp-8: 3rem;
+  --sp-10: 4rem;
+
+  /* ---- Radii ---- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* ---- Elevation ---- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+  --shadow-glow: 0 0 0 1px var(--c-gold-500), 0 0 18px rgba(201, 162, 75, 0.25);
+
+  /* ---- Motion (tune all animation feel from here) ---- */
+  --dur-fast: 120ms;
+  --dur-base: 220ms;
+  --dur-slow: 420ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ---- Layout ---- */
+  --layout-max: 1200px;
+  --nav-h: 60px;
+  --z-nav: 100;
+  --z-modal: 1000;
+
+  /* ---- Tooltip (custom; replaces native title — retune the whole look here) ---- */
+  --tooltip-bg: var(--c-ink-900);
+  --tooltip-text: var(--c-parchment-100);
+  --tooltip-border: var(--border-strong); /* gold edge */
+  --tooltip-radius: var(--radius-md);
+  --tooltip-shadow: var(--shadow-lg);
+  --tooltip-max-width: 20rem;
+  --tooltip-pad-y: var(--sp-2);
+  --tooltip-pad-x: var(--sp-3);
+  --tooltip-font-size: var(--fs-xs);
+  --tooltip-gap: var(--sp-2); /* distance from the host element */
+  --tooltip-z: var(--z-modal);
+}
+
+/* A light theme is one override block away — flip these and the app reskins.
+   (Disabled by default; uncomment / wire to a toggle to use.)
+[data-theme="parchment"] {
+  --bg-app: #efe6d0;
+  --bg-panel: #fbf5e6;
+  --text: #2a2118;
+  --text-muted: #6b5a40;
+  --border: #d8c79f;
+}
+*/

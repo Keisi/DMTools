@@ -1,0 +1,121 @@
+/* ============================================================================
+   ANIMATIONS — all @keyframes + reusable animation utility classes.
+   Durations/easings come from tokens.css so motion feel is tuned centrally.
+   Add a class here, use it anywhere; tweak the keyframes to restyle motion.
+   ========================================================================== */
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* A d20 tumble — use on a roll result or any "rolled" value */
+@keyframes dice-roll {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  35% {
+    transform: rotate(220deg) scale(1.2);
+  }
+  70% {
+    transform: rotate(340deg) scale(0.95);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px var(--accent), 0 0 10px rgba(201, 162, 75, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 1px var(--accent), 0 0 22px rgba(201, 162, 75, 0.5);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+/* ---- Utility classes ---- */
+.anim-fade-in {
+  animation: fade-in var(--dur-base) var(--ease-out) both;
+}
+.anim-rise-in {
+  animation: rise-in var(--dur-base) var(--ease-out) both;
+}
+.anim-slide-in {
+  animation: slide-in-right var(--dur-base) var(--ease-out) both;
+}
+.anim-pop-in {
+  animation: pop-in var(--dur-base) var(--ease-spring) both;
+}
+.anim-dice {
+  animation: dice-roll var(--dur-slow) var(--ease-in-out);
+}
+.anim-glow {
+  animation: glow-pulse 2.4s var(--ease-in-out) infinite;
+}
+
+/* Stagger children: set --stagger-i on each child (e.g. via index) */
+.stagger > * {
+  animation: rise-in var(--dur-base) var(--ease-out) both;
+  animation-delay: calc(var(--stagger-i, 0) * 60ms);
+}
+
+/* Skeleton loading shimmer */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-raised) 25%,
+    var(--bg-panel) 50%,
+    var(--bg-raised) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: var(--radius-sm);
+}

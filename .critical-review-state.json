@@ -1,0 +1,65 @@
+{
+  "date": "2026-06-06",
+  "pass": 1,
+  "strategy": "PASS",
+  "completion": "deferrals_recorded_with_evidence",
+  "target": "src/",
+  "scope": "directory-fallback",
+  "note": "Not a git repo (no .git/) — reviewed src/ directly per the critical-review non-git fallback. Personal project; no test runner is configured (CLAUDE.md states `tsc -b` is the correctness gate).",
+  "files_reviewed": [
+    "src/api/types.ts",
+    "src/api/endpoints.ts",
+    "src/routes/CharacterBuilder.tsx",
+    "src/routes/CharacterSheet.tsx",
+    "src/routes/LevelUpDialog.tsx",
+    "src/routes/Vault.tsx",
+    "src/routes/Compendium.tsx",
+    "src/styles/tokens.css",
+    "src/styles/theme.css"
+  ],
+  "summary": {
+    "codescan": { "critical": 0, "high": 1, "medium": 0 },
+    "oby_health": { "score": 66.0, "grade": "D" },
+    "build": "pass",
+    "lint": "pass"
+  },
+  "gates_passed": [
+    "tsc -b (typecheck/build) — green",
+    "eslint . — clean",
+    "live spectral verification of every feature shipped this session (builder validations, proficiency flags, primary-ability badge, level-up modal centering + apply feedback, sheet breakdown tooltips)"
+  ],
+  "findings": {
+    "blocking": [],
+    "serious": [],
+    "recommendations": [],
+    "edge_cases": []
+  },
+  "deferrals": [
+    {
+      "item": "OBY completion-loop reported done:false — demands automated-test, test-relevance, causal-proof, persistence-roundtrip, race-safety, backend-validation.",
+      "rationale": "Structurally inapplicable to this project: a frontend SPA with NO test runner (CLAUDE.md: `tsc -b` is the correctness gate), no backend persistence/concurrency layer, and no typed-op/registry/mutation control-plane. The applicable correctness gates (typecheck, lint, live UI verification) all pass.",
+      "owner": "project owner",
+      "follow_up": "If a test runner (e.g. Vitest + Testing Library) is added later, wire it into the loop's test/test-relevance gates and re-run."
+    },
+    {
+      "item": "oby health grade D / 66.0; ~9 codescan high (async-error-boundary, jwt-in-localstorage, fetch-no-timeout, env-var-undeclared, missing-rate-limit, dt-mixed-color-formats) + 31 AST + 16 anti-patterns.",
+      "rationale": "Pre-existing BASELINE from the original scaffold (recorded at `oby init`), not introduced by this session's work — `oby verify` delta on changed files was 0 new issues. jwt-in-localstorage is a known, deliberate scaffold auth choice.",
+      "owner": "project owner",
+      "follow_up": "Address as a dedicated hardening pass (error boundaries, fetch timeouts, JWT storage strategy) separate from feature work."
+    },
+    {
+      "item": "codescan advisory: CharacterBuilder/CharacterSheet/LevelUpDialog orchestrator functions exceed the 80-line guideline.",
+      "rationale": "Deliberate: these are cohesive wizard/sheet controllers; all presentational pieces are already extracted into sub-components. Further splitting to beat the line counter would scatter tightly-coupled state and hurt readability.",
+      "owner": "project owner",
+      "follow_up": "Revisit if a controller grows materially or gains independent state worth a custom hook."
+    }
+  ],
+  "hindsight": {
+    "rewrite": [],
+    "adjust": [],
+    "accept": [
+      "Features built against the live backend contract and live-verified via spectral; types reconciled to and confirmed against actual API responses (proficiency category-id matching, primary-ability stat-id matching, equipped-armor proficiency flags).",
+      "Tooltip nesting bug (attack row + inner warn span both .tip) caught and fixed; level-up modal re-parented via portal to escape the transformed ancestor."
+    ]
+  }
+}

@@ -1,0 +1,62 @@
+.login {
+  min-height: calc(100vh - var(--nav-h));
+  display: grid;
+  place-items: center;
+  padding: var(--sp-6) var(--sp-4);
+}
+
+.login__card {
+  width: 100%;
+  max-width: 380px;
+  padding: var(--sp-8) var(--sp-6);
+  text-align: center;
+}
+
+.login__crest {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto var(--sp-4);
+  display: grid;
+  place-items: center;
+  background: var(--action);
+  color: #fff;
+  font-family: var(--font-mono);
+  border-radius: var(--radius-md);
+  transform: rotate(45deg);
+  box-shadow: var(--shadow-md);
+}
+.login__crest {
+  /* keep the label upright */
+  font-size: 0;
+}
+.login__crest::after {
+  content: "d20";
+  font-size: var(--fs-sm);
+  transform: rotate(-45deg);
+}
+
+.login__title {
+  margin: 0;
+}
+.login__sub {
+  margin-top: var(--sp-1);
+}
+
+.login__error {
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-md);
+  background: rgba(165, 28, 28, 0.15);
+  border: 1px solid var(--c-crimson-500);
+  color: var(--c-crimson-400);
+  font-size: var(--fs-sm);
+}
+
+.login__switch {
+  margin-top: var(--sp-5);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.login__switch:hover {
+  color: var(--accent);
+}

@@ -1,0 +1,228 @@
+/* ============================================================================
+   THEME — base element styling built from the tokens. Page-level look lives
+   here; per-component look lives in each component's .css file.
+   ========================================================================== */
+
+body {
+  background-color: var(--bg-app);
+  /* Subtle vignette + parchment grain feel; swap freely. */
+  background-image:
+    radial-gradient(ellipse at top, rgba(201, 162, 75, 0.06), transparent 55%),
+    radial-gradient(ellipse at bottom, rgba(0, 0, 0, 0.4), transparent 60%);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+}
+
+h1 {
+  font-size: var(--fs-3xl);
+}
+h2 {
+  font-size: var(--fs-2xl);
+}
+h3 {
+  font-size: var(--fs-xl);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+.text-faint {
+  color: var(--text-faint);
+}
+.text-accent {
+  color: var(--accent);
+}
+
+/* ---- Shared primitives (use across screens) ---- */
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--radius-md);
+  font-weight: var(--fw-medium);
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  color: var(--text);
+  transition: transform var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn--primary {
+  background: var(--action);
+  border-color: var(--c-crimson-600);
+  color: #fff;
+}
+.btn--primary:hover {
+  background: var(--action-hover);
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.btn--ghost:hover {
+  background: var(--bg-raised);
+}
+
+.input {
+  width: 100%;
+  padding: var(--sp-3) var(--sp-3);
+  background: var(--c-ink-900);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  transition: border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.input::placeholder {
+  color: var(--text-faint);
+}
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(201, 162, 75, 0.15);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.badge--accent {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Custom tooltip primitive — add `class="tip"` + `data-tooltip="..."` to any
+   element. Pure CSS, driven entirely by the --tooltip-* tokens (no JS, no
+   native title). Shows on hover and keyboard focus. Note: positioned above the
+   host and centered; it does not auto-flip at viewport edges (acceptable for our
+   layouts). */
+.tip {
+  position: relative;
+}
+.tip::after,
+.tip::before {
+  position: absolute;
+  left: 50%;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: var(--tooltip-z);
+  transform: translate(-50%, 4px);
+  transition: opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.tip::after {
+  content: attr(data-tooltip);
+  bottom: calc(100% + var(--tooltip-gap));
+  width: max-content;
+  max-width: var(--tooltip-max-width);
+  white-space: pre-line;
+  padding: var(--tooltip-pad-y) var(--tooltip-pad-x);
+  background: var(--tooltip-bg);
+  color: var(--tooltip-text);
+  border: 1px solid var(--tooltip-border);
+  border-radius: var(--tooltip-radius);
+  box-shadow: var(--tooltip-shadow);
+  font-family: var(--font-body);
+  font-size: var(--tooltip-font-size);
+  font-weight: var(--fw-normal);
+  line-height: var(--lh-base);
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: left;
+}
+.tip::before {
+  /* arrow */
+  content: "";
+  bottom: calc(100% + var(--tooltip-gap) - 6px);
+  border: 6px solid transparent;
+  border-top-color: var(--tooltip-bg);
+}
+.tip:hover::after,
+.tip:hover::before,
+.tip:focus-visible::after,
+.tip:focus-visible::before {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tip::after,
+  .tip::before {
+    transition: none;
+  }
+}
+
+/* Divider with a fantasy flourish */
+.rule {
+  height: 1px;
+  border: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--border) 20%,
+    var(--accent) 50%,
+    var(--border) 80%,
+    transparent
+  );
+  margin: var(--sp-4) 0;
+}
+
+.container {
+  max-width: var(--layout-max);
+  margin: 0 auto;
+  padding: var(--sp-5) var(--sp-4);
+}
+
+/* Generic layout helpers */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.grid {
+  display: grid;
+  gap: var(--sp-4);
+}

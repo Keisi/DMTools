@@ -1,0 +1,207 @@
+.sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.sheet__loading {
+  display: grid;
+  gap: var(--sp-4);
+}
+
+/* ---- Header ---- */
+.sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-5);
+  padding: var(--sp-5);
+}
+.sheet__name {
+  margin: 0;
+  color: var(--accent);
+}
+
+.sheet__vitals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+.vital {
+  min-width: 64px;
+  padding: var(--sp-2) var(--sp-3);
+  text-align: center;
+  background: var(--c-ink-900);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.vital__value {
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-bold);
+}
+.vital__label {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+/* ---- Ability scores ---- */
+.sheet__abilities {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: var(--sp-3);
+}
+.ability {
+  position: relative;
+  padding: var(--sp-4) var(--sp-2) var(--sp-3);
+  text-align: center;
+  transition: transform var(--dur-fast) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+}
+.ability:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+.ability__code {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+.ability__mod {
+  font-family: var(--font-display);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-black);
+  color: var(--accent);
+  line-height: 1.1;
+}
+.ability__score {
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 30px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+}
+
+/* ---- Columns ---- */
+.sheet__cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--sp-4);
+  align-items: start;
+}
+.sheet__block {
+  padding: var(--sp-4);
+}
+.sheet__block-title {
+  font-size: var(--fs-lg);
+}
+.sheet__weight {
+  font-size: var(--fs-sm);
+  margin-bottom: var(--sp-3);
+}
+
+.prof-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.prof-list__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.prof-list__row:hover {
+  background: var(--bg-raised);
+}
+.prof-list__name {
+  flex: 1;
+}
+.prof-list__val {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.dot--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 6px rgba(201, 162, 75, 0.6);
+}
+
+.sheet__levelup {
+  margin-top: var(--sp-3);
+}
+
+/* ---- Rich sheet blocks ---- */
+.sheet__caster {
+  margin-bottom: var(--sp-3);
+}
+.sheet__spelllist {
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+.sheet__features {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  font-size: var(--fs-sm);
+}
+.sheet__feature-desc {
+  font-size: var(--fs-xs);
+  margin-top: var(--sp-1);
+}
+.sheet__traits {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--sp-2) var(--sp-4);
+  font-size: var(--fs-sm);
+  margin: 0;
+}
+.sheet__traits dt {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+}
+.sheet__traits dd {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+/* ---- Proficiency warnings ---- */
+.sheet__warn {
+  color: var(--c-crimson-400);
+  font-size: var(--fs-xs);
+  cursor: help;
+}
+.sheet__warn-note {
+  font-size: var(--fs-xs);
+  margin-top: var(--sp-2);
+  line-height: 1.5;
+}
+
+.ability--help {
+  cursor: help;
+}
