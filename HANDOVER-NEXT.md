@@ -7,9 +7,10 @@ next" doc. Companion: `FRONTEND-CONTEXT.md` (architecture/API map) and `CLAUDE.m
 contract is its `Models/*` + `Entities/Enums/*`.
 
 ## Current state
-- **Git:** repo on `main`, remote `origin` (Azure DevOps `DMTools-Frontend`). The
-  builder/edit/inventory/level-up feature commit is `08091a7`. Working tree clean
-  except this doc. All feature work is committed.
+- **Git:** repo on `main`, remote `origin` (Azure DevOps `DMTools-Frontend`).
+  Latest commit `2c4cc81` (multiclass-from-sheet, compendium detail, 401 redirect,
+  builder polish, PUT-204 fix) — pushed. Prior feature commit `08091a7`. All work
+  committed + pushed.
 - **Gates:** `npm run build` (`tsc -b && vite build`) and `npm run lint` both GREEN.
   There is **no test runner** — `tsc -b` + eslint are the correctness gates.
   (`oby verify`'s build step is a false negative here — `os error 193`; trust npm.)
@@ -78,27 +79,67 @@ Create-time Fighting Style / Metamagic in the builder (the `fightingStyleIds`/`m
 request fields exist + edit preserves them, but there's no wizard picker). Backend frames
 this as an edge case (a Fighter built directly at L3); level-up is the primary path.
 
-## TODO — next session (newest first)
-- [ ] **Bug: wizard Back button not working** in New Character and Edit Character.
-  Investigate `BuilderNav`'s `onBack` (`CharacterBuilder.steps.tsx`) /
-  `setStep((s) => s - 1)` + `backDisabled` wiring in `CharacterBuilder.tsx` — confirm
-  whether it's the in-wizard step Back or the browser back, and that it advances steps
-  in both create and edit mounts.
-- [ ] **Bug: sheet header buttons mismatched size.** "Level Up" (`btn btn--primary`) and
-  "Edit" (`btn`, a `<Link>`) render at different sizes in `.sheet__actions`. Normalise
-  in `CharacterSheet.css` (line-height/padding/height parity between `<button>` and the
-  `<Link class="btn">`).
-- [ ] **(a) Background step: flag skills already chosen in the Skills step.** When a
-  background grants/offers a skill the character already took as a class skill pick,
-  show an indicator (5e: a duplicate background skill normally lets you pick a different
-  one). Builder state lives in `CharacterBuilder.tsx` (`skillIds` = class skill picks;
-  the Background step renders `bg.skills`). Cross-reference the two in
-  `BackgroundStep` (`CharacterBuilder.steps.tsx`) and badge the overlap.
-- [ ] **(b) Review step: analyze and add items that make sense.** Audit the `Review`
-  component (`CharacterBuilder.steps.tsx`) against everything the wizard now collects
-  and surface what's missing — candidates: subclass-per-class (partially shown),
-  background feature, HP/AC preview, proficiencies summary, narrative/appearance if
-  added, edit-mode "what changed" hints. Decide what's genuinely useful vs. noise.
+## Done — 2026-06-07 (session 2, commit `2c4cc81`)
+All gates green (`npm run build`, `npm run lint`); oby precheck delta **0 introduced**.
+- **Bug fixed — wizard Back button.** Was actually correct in code; live-verified via
+  spectral snapshot (Back `disabled` on step 0, enabled on step 1). No change needed
+  beyond confirmation. (The browser-back-loses-progress option was offered; not chosen.)
+- **Bug fixed — sheet header button size.** Root cause was app-wide: `<button class="btn">`
+  used the UA font while `<a class="btn">` inherited the page font. Added
+  `font-family/size: inherit` to `.btn` in `theme.css` (fixes button/link parity
+  everywhere) + removed the stale `.sheet__levelup` margin.
+- **Builder (a) background dup-skill flag** — `BackgroundStep` cross-references `bg.skills`
+  vs class `skillIds`; overlaps get a red ⚠ tag + a note. Live-verified.
+- **Builder (b) Review step** — added **Age** + **Background feature**. Deliberately NOT
+  HP/AC preview (server-derived; CLAUDE.md forbids client recompute).
+- **Too-many-classes warning** — non-blocking advisory at ≥3 classes in the Class step
+  (`MULTICLASS_WARN_AT`). Live-verified (screenshot: 3 classes → red banner).
+- **Multiclass from the sheet** — new `routes/AddClassDialog.tsx` (+ `.css`): pick a
+  class not already taken, append at level 1, persist via `characters.update()`,
+  re-render in place. Uses the **PUT path** because the level-up engine rejects a
+  not-yet-owned class (confirmed in backend `LevelUpPlanner.Plan`). New shared
+  `api/characterRequest.ts#characterResponseToRequest()` (lossless response→request)
+  — **also fixes the Expertise→Proficient downgrade** on round-trip (preserves real
+  skill levels), unlike the builder's edit path.
+- **Bug fixed — "multiclass redirects to nothing" (blank sheet).** `PUT /api/character/{id}`
+  returns **204 No Content**, so `characters.update()` resolved to `undefined` →
+  `setC(undefined)` → blank. `update()` now PUTs then **re-GETs** the fresh character.
+  **This also fixes builder edit-save** (`navigate(/character/${saved.id})` on undefined),
+  which the prior handover flagged as never click-tested. Verified: pre-fix repro showed
+  nav-only (4 refs); direct node PUT test confirmed 204 + persistence.
+- **401 → login redirect (session expiry).** `client.ts` fires a hook on any authed 401
+  (clears token); `AuthContext` resets state so `RequireAuth` bounces guarded routes to
+  `/login`. `Login` now honors the `from` location. Login itself (`auth:false`) is
+  unaffected.
+- **Compendium enriched + categorized.** Each tab now shows rich detail (was name-only);
+  spells grouped by level, items by Equipment vs Magic Items, collapsible sections with
+  counts (search force-expands). Frontend-only — all data already on the reference DTOs.
+
+### Backend handover (this session)
+`DMTool/FRONTEND-REQUEST-compendium-and-update-contract.md` — Compendium needs **nothing**.
+One real ask: make `PUT /api/character/{id}` return **200 + updated CharacterResponse**
+(consistent with create + levelup/apply) so the frontend can drop the extra GET in
+`update()`. Optional: multiclass-in via the level-up engine; richer item/race/class DTOs.
+
+## Verification gaps (carry forward)
+- **Spectral is slow + flaky in this env** (cold start ~5s, hangs with `--console`;
+  big multi-action batches can hit the timeout). Use screenshot/`--snapshot` batches,
+  not `--console`. Clear orphan **headless** Chrome via PowerShell (kill only
+  `--headless` PIDs — the user has ~80 real Chrome procs; don't touch those).
+- **Not live-clicked post-fix:** the multiclass dialog success path screenshot timed out
+  (fix is proven via node PUT test + code path, but a green screenshot is still owed).
+  Test char left in DB: **"Multiclass Test Dummy"** `d5f11f29-76b8-4b3f-b69c-4048b3173e9a`
+  (now Bard 1/Barbarian 3) under `dungeonmaster`.
+- 401-redirect and Compendium render not yet click-verified live (build/lint green).
+
+## TODO — next session
+- [ ] Live-verify (spectral screenshot) the multiclass dialog success path, the 401→login
+  redirect, and the Compendium grouping/detail render.
+- [ ] If backend returns the body on PUT (see handover), drop the extra GET in
+  `characters.update()`.
+- [ ] Consider an app-level **ErrorBoundary** (baseline `async-no-error-boundary` gap) so
+  a render throw shows a fallback instead of a blank screen — would have surfaced the
+  PUT-204 bug as an error, not a white screen.
 
 ## Still open / never-started (from FRONTEND-CONTEXT next-steps)
 - Homebrew `*CreateRequest` DTOs + POST flows when the Compendium gains "add homebrew".
