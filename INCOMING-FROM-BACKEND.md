@@ -437,3 +437,56 @@ double-enforce counts on your side beyond what you want the UX to guide.
 - Commit on `origin/master`: `ab615b7`.
 - **Heads-up (reminder for our side):** IIS serves the built DLL — verify after a real `dotnet build DMTool.slnx`
   + pool restart, not `dotnet test` alone (it doesn't rebuild the web project's IIS output).
+
+---
+
+# INCOMING #6 — `FRONTEND-REQUEST-spellcasting-progression.md` DONE
+
+**Date:** 2026-06-07. Shipped, built, **live-verified**, committed + **pushed to `origin/master`** (`3029675`).
+**No migration** (the data was already there from 038) — pure response-only addition. This was the last gap for
+full-fidelity direct above-L1 caster creation.
+
+## `ClassResponse.spellcasting` — new, nullable
+`GET /api/classes` now returns per class:
+```jsonc
+"spellcasting": {                       // null for non-casters (Barbarian/Fighter/Monk/Rogue)
+  "abilityStatId": "<Stat id>",         // casting ability (match StatResponse.id)
+  "isPrepared": true,                   // prepared caster → known counts are null; skip the known-spell step
+  "progression": [
+    // one row per class level that has a spellcasting row, ascending
+    { "classLevel": 1, "cantripsKnown": 4, "spellsKnown": 2, "maxSpellLevel": 1, "slots": [ { "level": 1, "count": 2 } ] },
+    { "classLevel": 5, "cantripsKnown": 5, "spellsKnown": 6, "maxSpellLevel": 3, "slots": [ {"level":1,"count":4}, {"level":2,"count":3}, {"level":3,"count":2} ] }
+    // ...
+  ]
+}
+```
+- `cantripsKnown` / `spellsKnown` are **cumulative** totals at that level (exactly what you asked — not deltas),
+  and **`null` for prepared casters**.
+- `maxSpellLevel` = highest castable spell level (0 = cantrips only) — filter your `/api/spells` pool by it.
+- `slots` = `{ level, count }` (your existing `SpellSlotResponse` shape).
+
+## Live-verified (`GET /api/classes`)
+| Class | isPrepared | rows | sample |
+|---|---|---|---|
+| Sorcerer | false | 20 | L1 c4/s2/max1 · L5 c5/s6/max3, slots 1:4,2:3,3:2 |
+| Bard | false | 20 | L1 c2/s4 · L5 c3/s8/max3 |
+| Ranger | false | 19 | **no L1 row** (gains casting at L2) · L5 s4/max2 (no cantrips) |
+| Warlock | false | 20 | L1 c2/s2 · L5 c3/s6/max3, slots 3:2 (pact magic) |
+| Wizard / Cleric | true | 20 | counts null, slots present |
+| Paladin | true | **0** | prepared half-caster — no progression rows seeded (see note) |
+| Fighter | — | — | `spellcasting: null` |
+
+## Notes / the open question you raised
+- **Ranger** has no `classLevel: 1` entry (it gains spellcasting at L2) — a Ranger created at L1 collects 0 spells,
+  correct. Just key off the rows that exist.
+- **Wizard spellbook:** there's no spellbook-size concept in the model today, so — per your suggestion — Wizard is
+  **deferred** (treated as prepared, null counts; DM adds spells via edit at creation). Say the word if you want a
+  spellbook-size field later.
+- **Paladin** alone has an **empty `progression`** (its half-caster slot table was a Tier-1 deferral and wasn't in
+  scope here). It reports `isPrepared: true` so you'll skip its known-spell step anyway. If you want Paladin's
+  prepared-slot progression seeded (like Ranger/Warlock got in 038), that's a quick follow-up — let me know.
+
+## Build / status
+- `dotnet build DMTool.slnx` → **0 errors**; `dotnet test` → **60/60 pass**; codescan **A**, 0 dupes.
+- IIS pool `DMTool` running; `/api/health` → ok. DB `DMTools_local` **through 038** (no new migration).
+- Commit on `origin/master`: `3029675`.
