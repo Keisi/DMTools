@@ -1,6 +1,6 @@
 # Handover — DMTool-FrontEnd (for the next session)
 
-Refreshed 2026-06-07. This is the authoritative "where things stand + what to do
+Refreshed 2026-06-08. This is the authoritative "where things stand + what to do
 next" doc. Companion: `FRONTEND-CONTEXT.md` (architecture/API map) and `CLAUDE.md`
 (commands, constraints, spectral recipe, quality-gate notes). Backend lives at
 `C:\Users\keisi\source\repos\DMTool` (`DMTool.slnx`); the authoritative API
@@ -8,9 +8,10 @@ contract is its `Models/*` + `Entities/Enums/*`.
 
 ## Current state
 - **Git:** repo on `main`, remote `origin` (Azure DevOps `DMTools-Frontend`).
-  Latest commit `2c4cc81` (multiclass-from-sheet, compendium detail, 401 redirect,
-  builder polish, PUT-204 fix) — pushed. Prior feature commit `08091a7`. All work
-  committed + pushed.
+  Latest commit `4c0f2fa` (full-fidelity above-L1 / multiclass character creation —
+  Choices + Spells builder steps + ability-improvements) — pushed. Prior `2c4cc81`
+  (multiclass-from-sheet, compendium detail, 401 redirect, PUT-204 fix). All work
+  committed + pushed; critical-review marker stamped for HEAD.
 - **Gates:** `npm run build` (`tsc -b && vite build`) and `npm run lint` both GREEN.
   There is **no test runner** — `tsc -b` + eslint are the correctness gates.
   (`oby verify`'s build step is a false negative here — `os error 193`; trust npm.)
@@ -74,10 +75,9 @@ has **Expertise** (now reachable via level-up Rogue/Bard) downgrades those skill
 Proficient. Documented deferral (see "Edit-mode deferrals"); the clean fix is the same
 backend partial-update/delta exposure noted there.
 
-### Not built (deferred, optional)
-Create-time Fighting Style / Metamagic in the builder (the `fightingStyleIds`/`metamagicIds`
-request fields exist + edit preserves them, but there's no wizard picker). Backend frames
-this as an edge case (a Fighter built directly at L3); level-up is the primary path.
+### Built in session 3 (was the "not built" item above)
+Create-time Fighting Style / Expertise / Metamagic **and** known-caster spells **and**
+above-L1 ASIs are now collected in the builder — see the session-3 section below.
 
 ## Done — 2026-06-07 (session 2, commit `2c4cc81`)
 All gates green (`npm run build`, `npm run lint`); oby precheck delta **0 introduced**.
@@ -121,6 +121,50 @@ One real ask: make `PUT /api/character/{id}` return **200 + updated CharacterRes
 (consistent with create + levelup/apply) so the frontend can drop the extra GET in
 `update()`. Optional: multiclass-in via the level-up engine; richer item/race/class DTOs.
 
+## Done — 2026-06-08 (session 3, commit `4c0f2fa`) — full-fidelity above-L1 / multiclass creation
+**The original goal is met:** a character built directly at any level (incl. multiclass)
+now gets every choice its level entitles. All gates green (`npm run build`, `npm run lint`,
+`oby verify` delta **0**); critical-review **PASS**; payload **live-verified** against `:3501`
+(Sorcerer L5: CHA base 15 +2 improvement = 19, 2 metamagics, 5 cantrips + 6 spells, Draconic —
+all round-trip on re-GET).
+
+Investigation that drove it (simulation + cross-repo trace) found the builder was a
+"level-1 creator with a level dial that didn't backfill choices." The **engine + apply
+path were already correct**; gaps were (a) read-side metadata not exposed and (b) two seed
+holes. Backend shipped all of it (INCOMING #5 + #6); this session consumes it.
+
+- **types.ts:** `ClassResponse.featureSelections` + `SubclassResponse.featureSelections`
+  (type 4/5/6 selections); `ClassResponse.spellcasting` (`ClassSpellcastingResponse` +
+  per-level `progression`); `CharacterRequest.abilityImprovements`.
+- **CharacterBuilder.steps.tsx:** new `ChoicesStep` (generic `ChoiceGroup[]` — Fighting
+  Style / Expertise / Metamagic), `SpellsStep` (+ `SpellPick`/`SpellPickList`, search on
+  big pools), `ImprovementsPanel`; `STEPS` now 10 entries (Choices @4, Spells @5).
+- **CharacterBuilder.tsx:** loads `reference.spells()`; aggregates `subFeature` budgets +
+  pools across every class + chosen subclass (level-gated), `expertiseOptions` (= chosen
+  class skills), `spellPlan` (cumulative cantrip/spell counts from the progression row at
+  each caster's level, pool filtered to `maxSpellLevel`, prepared/non-casters skip);
+  `choicesComplete`/`spellsComplete` gates; positional arrays + render switch renumbered to
+  10 steps; `buildPayload` sends `fightingStyleIds`/`metamagicIds`, Expertise via
+  `skillProficiencies[].level=2`, merged `spellIds` (cantrips+spells), and
+  `abilityImprovements`. Edit mode prefills + round-trips all of these — **this also fixes
+  the old Expertise→Proficient downgrade on the builder edit path** (expertise is now
+  preserved).
+
+### Session-3 deferrals (acceptable; documented)
+- **Multiclass union pools:** sub-feature option pools and caster spell counts are
+  aggregated/unioned across classes (the request is flat), so a double-caster or
+  fighting-style-from-two-classes could pick from the combined pool. Fine for a DM tool;
+  per-class grouping is the durable refinement if it ever matters.
+- **Wizard spellbook:** Wizard is `isPrepared` → builder skips its creation spell step
+  (no spellbook-size concept backend-side; DM adds via edit). Backend will add a
+  spellbook-size field on request.
+- **Paladin** has an empty spellcasting `progression` (backend Tier-1 deferral); it's
+  `isPrepared` so the spell step skips it anyway. Ask backend to seed it if needed.
+- **Stale expertise id:** deselecting a class skill after marking it for Expertise leaves
+  a stale id that's silently dropped at payload-build (still a valid payload).
+- ASIs use **free allocation** (no count enforcement) — the reference API doesn't expose
+  the per-class ASI schedule, so the panel guides with a hint rather than a hard budget.
+
 ## Verification gaps (carry forward)
 - **Spectral is slow + flaky in this env** (cold start ~5s, hangs with `--console`;
   big multi-action batches can hit the timeout). Use screenshot/`--snapshot` batches,
@@ -133,6 +177,12 @@ One real ask: make `PUT /api/character/{id}` return **200 + updated CharacterRes
 - 401-redirect and Compendium render not yet click-verified live (build/lint green).
 
 ## TODO — next session
+- [ ] **Live-click the new builder steps** (spectral): build a Fighter L1 (must pick a
+  Fighting Style — the formerly-stranded L1 choice), a Sorcerer L5 (Metamagic + cantrips
+  + spells + the L4 ASI), and a Fighter/Wizard multiclass; confirm save + sheet render.
+  (Payload is node-verified against `:3501`, but not yet browser-clicked.)
+- [ ] Optionally extend the **Review** step to list the chosen fighting styles / metamagic
+  / expertise / spells / improvements (currently collected + saved but not shown on Review).
 - [ ] Live-verify (spectral screenshot) the multiclass dialog success path, the 401→login
   redirect, and the Compendium grouping/detail render.
 - [ ] If backend returns the body on PUT (see handover), drop the extra GET in
@@ -164,9 +214,13 @@ One real ask: make `PUT /api/character/{id}` return **200 + updated CharacterRes
 
 ## Coordination files
 - `FRONTEND-REQUEST-class-proficiencies.md` (backend repo) — DONE.
-- `FRONTEND-REQUEST-hp-ac-breakdown.md` (backend repo) — DONE (tooltips now render
-  the real breakdown math).
-- `INCOMING-FROM-BACKEND.md` (here) — backend's callback log. #1–#4 all consumed.
+- `FRONTEND-REQUEST-hp-ac-breakdown.md` (backend repo) — DONE (tooltips render the math).
+- `CHARACTER-CREATION-HANDOFF-FROM-FRONTEND.md` (here) — DONE (INCOMING #5; #1–#5).
+- `FRONTEND-REQUEST-spellcasting-progression.md` (here) — DONE (INCOMING #6).
+- `FRONTEND-REQUEST-compendium-and-update-contract.md` (backend repo) — **OPEN**: the one
+  live ask is PUT returning 200+body (we still PUT-then-GET in `characters.update()`);
+  multiclass-in via the level-up engine is an optional future item. Neither blocks anything.
+- `INCOMING-FROM-BACKEND.md` (here) — backend's callback log. **#1–#6 all consumed.**
 
 ## Not verified live this session
 The builder/edit/inventory/level-up changes passed `tsc` + eslint + `oby verify`
