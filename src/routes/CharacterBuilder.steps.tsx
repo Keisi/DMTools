@@ -33,6 +33,9 @@ export const STEPS = [
   "Review",
 ] as const;
 export const MAX_TOTAL_LEVEL = 20;
+// Soft advisory threshold: 5e multiclassing into this many classes is unusual and
+// mechanically weak (levels spread thin → delayed high-level features). Non-blocking.
+export const MULTICLASS_WARN_AT = 3;
 
 // 5e point-buy: 27 points, scores 8–15. Manual mode allows the backend's full 1–30.
 export type AbilityMode = "pointbuy" | "manual";
@@ -346,6 +349,14 @@ export function ClassStep({
       <p className="text-faint builder__total">
         Total level: {totalLevel}/{MAX_TOTAL_LEVEL}
       </p>
+      {picks.length >= MULTICLASS_WARN_AT && (
+        <p className="builder__multiclass-warn" role="alert">
+          ⚠ {picks.length} classes selected. Multiclassing this widely spreads
+          your levels thin — you'll unlock high-level class features much later,
+          and most builds use just 1–2 classes. 5e also requires a 13+ in each
+          class's key ability to multiclass, so double-check your scores.
+        </p>
+      )}
       {totalLevel >= MAX_TOTAL_LEVEL ? (
         <p className="text-faint">
           At the level cap — lower a class's level to add another.
@@ -563,6 +574,7 @@ export function BackgroundStep({
   languageSelection,
   chosenLanguages,
   onToggleLanguage,
+  classSkillIds,
 }: {
   backgrounds: BackgroundResponse[];
   selectedId: string | null;
@@ -570,6 +582,9 @@ export function BackgroundStep({
   languageSelection: SelectionResponse | null;
   chosenLanguages: string[];
   onToggleLanguage: (id: string) => void;
+  // Skill ids already picked in the Skills step (class skills). A background skill
+  // that duplicates one is flagged: 5e lets you swap a duplicate for another skill.
+  classSkillIds: string[];
 }) {
   if (backgrounds.length === 0)
     return (
@@ -578,6 +593,9 @@ export function BackgroundStep({
       </p>
     );
   const bg = backgrounds.find((b) => b.id === selectedId) ?? null;
+  const dupSkills = bg
+    ? bg.skills.filter((s) => classSkillIds.includes(s.id))
+    : [];
   return (
     <>
       <p className="text-muted builder__hint">
@@ -616,15 +634,47 @@ export function BackgroundStep({
           {(bg.skills.length > 0 ||
             bg.tools.length > 0 ||
             bg.languages.length > 0) && (
-            <p className="text-faint">
-              Grants:{" "}
-              {[
-                bg.skills.map((s) => s.name).join(", "),
-                bg.tools.map((t) => t.name).join(", "),
-                bg.languages.map((l) => l.name).join(", "),
-              ]
-                .filter(Boolean)
-                .join(" · ")}
+            <div className="builder__bg-grants">
+              <span className="text-faint">Grants:</span>
+              {bg.skills.map((s) => {
+                const dup = classSkillIds.includes(s.id);
+                return (
+                  <span
+                    key={`sk-${s.id}`}
+                    className={
+                      "builder__bg-tag" +
+                      (dup ? " builder__bg-tag--dup tip" : "")
+                    }
+                    data-tooltip={
+                      dup
+                        ? "Already chosen as a class skill — in 5e a duplicate background skill lets you take a different one instead."
+                        : undefined
+                    }
+                  >
+                    {dup && "⚠ "}
+                    {s.name}
+                  </span>
+                );
+              })}
+              {bg.tools.map((t) => (
+                <span key={`tl-${t.id}`} className="builder__bg-tag">
+                  {t.name}
+                </span>
+              ))}
+              {bg.languages.map((l) => (
+                <span key={`ln-${l.id}`} className="builder__bg-tag">
+                  {l.name}
+                </span>
+              ))}
+            </div>
+          )}
+          {dupSkills.length > 0 && (
+            <p className="builder__bg-dupnote">
+              {dupSkills.map((s) => s.name).join(", ")}{" "}
+              {dupSkills.length === 1 ? "duplicates" : "duplicate"} a class skill
+              pick. 5e lets you swap a duplicate background skill for another of
+              your choice — adjust your class skill picks or note the swap with
+              your DM.
             </p>
           )}
           {bg.featureName && (
@@ -1099,6 +1149,7 @@ function SingleChoice({
 export function Review({
   name,
   raceName,
+  age,
   picks,
   classes,
   startingClassId,
@@ -1107,6 +1158,7 @@ export function Review({
   abilities,
   skillNames,
   backgroundName,
+  backgroundFeatureName,
   languageNames,
   featNames,
   armorName,
@@ -1117,6 +1169,7 @@ export function Review({
 }: {
   name: string;
   raceName?: string;
+  age: number;
   picks: CharacterClassRequest[];
   classes: ClassResponse[];
   startingClassId: string | null;
@@ -1125,6 +1178,7 @@ export function Review({
   abilities: Record<string, number>;
   skillNames: string[];
   backgroundName?: string;
+  backgroundFeatureName?: string;
   languageNames: string[];
   featNames: string[];
   armorName?: string;
@@ -1165,6 +1219,7 @@ export function Review({
       <p className="text-muted">
         {raceName ?? "No race"} · {classLine} · {alignmentLabel}
         {backgroundName && ` · ${backgroundName}`}
+        {age > 0 && ` · age ${age}`}
       </p>
       <div className="builder__review-abilities">
         {stats.map((s) => (
@@ -1174,6 +1229,11 @@ export function Review({
           </div>
         ))}
       </div>
+      {backgroundFeatureName && (
+        <p className="text-muted">
+          Background feature: {backgroundFeatureName}
+        </p>
+      )}
       {skillNames.length > 0 && (
         <p className="text-muted">Skills: {skillNames.join(", ")}</p>
       )}

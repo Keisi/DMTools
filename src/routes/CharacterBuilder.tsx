@@ -644,6 +644,7 @@ export default function CharacterBuilder() {
             languageSelection={bgLanguageSelection}
             chosenLanguages={languageIds}
             onToggleLanguage={toggleLanguage}
+            classSkillIds={skillIds}
           />
         )}
 
@@ -679,6 +680,7 @@ export default function CharacterBuilder() {
           <Review
             name={name}
             raceName={races.find((r) => r.id === raceId)?.name}
+            age={age}
             picks={picks}
             classes={classes}
             startingClassId={startingClassId}
@@ -691,6 +693,7 @@ export default function CharacterBuilder() {
                 .map((o) => o.name) ?? []
             }
             backgroundName={selectedBackground?.name}
+            backgroundFeatureName={selectedBackground?.featureName}
             languageNames={
               bgLanguageSelection?.options
                 .filter((o) => languageIds.includes(o.optionId))

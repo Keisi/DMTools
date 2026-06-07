@@ -20,6 +20,7 @@ import {
 } from "../api/types";
 import { ApiError } from "../api/client";
 import LevelUpDialog from "./LevelUpDialog";
+import AddClassDialog from "./AddClassDialog";
 import "./CharacterSheet.css";
 
 const fmtMod = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
@@ -58,6 +59,7 @@ export default function CharacterSheet() {
   const [c, setC] = useState<CharacterResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [levelingUp, setLevelingUp] = useState(false);
+  const [addingClass, setAddingClass] = useState(false);
   const [items, setItems] = useState<ItemResponse[]>([]);
 
   useEffect(() => {
@@ -180,7 +182,7 @@ export default function CharacterSheet() {
           </p>
           <div className="sheet__actions">
             <button
-              className="btn btn--primary sheet__levelup"
+              className="btn btn--primary"
               onClick={() => setLevelingUp(true)}
             >
               Level Up
@@ -188,6 +190,9 @@ export default function CharacterSheet() {
             <Link to={`/character/${c.id}/edit`} className="btn">
               Edit
             </Link>
+            <button className="btn" onClick={() => setAddingClass(true)}>
+              Multiclass
+            </button>
           </div>
         </div>
         <div className="sheet__vitals">
@@ -302,6 +307,17 @@ export default function CharacterSheet() {
           onApplied={(updated) => {
             setC(updated);
             setLevelingUp(false);
+          }}
+        />
+      )}
+
+      {addingClass && (
+        <AddClassDialog
+          character={c}
+          onClose={() => setAddingClass(false)}
+          onApplied={(updated) => {
+            setC(updated);
+            setAddingClass(false);
           }}
         />
       )}

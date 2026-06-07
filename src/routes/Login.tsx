@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
 import "./Login.css";
@@ -7,6 +7,12 @@ import "./Login.css";
 export default function Login() {
   const { login, register } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Where to land after auth: the route the user was bounced from (set by
+  // RequireAuth on session expiry), else the vault.
+  const from =
+    (location.state as { from?: { pathname?: string } } | null)?.from
+      ?.pathname ?? "/vault";
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -20,7 +26,7 @@ export default function Login() {
     try {
       const fn = mode === "login" ? login : register;
       await fn({ username, password });
-      navigate("/vault");
+      navigate(from, { replace: true });
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : "Could not reach the server.",

@@ -6,11 +6,12 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
-import { tokenStore } from "../api/client";
+import { setUnauthorizedHandler, tokenStore } from "../api/client";
 import { auth as authApi } from "../api/endpoints";
 import type { AuthRequest } from "../api/types";
 
@@ -42,6 +43,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     tokenStore.clear();
     setToken(null);
+  }, []);
+
+  // Wire the client's 401 hook to clear auth state on session expiry; once the
+  // token is null, RequireAuth redirects any guarded route to /login.
+  useEffect(() => {
+    setUnauthorizedHandler(() => setToken(null));
+    return () => setUnauthorizedHandler(null);
   }, []);
 
   const value = useMemo<AuthState>(

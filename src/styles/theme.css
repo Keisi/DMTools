@@ -58,6 +58,11 @@ h3 {
   gap: var(--sp-2);
   padding: var(--sp-2) var(--sp-4);
   border-radius: var(--radius-md);
+  /* Buttons don't inherit page typography by default (UA stylesheet), so a
+     <button class="btn"> rendered ~13px next to an <a class="btn"> at 16px;
+     inherit so the two render identically. */
+  font-family: inherit;
+  font-size: inherit;
   font-weight: var(--fw-medium);
   border: 1px solid var(--border);
   background: var(--bg-raised);

@@ -33,6 +33,15 @@ interface RequestOptions {
   auth?: boolean; // attach bearer token (default true)
 }
 
+// Invoked when an *authenticated* request is rejected with 401 — i.e. the JWT
+// expired or was revoked. AuthContext registers a handler that clears auth state,
+// so RequireAuth re-renders and bounces guarded routes to /login. Registered once
+// at app start; null when no provider is mounted (e.g. tests).
+let unauthorizedHandler: (() => void) | null = null;
+export function setUnauthorizedHandler(fn: (() => void) | null): void {
+  unauthorizedHandler = fn;
+}
+
 async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const { method = "GET", body, auth = true } = opts;
 
@@ -48,6 +57,14 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+
+  // Session expired/invalid: drop the dead token and let the app redirect to
+  // login. Still throw below so the caller's catch runs. Only for authed calls —
+  // a 401 from login (auth:false) is a bad-credentials error, not an expiry.
+  if (auth && res.status === 401) {
+    tokenStore.clear();
+    unauthorizedHandler?.();
+  }
 
   if (res.status === 204) return undefined as T;
 

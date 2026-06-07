@@ -24,12 +24,52 @@
   max-width: 360px;
 }
 
+.compendium__groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.compendium__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.compendium__group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  text-align: left;
+  font-family: var(--font-display);
+  font-size: var(--fs-base);
+  color: var(--accent);
+  background: var(--bg-app);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.compendium__group-chevron {
+  width: 1em;
+  font-size: var(--fs-sm);
+}
+.compendium__group-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
 .compendium__list {
   display: flex;
   flex-direction: column;
   gap: var(--sp-1);
 }
 .compendium__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
   padding: var(--sp-3) var(--sp-4);
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -40,4 +80,43 @@
 .compendium__row:hover {
   border-color: var(--accent);
   transform: translateX(4px);
+}
+.compendium__row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.compendium__row-name {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+}
+.compendium__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.compendium__tag {
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius-pill);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.compendium__row-meta {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+.compendium__row-desc {
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }

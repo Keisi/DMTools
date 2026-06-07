@@ -228,6 +228,16 @@
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
 }
+.builder__multiclass-warn {
+  margin-bottom: var(--sp-4);
+  padding: var(--sp-3);
+  border: 1px solid var(--c-crimson-600);
+  border-radius: var(--radius-md);
+  background: rgba(180, 40, 40, 0.08);
+  color: var(--c-crimson-400);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
 
 /* ---- Equipment ---- */
 .builder__equip {
@@ -357,6 +367,31 @@
 }
 .builder__bg-langs {
   margin-top: var(--sp-4);
+}
+.builder__bg-grants {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+.builder__bg-tag {
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius-pill);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+.builder__bg-tag--dup {
+  border-color: var(--c-crimson-500);
+  color: var(--c-crimson-400);
+}
+.builder__bg-dupnote {
+  font-size: var(--fs-xs);
+  color: var(--c-crimson-400);
+  line-height: 1.5;
+  margin-bottom: var(--sp-2);
 }
 
 /* ---- Feats step ---- */
