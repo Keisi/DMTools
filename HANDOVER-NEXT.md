@@ -1,5 +1,13 @@
 # Handover — DMTool-FrontEnd (for the next session)
 
+> **▶ NEXT ACTION ON RESUME:** live-verify the new builder steps with **spectral** — the
+> session-3 work (Choices/Spells steps + ability improvements, commit `4c0f2fa`) is
+> node-verified at the payload level against `:3501` but **not yet browser-clicked**.
+> Build a Fighter L1 (must pick a Fighting Style — the formerly-stranded L1 choice), a
+> Sorcerer L5 (Metamagic + cantrips + spells + the L4 ASI), and a Fighter/Wizard
+> multiclass; confirm each saves and renders on the sheet. Use the `spectral batch` recipe
+> in `CLAUDE.md` (inject the JWT into `localStorage['dmtool.jwt']`, navigate, `--screenshot`).
+
 Refreshed 2026-06-08. This is the authoritative "where things stand + what to do
 next" doc. Companion: `FRONTEND-CONTEXT.md` (architecture/API map) and `CLAUDE.md`
 (commands, constraints, spectral recipe, quality-gate notes). Backend lives at
