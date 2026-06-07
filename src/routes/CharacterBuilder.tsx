@@ -17,6 +17,7 @@ import {
   type RaceResponse,
   type SelectionResponse,
   type SkillResponse,
+  type SpellResponse,
   type StatResponse,
   type WeaponResponse,
 } from "../api/types";
@@ -25,10 +26,12 @@ import {
   BackgroundStep,
   BuilderDetails,
   BuilderNav,
+  ChoicesStep,
   ClassStep,
   describeError,
   EquipmentStep,
   FeatsStep,
+  ImprovementsPanel,
   MANUAL_DEFAULT,
   MAX_TOTAL_LEVEL,
   PickList,
@@ -38,12 +41,15 @@ import {
   pointCost,
   Review,
   SkillsStep,
+  SpellsStep,
   STEPS,
   StepNav,
   toggleCapped,
   ZERO_COINS,
   type AbilityMode,
+  type ChoiceGroup,
   type Coins,
+  type SpellPick,
 } from "./CharacterBuilder.steps";
 import "./CharacterBuilder.css";
 
@@ -76,6 +82,7 @@ export default function CharacterBuilder() {
   const [feats, setFeats] = useState<FeatResponse[]>([]);
   const [backgrounds, setBackgrounds] = useState<BackgroundResponse[]>([]);
   const [items, setItems] = useState<ItemResponse[]>([]);
+  const [spells, setSpells] = useState<SpellResponse[]>([]);
 
   // Selections.
   const [name, setName] = useState("");
@@ -88,6 +95,15 @@ export default function CharacterBuilder() {
   const [abilities, setAbilities] = useState<Record<string, number>>({});
   const [abilityMode, setAbilityMode] = useState<AbilityMode>("pointbuy");
   const [skillIds, setSkillIds] = useState<string[]>([]);
+  // Above-L1 ability-score improvements: statId -> total improvement amount.
+  const [improvements, setImprovements] = useState<Record<string, number>>({});
+  // Sub-feature choices (Choices step): fighting styles, metamagic, expertise skills.
+  const [fightingStyleIds, setFightingStyleIds] = useState<string[]>([]);
+  const [metamagicIds, setMetamagicIds] = useState<string[]>([]);
+  const [expertiseSkillIds, setExpertiseSkillIds] = useState<string[]>([]);
+  // Known-caster spells (Spells step): cantrips (level 0) + levelled spells.
+  const [cantripIds, setCantripIds] = useState<string[]>([]);
+  const [spellIds, setSpellIds] = useState<string[]>([]);
   const [backgroundId, setBackgroundId] = useState<string | null>(null);
   const [languageIds, setLanguageIds] = useState<string[]>([]);
   const [featIds, setFeatIds] = useState<string[]>([]);
@@ -127,6 +143,7 @@ export default function CharacterBuilder() {
     reference.feats().then(setFeats).catch(() => setFeats([]));
     reference.backgrounds().then(setBackgrounds).catch(() => setBackgrounds([]));
     reference.items().then(setItems).catch(() => setItems([]));
+    reference.spells().then(setSpells).catch(() => setSpells([]));
   }, [editId]);
 
   // Edit mode: load the existing character and prefill every wizard-owned field.
@@ -156,6 +173,24 @@ export default function CharacterBuilder() {
           Object.fromEntries(ch.abilityScores.map((a) => [a.statId, a.base])),
         );
         setSkillIds(ch.skills.filter((s) => s.isProficient).map((s) => s.skillId));
+        // Above-L1 improvements + sub-feature choices + known spells, recovered so an
+        // edit-save round-trips them (the wizard now owns these, not just carry-through).
+        setImprovements(
+          Object.fromEntries(
+            ch.abilityScores
+              .filter((a) => a.improvementModifier > 0)
+              .map((a) => [a.statId, a.improvementModifier]),
+          ),
+        );
+        setFightingStyleIds(ch.fightingStyles.map((f) => f.id));
+        setMetamagicIds(ch.metamagics.map((m) => m.id));
+        setExpertiseSkillIds(
+          ch.skills
+            .filter((s) => s.level === SkillProficiencyLevel.Expertise)
+            .map((s) => s.skillId),
+        );
+        setCantripIds(ch.spells.filter((s) => s.level === 0).map((s) => s.id));
+        setSpellIds(ch.spells.filter((s) => s.level > 0).map((s) => s.id));
         setBackgroundId(ch.background?.id ?? null);
         setFeatIds(ch.feats.map((f) => f.id));
         setArmorId(ch.equippedArmor?.id ?? null);
@@ -245,6 +280,97 @@ export default function CharacterBuilder() {
     return { armorCats, armorIds, weaponCats, weaponIds, primaryStats };
   }, [picks, classes]);
 
+  // Sub-feature budgets + option pools aggregated across every picked class and its
+  // chosen subclass, counting only selections whose level the class has reached. The
+  // request is flat (fightingStyleIds / metamagicIds / expertise via skillProficiencies),
+  // so we union options across classes (a rare multiclass overlap is harmless on a DM tool).
+  const subFeature = useMemo(() => {
+    const fs = new Map<string, string>();
+    const mm = new Map<string, string>();
+    let fsBudget = 0;
+    let mmBudget = 0;
+    let exBudget = 0;
+    for (const p of picks) {
+      const cls = classes.find((c) => c.id === p.classId);
+      if (!cls) continue;
+      const sels = [...(cls.featureSelections ?? [])];
+      if (p.subclassId) {
+        const sub = cls.subclasses.find((s) => s.id === p.subclassId);
+        if (sub) sels.push(...(sub.featureSelections ?? []));
+      }
+      for (const sel of sels) {
+        if (sel.level > p.level) continue;
+        if (sel.type === SelectionType.FightingStyle) {
+          fsBudget += sel.choose;
+          sel.options.forEach((o) => fs.set(o.optionId, o.name));
+        } else if (sel.type === SelectionType.Metamagic) {
+          mmBudget += sel.choose;
+          sel.options.forEach((o) => mm.set(o.optionId, o.name));
+        } else if (sel.type === SelectionType.Expertise) {
+          exBudget += sel.choose;
+        }
+      }
+    }
+    return {
+      fsBudget,
+      fsOptions: [...fs].map(([optionId, name]) => ({ optionId, name })),
+      mmBudget,
+      mmOptions: [...mm].map(([optionId, name]) => ({ optionId, name })),
+      exBudget,
+    };
+  }, [picks, classes]);
+
+  // Expertise options = the class skills chosen in the Skills step (you can only gain
+  // expertise in a skill you're already proficient in).
+  const expertiseOptions = useMemo(
+    () =>
+      skillIds.map((id) => ({
+        optionId: id,
+        name: skills.find((s) => s.id === id)?.name ?? "Skill",
+      })),
+    [skillIds, skills],
+  );
+
+  // Known-caster spell plan: cumulative cantrips/spells known at each caster class's
+  // chosen level, plus the unioned pools filtered to each class's max spell level.
+  // Prepared casters and non-casters contribute nothing (they self-skip).
+  const spellPlan = useMemo(() => {
+    let cantripsNeed = 0;
+    let spellsNeed = 0;
+    const cantripPool = new Map<string, SpellPick["pool"][number]>();
+    const spellPool = new Map<string, SpellPick["pool"][number]>();
+    const casterNames: string[] = [];
+    for (const p of picks) {
+      const cls = classes.find((c) => c.id === p.classId);
+      const sc = cls?.spellcasting;
+      if (!cls || !sc || sc.isPrepared) continue;
+      const row = sc.progression
+        .filter((r) => r.classLevel <= p.level)
+        .sort((a, b) => b.classLevel - a.classLevel)[0];
+      if (!row) continue;
+      casterNames.push(cls.name);
+      cantripsNeed += row.cantripsKnown ?? 0;
+      spellsNeed += row.spellsKnown ?? 0;
+      for (const s of spells) {
+        if (!s.classes?.includes(cls.name)) continue;
+        if (s.level === 0) cantripPool.set(s.id, { id: s.id, name: s.name, level: 0 });
+        else if (s.level <= row.maxSpellLevel)
+          spellPool.set(s.id, { id: s.id, name: s.name, level: s.level });
+      }
+    }
+    return {
+      cantripsNeed,
+      spellsNeed,
+      cantripPool: [...cantripPool.values()].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      ),
+      spellPool: [...spellPool.values()].sort(
+        (a, b) => a.level - b.level || a.name.localeCompare(b.name),
+      ),
+      casterNames,
+    };
+  }, [picks, classes, spells]);
+
   const armorProficient = (a: ArmorResponse) =>
     proficiency.armorCats.has(a.armorCategoryId) || proficiency.armorIds.has(a.id);
   const weaponProficient = (w: WeaponResponse) =>
@@ -287,12 +413,26 @@ export default function CharacterBuilder() {
     isEdit ||
     !bgLanguageSelection ||
     languageIds.length === bgLanguageSelection.choose;
+  // Sub-feature picks must each match their aggregated budget (relaxed on edit, which
+  // re-submits prefilled picks under the homebrew flag).
+  const choicesComplete =
+    isEdit ||
+    (fightingStyleIds.length === subFeature.fsBudget &&
+      metamagicIds.length === subFeature.mmBudget &&
+      expertiseSkillIds.length === subFeature.exBudget);
+  // Known-caster cantrips/spells must match the level's totals (relaxed on edit).
+  const spellsComplete =
+    isEdit ||
+    (cantripIds.length === spellPlan.cantripsNeed &&
+      spellIds.length === spellPlan.spellsNeed);
 
   const canAdvance = [
     !!raceId, // Race
     classesValid, // Class
     abilitiesComplete, // Abilities
     skillsComplete, // Skills
+    choicesComplete, // Choices (fighting style / expertise / metamagic)
+    spellsComplete, // Spells (known casters)
     languagesComplete, // Background (only the language pick can block)
     true, // Feats (optional)
     true, // Equipment (optional)
@@ -321,6 +461,12 @@ export default function CharacterBuilder() {
     !languagesComplete
       ? `${bgLanguageSelection?.choose} background language${bgLanguageSelection?.choose === 1 ? "" : "s"} (${languageIds.length}/${bgLanguageSelection?.choose})`
       : null,
+    !choicesComplete
+      ? `class choices (fighting style ${fightingStyleIds.length}/${subFeature.fsBudget}, expertise ${expertiseSkillIds.length}/${subFeature.exBudget}, metamagic ${metamagicIds.length}/${subFeature.mmBudget})`
+      : null,
+    !spellsComplete
+      ? `spells (cantrips ${cantripIds.length}/${spellPlan.cantripsNeed}, spells ${spellIds.length}/${spellPlan.spellsNeed})`
+      : null,
   ].filter(Boolean);
   const canCreate = createMissing.length === 0;
 
@@ -331,6 +477,8 @@ export default function CharacterBuilder() {
     classesValid,
     abilitiesComplete,
     skillsComplete,
+    choicesComplete,
+    spellsComplete,
     languagesComplete,
     true,
     true,
@@ -354,6 +502,12 @@ export default function CharacterBuilder() {
       : "",
     !skillsComplete && skillSelection
       ? `Choose ${skillSelection.choose} skill${skillSelection.choose === 1 ? "" : "s"} — ${skillIds.length}/${skillSelection.choose} selected.`
+      : "",
+    !choicesComplete
+      ? `Make your class choices — fighting style ${fightingStyleIds.length}/${subFeature.fsBudget}, expertise ${expertiseSkillIds.length}/${subFeature.exBudget}, metamagic ${metamagicIds.length}/${subFeature.mmBudget}.`
+      : "",
+    !spellsComplete
+      ? `Choose your known spells — cantrips ${cantripIds.length}/${spellPlan.cantripsNeed}, spells ${spellIds.length}/${spellPlan.spellsNeed}.`
       : "",
     !languagesComplete && bgLanguageSelection
       ? `Choose ${bgLanguageSelection.choose} background language${bgLanguageSelection.choose === 1 ? "" : "s"} — ${languageIds.length}/${bgLanguageSelection.choose} selected.`
@@ -441,6 +595,29 @@ export default function CharacterBuilder() {
   function toggleWeapon(id: string) {
     setWeaponIds((prev) => toggleCapped(prev, id, undefined));
   }
+  function toggleFightingStyle(id: string) {
+    setFightingStyleIds((prev) => toggleCapped(prev, id, subFeature.fsBudget));
+  }
+  function toggleMetamagic(id: string) {
+    setMetamagicIds((prev) => toggleCapped(prev, id, subFeature.mmBudget));
+  }
+  function toggleExpertise(id: string) {
+    setExpertiseSkillIds((prev) => toggleCapped(prev, id, subFeature.exBudget));
+  }
+  function toggleCantrip(id: string) {
+    setCantripIds((prev) => toggleCapped(prev, id, spellPlan.cantripsNeed));
+  }
+  function toggleSpell(id: string) {
+    setSpellIds((prev) => toggleCapped(prev, id, spellPlan.spellsNeed));
+  }
+  function setImprovement(statId: string, amount: number) {
+    setImprovements((prev) => {
+      const next = { ...prev };
+      if (amount <= 0) delete next[statId];
+      else next[statId] = amount;
+      return next;
+    });
+  }
 
   // ---- Inventory handlers ----
   function addInventory(itemId: string) {
@@ -472,6 +649,9 @@ export default function CharacterBuilder() {
   }
 
   function buildPayload(): CharacterRequest {
+    const improvementList = Object.entries(improvements)
+      .filter(([, amount]) => amount > 0)
+      .map(([statId, amount]) => ({ statId, amount }));
     const payload: CharacterRequest = {
       name: name.trim(),
       description: description.trim() || undefined,
@@ -493,10 +673,22 @@ export default function CharacterBuilder() {
       experience: original?.experience ?? 0,
       age,
       hasJackOfAllTrades: original?.hasJackOfAllTrades ?? false,
+      // Class skills, with any picked for Expertise upgraded to level 2.
       skillProficiencies: skillIds.map((id) => ({
         skillId: id,
-        level: SkillProficiencyLevel.Proficient,
+        level: expertiseSkillIds.includes(id)
+          ? SkillProficiencyLevel.Expertise
+          : SkillProficiencyLevel.Proficient,
       })),
+      // Known-caster picks: cantrips (level 0) + levelled spells go in one flat list.
+      spellIds:
+        cantripIds.length || spellIds.length
+          ? [...cantripIds, ...spellIds]
+          : undefined,
+      fightingStyleIds: fightingStyleIds.length ? fightingStyleIds : undefined,
+      metamagicIds: metamagicIds.length ? metamagicIds : undefined,
+      // Above-L1 ability improvements (base/improvement split preserved server-side).
+      abilityImprovements: improvementList.length ? improvementList : undefined,
       backgroundId: backgroundId ?? undefined,
       languageIds: languageIds.length ? languageIds : undefined,
       featIds: featIds.length ? featIds : undefined,
@@ -514,22 +706,11 @@ export default function CharacterBuilder() {
       // Carry through everything the wizard doesn't expose so the PUT doesn't wipe it.
       payload.hitPointsOverride = original.hitPointsOverride ?? undefined;
       payload.armorClassOverride = original.armorClassOverride ?? undefined;
-      payload.spellIds = original.spells.length
-        ? original.spells.map((s) => s.id)
-        : undefined;
       payload.statusEffects = original.statusEffects.length
         ? original.statusEffects.map((s) => ({
             statusEffectId: s.statusEffectId,
             source: s.source ?? undefined,
           }))
-        : undefined;
-      // Sub-features (the wizard doesn't pick these — level-up does); preserve so
-      // a PUT doesn't drop a character's chosen fighting styles / metamagic.
-      payload.fightingStyleIds = original.fightingStyles.length
-        ? original.fightingStyles.map((f) => f.id)
-        : undefined;
-      payload.metamagicIds = original.metamagics.length
-        ? original.metamagics.map((m) => m.id)
         : undefined;
       payload.personalityTraits = original.personalityTraits ?? undefined;
       payload.ideals = original.ideals ?? undefined;
@@ -563,6 +744,41 @@ export default function CharacterBuilder() {
       setBusy(false);
     }
   }
+
+  // The Choices step's pickers (only those the build actually grants).
+  const choiceGroups: ChoiceGroup[] = [];
+  if (subFeature.fsBudget > 0)
+    choiceGroups.push({
+      key: "fs",
+      title: "Fighting Style",
+      hint: "Pick the fighting style(s) your class(es) grant.",
+      choose: subFeature.fsBudget,
+      options: subFeature.fsOptions,
+      chosen: fightingStyleIds,
+      onToggle: toggleFightingStyle,
+    });
+  if (subFeature.exBudget > 0)
+    choiceGroups.push({
+      key: "ex",
+      title: "Expertise",
+      hint: "Double your proficiency bonus on the chosen skills.",
+      choose: subFeature.exBudget,
+      options: expertiseOptions,
+      chosen: expertiseSkillIds,
+      onToggle: toggleExpertise,
+      emptyNote:
+        "Pick class skills in the Skills step first — expertise applies to skills you're proficient in.",
+    });
+  if (subFeature.mmBudget > 0)
+    choiceGroups.push({
+      key: "mm",
+      title: "Metamagic",
+      hint: "Choose your Sorcerer metamagic options.",
+      choose: subFeature.mmBudget,
+      options: subFeature.mmOptions,
+      chosen: metamagicIds,
+      onToggle: toggleMetamagic,
+    });
 
   return (
     <div className="container builder">
@@ -613,17 +829,27 @@ export default function CharacterBuilder() {
         )}
 
         {step === 2 && (
-          <AbilitiesStep
-            mode={abilityMode}
-            onMode={changeAbilityMode}
-            remaining={pointsRemaining}
-            stats={defaultStats}
-            abilities={abilities}
-            primaryStats={proficiency.primaryStats}
-            onChange={(statId, value) =>
-              setAbilities((prev) => ({ ...prev, [statId]: value }))
-            }
-          />
+          <>
+            <AbilitiesStep
+              mode={abilityMode}
+              onMode={changeAbilityMode}
+              remaining={pointsRemaining}
+              stats={defaultStats}
+              abilities={abilities}
+              primaryStats={proficiency.primaryStats}
+              onChange={(statId, value) =>
+                setAbilities((prev) => ({ ...prev, [statId]: value }))
+              }
+            />
+            {totalLevel > 1 && (
+              <ImprovementsPanel
+                stats={defaultStats}
+                base={abilities}
+                improvements={improvements}
+                onChange={setImprovement}
+              />
+            )}
+          </>
         )}
 
         {step === 3 && (
@@ -636,7 +862,35 @@ export default function CharacterBuilder() {
           />
         )}
 
-        {step === 4 && (
+        {step === 4 && <ChoicesStep groups={choiceGroups} />}
+
+        {step === 5 && (
+          <SpellsStep
+            casterNames={spellPlan.casterNames}
+            cantrips={
+              spellPlan.cantripsNeed > 0
+                ? {
+                    choose: spellPlan.cantripsNeed,
+                    pool: spellPlan.cantripPool,
+                    chosen: cantripIds,
+                    onToggle: toggleCantrip,
+                  }
+                : null
+            }
+            spells={
+              spellPlan.spellsNeed > 0
+                ? {
+                    choose: spellPlan.spellsNeed,
+                    pool: spellPlan.spellPool,
+                    chosen: spellIds,
+                    onToggle: toggleSpell,
+                  }
+                : null
+            }
+          />
+        )}
+
+        {step === 6 && (
           <BackgroundStep
             backgrounds={backgrounds}
             selectedId={backgroundId}
@@ -648,11 +902,11 @@ export default function CharacterBuilder() {
           />
         )}
 
-        {step === 5 && (
+        {step === 7 && (
           <FeatsStep feats={feats} chosen={featIds} onToggle={toggleFeat} />
         )}
 
-        {step === 6 && (
+        {step === 8 && (
           <EquipmentStep
             armors={armors}
             weapons={weapons}
@@ -676,7 +930,7 @@ export default function CharacterBuilder() {
           />
         )}
 
-        {step === 7 && (
+        {step === 9 && (
           <Review
             name={name}
             raceName={races.find((r) => r.id === raceId)?.name}

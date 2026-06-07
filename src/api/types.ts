@@ -254,6 +254,25 @@ export interface SubclassResponse {
   name: string;
   description?: string | null;
   features: SubclassFeatureResponse[];
+  // Sub-feature choices the subclass's features force (e.g. Champion's extra
+  // Fighting Style at L10). Same type-4/5/6 shape as ClassResponse.featureSelections.
+  featureSelections: SelectionResponse[];
+}
+
+// A class's per-level spellcasting row (ClassResponse.spellcasting.progression).
+// Known counts are CUMULATIVE totals at that level; both null for prepared casters.
+// Only levels that have a spellcasting row are present (e.g. Ranger has no L1 row).
+export interface ClassSpellcastingProgressionResponse {
+  classLevel: number;
+  cantripsKnown?: number | null;
+  spellsKnown?: number | null;
+  maxSpellLevel: number; // highest castable spell level (0 = cantrips only)
+  slots: SpellSlotResponse[];
+}
+export interface ClassSpellcastingResponse {
+  abilityStatId: string; // casting ability (match StatResponse.id)
+  isPrepared: boolean; // prepared caster → known counts null; skip the known-spell step
+  progression: ClassSpellcastingProgressionResponse[];
 }
 
 /** A "class" (Job on the backend). */
@@ -264,6 +283,14 @@ export interface ClassResponse {
   hitDie: HitDie;
   selections: SelectionResponse[];
   subclasses: SubclassResponse[];
+  // Sub-feature choices the class's features force (Fighting Style / Expertise /
+  // Metamagic), each with type (4/5/6), choose, level, and options. Expertise
+  // (type 5) carries an EMPTY options[] — its pool is the character's proficient
+  // skills. Render a picker per entry whose level <= the chosen class level.
+  featureSelections: SelectionResponse[];
+  // Per-level spellcasting progression (null for non-casters). Lets the builder
+  // collect the level-appropriate cantrips/spells at direct creation.
+  spellcasting?: ClassSpellcastingResponse | null;
   // Proficiency grants — category ids match Armor/Weapon/Tool .*CategoryId;
   // item ids match the Armor/Weapon/Tool id. SRD classes grant by category
   // (item lists usually empty); homebrew per-item grants populate the item lists.
@@ -490,6 +517,11 @@ export interface CharacterRequest extends CharacterDetails {
   // skillProficiencies[].level = 2, not here.
   fightingStyleIds?: string[] | null;
   metamagicIds?: string[] | null;
+  // Ability-score improvements baked in at creation for an above-L1 character
+  // (preserves the base/improvement split instead of inflating base scores).
+  // Each leg adds `amount` to a stat; legs may repeat a stat (they accumulate).
+  // Existence-checked (stat must be one the character has); not count-gated.
+  abilityImprovements?: AbilityImprovementChoice[] | null;
   copperPieces?: number;
   silverPieces?: number;
   electrumPieces?: number;

@@ -27,6 +27,8 @@ export const STEPS = [
   "Class",
   "Abilities",
   "Skills",
+  "Choices",
+  "Spells",
   "Background",
   "Feats",
   "Equipment",
@@ -767,6 +769,215 @@ export function FeatsStep({
         })}
       </div>
     </>
+  );
+}
+
+// Above-L1 ability-score improvements: allocate the ASIs the character earned, kept
+// as a separate improvement modifier (base scores stay intact). Free allocation — the
+// reference API doesn't expose the per-class ASI schedule, so we guide with a hint and
+// cap each stat so base + improvement <= 20 (the backend's effective cap).
+export function ImprovementsPanel({
+  stats,
+  base,
+  improvements,
+  onChange,
+}: {
+  stats: StatResponse[];
+  base: Record<string, number>;
+  improvements: Record<string, number>;
+  onChange: (statId: string, amount: number) => void;
+}) {
+  const total = Object.values(improvements).reduce((a, b) => a + b, 0);
+  return (
+    <div className="builder__improvements">
+      <h4 className="builder__equip-title">Ability Score Improvements</h4>
+      <p className="text-faint builder__hint">
+        Above level 1: allocate the points your character earned from Ability Score
+        Improvements (levels 4 / 8 / 12 / 16 / 19, plus class extras — Fighter 6 / 14,
+        Rogue 10). Each ASI is +2 to one or +1 to two. Prefer a feat instead? Add it in
+        the Feats step. These keep your base scores intact ({total} allocated).
+      </p>
+      <div className="builder__abilities">
+        {stats.map((s) => {
+          const b = base[s.id] ?? 0;
+          const inc = improvements[s.id] ?? 0;
+          return (
+            <div key={s.id} className="builder__ability">
+              <span className="builder__ability-name">{s.code ?? s.name}</span>
+              <div className="builder__stepper">
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={inc <= 0}
+                  onClick={() => onChange(s.id, inc - 1)}
+                >
+                  −
+                </button>
+                <span className="builder__stepper-val">
+                  {b}
+                  {inc > 0 && (
+                    <span className="text-faint">
+                      {" "}
+                      +{inc} = {b + inc}
+                    </span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={b + inc >= 20}
+                  onClick={() => onChange(s.id, inc + 1)}
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// A generic "choose N from a set" group — drives the Fighting Style / Expertise /
+// Metamagic pickers in the Choices step (and any future sub-feature choice).
+export interface ChoiceGroup {
+  key: string;
+  title: string;
+  hint?: string;
+  choose: number;
+  options: { optionId: string; name: string }[];
+  chosen: string[];
+  onToggle: (optionId: string) => void;
+  emptyNote?: string;
+}
+
+// Sub-feature choices the character's classes/subclasses grant at their chosen levels:
+// Fighting Style (incl. a Fighter's L1 style, unreachable via level-up), Rogue/Bard
+// Expertise, Sorcerer Metamagic. Empty when the build owes none.
+export function ChoicesStep({ groups }: { groups: ChoiceGroup[] }) {
+  if (groups.length === 0)
+    return (
+      <p className="text-faint">
+        This build has no Fighting Style, Expertise, or Metamagic choices at the chosen
+        levels — skip ahead.
+      </p>
+    );
+  return (
+    <div className="builder__choices">
+      {groups.map((g) => (
+        <div key={g.key} className="builder__choice-group">
+          <h4 className="builder__equip-title">
+            {g.title} — choose {g.choose} ({g.chosen.length}/{g.choose})
+          </h4>
+          {g.hint && <p className="text-faint builder__hint">{g.hint}</p>}
+          {g.options.length === 0 ? (
+            <p className="text-faint">{g.emptyNote ?? "No options available."}</p>
+          ) : (
+            <div className="builder__chips">
+              {g.options.map((o) => {
+                const on = g.chosen.includes(o.optionId);
+                const atCap = !on && g.chosen.length >= g.choose;
+                return (
+                  <button
+                    key={o.optionId}
+                    type="button"
+                    disabled={atCap}
+                    className={"builder__chip" + (on ? " builder__chip--on" : "")}
+                    onClick={() => g.onToggle(o.optionId)}
+                  >
+                    {o.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// One "choose N" spell picker (cantrips or levelled spells), with a search box for
+// the larger pools. Used by SpellsStep.
+export interface SpellPick {
+  choose: number;
+  pool: { id: string; name: string; level: number }[];
+  chosen: string[];
+  onToggle: (id: string) => void;
+}
+function SpellPickList({ title, pick }: { title: string; pick: SpellPick }) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const shown = q
+    ? pick.pool.filter(
+        (s) => pick.chosen.includes(s.id) || s.name.toLowerCase().includes(q),
+      )
+    : pick.pool;
+  return (
+    <div className="builder__spell-group">
+      <h4 className="builder__equip-title">
+        {title} — choose {pick.choose} ({pick.chosen.length}/{pick.choose})
+      </h4>
+      {pick.pool.length > 8 && (
+        <input
+          className="input"
+          placeholder={`Search ${pick.pool.length} ${title.toLowerCase()}…`}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      )}
+      <div className="builder__chips">
+        {shown.map((s) => {
+          const on = pick.chosen.includes(s.id);
+          const atCap = !on && pick.chosen.length >= pick.choose;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              disabled={atCap}
+              className={"builder__chip" + (on ? " builder__chip--on" : "")}
+              onClick={() => pick.onToggle(s.id)}
+            >
+              {s.name}
+              {s.level > 0 && <span className="text-faint"> · L{s.level}</span>}
+            </button>
+          );
+        })}
+        {shown.length === 0 && <span className="text-faint">No matches.</span>}
+      </div>
+    </div>
+  );
+}
+
+// Known-caster spell selection at creation: cantrips + levelled spells the character
+// knows at its chosen level (prepared casters and non-casters self-hide).
+export function SpellsStep({
+  casterNames,
+  cantrips,
+  spells,
+}: {
+  casterNames: string[];
+  cantrips: SpellPick | null;
+  spells: SpellPick | null;
+}) {
+  if (!cantrips && !spells)
+    return (
+      <p className="text-faint">
+        No spells to choose at creation. Prepared casters (Cleric, Druid, Paladin, Wizard)
+        prepare from the full list in play; non-casters have none. You can add spells later
+        via Edit.
+      </p>
+    );
+  return (
+    <div className="builder__spells">
+      <p className="text-muted builder__hint">
+        Known spells for {casterNames.join(", ")} at your chosen level. (Prepared casters
+        aren't shown — they prepare in play.)
+      </p>
+      {cantrips && <SpellPickList title="Cantrips" pick={cantrips} />}
+      {spells && <SpellPickList title="Spells" pick={spells} />}
+    </div>
   );
 }
 
