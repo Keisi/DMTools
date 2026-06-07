@@ -363,3 +363,77 @@ simply stop appearing (correct behavior).
   (conditional bonuses applied at the table — show the `description`); metamagic isn't de-duped against
   already-known across level-ups (DM picks new ones). Eldritch Invocations (Warlock) aren't seeded yet — same
   recipe when wanted.
+
+---
+
+# INCOMING #5 — `CHARACTER-CREATION-HANDOFF-FROM-FRONTEND.md` DONE (all of #1–#5)
+
+**Date:** 2026-06-07. Shipped, built, **live-verified**, committed + **pushed to `origin/master`** (`ab615b7`,
+migration **038**; DB `DMTools_local` now **through 038**). All additive / non-breaking. Your handoff was spot-on
+— here's each item:
+
+## #1 [BLOCKER] — ClassFeature-sourced selections now on the reference API ✅
+We went with **both** shapes you offered (each is additive, neither breaks anything):
+- **`ClassResponse.featureSelections`** — `SelectionResponse[]` for the **base class's** Fighting Style /
+  Expertise / Metamagic selections (each with `type` 4/5/6, `choose`, `level`, `options`).
+- **`SubclassResponse.featureSelections`** — same shape, for subclass-granted selections (covers #3 below).
+
+Existing `ClassResponse.selections` (Job-sourced skill + subclass) is **unchanged**. Live-verified `GET /api/classes`:
+```jsonc
+"Fighter.featureSelections":  [ { type:4, choose:1, level:1,  options:6 } ]   // Fighting Style (6 styles)
+"Paladin.featureSelections":  [ { type:4, choose:1, level:2,  options:4 } ]   // no Archery/Two-Weapon (SRD subset)
+"Ranger.featureSelections":   [ { type:4, choose:1, level:2,  options:4 } ]
+"Rogue.featureSelections":    [ { type:5, choose:2, level:1, options:0 }, { type:5, choose:2, level:6, options:0 } ]   // Expertise — options EMPTY (dynamic pool = proficient skills)
+"Bard.featureSelections":     [ { type:5, choose:2, level:3, options:0 }, { type:5, choose:2, level:10, options:0 } ]
+"Sorcerer.featureSelections": [ { type:6, choose:2, level:3, options:8 }, { type:6, choose:1, level:10, options:8 }, { type:6, choose:1, level:17, options:8 } ]  // Metamagic
+// Fighter → Champion subclass:
+"Champion.featureSelections": [ { type:4, choose:1, level:10, options:6 } ]   // Additional Fighting Style (#3)
+```
+Render pickers for entries whose `level <= chosen class level`, summing `choose`. **Expertise (type 5) has
+`options: []`** — populate its picker from the character's proficient skills (`skills[]` where `isProficient`),
+same as the level-up flow (INCOMING #4). POST the ids via the existing `fightingStyleIds` / `metamagicIds` /
+Expertise-level `skillProficiencies` request fields.
+
+## #2 [BLOCKER for casters] — known-caster spell counts populated ✅ (migration 038)
+- **Sorcerer / Bard:** `cantripsKnown` / `spellsKnown` filled per SRD (rows already existed).
+- **Ranger / Warlock:** had **no** `ClassSpellcasting` rows at all (their slot tables were a Tier-1 deferral) —
+  we **seeded the full progression** (slots + known counts). Ranger is a half-caster (no cantrips, spells from
+  L2); Warlock is pact magic (all slots at the top level; the short-rest recharge nuance isn't modeled — slot
+  *counts/levels* are correct).
+- Prepared casters (Cleric/Druid/Paladin/Wizard) correctly stay `null` (you prepare from the full list).
+
+Live-verified `POST /levelup/plan`: Sorcerer 1→2 `newSpells:1`, Ranger 1→2 `newSpells:2`, Warlock 1→2
+`newSpells:1`. For **creation**, read the per-level `spellsKnown`/`cantripsKnown` (via a spellcasting lookup or
+the class data) to know how many to collect, then POST via `spellIds`. **Note:** there's no dedicated
+"spellcasting progression" endpoint yet — if you want the per-level counts exposed directly on `ClassResponse`
+(rather than inferring from level-up plans), say so and I'll add it.
+
+## #3 — subclass extra-style selection ✅
+Champion's **Additional Fighting Style** (L10) now carries a type-4 selection (options = the 6 Fighter styles),
+surfaced both on `SubclassResponse.featureSelections` (above) and by the level-up planner at L10.
+
+## #4 [DECISION] — `CharacterRequest.AbilityImprovements` added (Kevin chose the fidelity option) ✅
+New **optional** request field so a directly-built above-L1 character keeps the base/improvement split instead of
+baking ASIs into base scores:
+```jsonc
+"abilityImprovements": [ { "statId": "<stat id>", "amount": 2 } ]   // each leg 1–2; legs may repeat a stat (they accumulate)
+```
+Folds exactly like the level-up engine: `effective = base + racial + feat + improvement`, base score untouched.
+Live-verified: Fighter L4 with STR +2 → `abilityScores[STR]`: `base 14, racialModifier 2, improvementModifier 2,
+effective 18`; persists + reloads. A leg targeting a stat the character doesn't have → **400**. (Baking into base
+also still works if you prefer it for any case.)
+
+## #5 [CONFIRM] — yes, create-time validation is existence-only, by design ✅
+Fighting styles / metamagic / spells / ability-improvements on **create** are validated for **existence** (and
+stat-membership for improvements), **not** gated to level-appropriate counts — intentional for a DM tool. The
+**builder owns** offering the correct counts; `allowHomebrewSelections` remains the escape hatch for off-catalog
+picks. Skills / languages / subclass remain count-gated via `SelectionValidator` (unchanged). Please don't
+double-enforce counts on your side beyond what you want the UX to guide.
+
+## Build / status
+- `dotnet build DMTool.slnx` → **0 errors**; `dotnet test` → **60/60 pass**.
+- codescan grade **A** (0 issues / 0 vulns in app code), 0 cross-module duplicates. Migration **038** idempotent.
+- IIS pool `DMTool` running; `/api/health` → ok. DB `DMTools_local` **through 038**.
+- Commit on `origin/master`: `ab615b7`.
+- **Heads-up (reminder for our side):** IIS serves the built DLL — verify after a real `dotnet build DMTool.slnx`
+  + pool restart, not `dotnet test` alone (it doesn't rebuild the web project's IIS output).
