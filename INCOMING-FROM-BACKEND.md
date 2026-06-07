@@ -490,3 +490,75 @@ full-fidelity direct above-L1 caster creation.
 - `dotnet build DMTool.slnx` → **0 errors**; `dotnet test` → **60/60 pass**; codescan **A**, 0 dupes.
 - IIS pool `DMTool` running; `/api/health` → ok. DB `DMTools_local` **through 038** (no new migration).
 - Commit on `origin/master`: `3029675`.
+
+---
+
+# INCOMING #7 — `FRONTEND-REQUEST-compendium-and-update-contract.md` (all 4) + multiclass-in DONE
+
+**Date:** 2026-06-08. Shipped, built, **live-verified**, committed + **pushed to `origin/master`** (`b2fa276`,
+**migrations 039 + 040**; DB `DMTools_local` now **through 040**). All additive / non-breaking except the PUT
+status change (#2, which you asked for).
+
+## ❓ One question back to you (Kevin asked me to confirm this): why did we need multiclass-in (#3)?
+I built the **multiclass-in level-up engine** (#3) this pass — but your handoff explicitly marked it **"no rush"**
+and said the sheet's Multiclass action already works via the `PUT`/update path (append `{classId, level:1}` and
+re-submit). So: **what made multiclass-in necessary now, and will you actually route the Multiclass action
+through `levelup/plan`+`apply` instead of the bulk PUT?** If the PUT path is staying, #3 is still a correctness
+win (proper L1 HP recording + L1 feature/subclass/spell prompts for the new class) but it's optional for you —
+let me know so I document the intended path. (Implementation details below regardless.)
+
+## #2 — `PUT /api/character/{id}` now returns `200 + CharacterResponse` ✅
+Was `204 No Content`; now returns the full updated `CharacterResponse` (same shape as create / levelup-apply).
+**You can drop the follow-up GET workaround** in `characters.update()`. Live-verified (PUT → body with the
+renamed character). The only behavioral change in this batch — everything else is additive.
+
+## #4c — `ClassResponse.features` (class feature-by-level) ✅
+New `features: ClassFeatureResponse[]` on `GET /api/classes`, ordered by level:
+```jsonc
+"features": [ { "name": "Second Wind", "description": "...", "level": 1, "kind": 0 }, ... ]   // base-class features
+```
+`kind` is the `FeatureKind` enum (0 Normal / 1 AbilityScoreImprovement / 2 Subclass). Subclass features remain on
+`subclasses[].features`. Live: Fighter returns 22 features (L1 = Fighting Style, Second Wind).
+
+## #4a — `ItemResponse.category` + `.rarity` ✅ (migration 039)
+```jsonc
+{ ..., "category": "Wondrous item", "rarity": "Uncommon" }   // magic item
+{ ..., "category": "Adventuring Gear", "rarity": null }       // plain gear
+{ ..., "category": "Magic Item", "rarity": null }             // magic item w/o an SRD header (hand-seeded)
+```
+- `category` (string): for SRD magic items, the type header ("Wondrous item", "Ring", "Potion", "Weapon",
+  "Armor", "Wand", "Staff", "Rod", "Scroll"); "Adventuring Gear" for non-magic; **"Magic Item"** for the couple
+  of hand-seeded magic items (Ring of Protection, Potion of Healing) that lack an SRD type/rarity header.
+- `rarity` (string|null): Common / Uncommon / Rare / Very Rare / Legendary / Artifact for SRD magic items; null
+  for plain gear and headerless magic items. **Caveat:** the few multi-variant items ("…uncommon (+1), rare
+  (+2), very rare (+3)") resolve to their **highest** rarity — fine as a browser facet, not a per-variant value.
+- Backfilled by parsing 030's SRD descriptions (lossy but good); both settable on homebrew `POST /api/items`.
+- Live distinct categories: Wondrous item 172, Adventuring Gear 117, Potion 37, Ring 35, Weapon 35, Armor 29, …
+
+## #4b — `RaceResponse.traits` (named racial traits) ✅ (migration 040)
+```jsonc
+"traits": [ { "name": "Fey Ancestry", "description": "You have advantage on saving throws against being charmed..." }, ... ]
+```
+Seeded the 8 SRD races that have named traits (Dwarf 5, Elf 4, Half-Orc 4, Dragonborn/Half-Elf/Halfling/Tiefling 3,
+Gnome 2). **Human has none** (no named SRD traits) → `traits: []`. Descriptive only (the mechanical bits —
+ability modifiers, speeds, darkvision, resistances, languages — stay where they were). Also settable on homebrew
+`POST /api/races` via a `traits: [{name, description}]` field. Live: Elf → Darkvision, Fey Ancestry, Keen Senses, Trance.
+
+## #3 — Multiclass-in level-up engine ✅
+`POST /api/character/{id}/levelup/plan` and `…/apply` now accept a **classId the character doesn't have yet** —
+the planner treats it as that class's **first level** (`fromLevel: 0 → toLevel: 1`) and `apply` adds a new
+`CharacterClass` at level 1. HP is the normal roll/average (NOT maxed — RAW: only the *starting* class's L1 is
+maxed). The plan surfaces the new class's L1 features, subclass choice (Cleric/Sorcerer/Warlock get theirs at
+L1), caster spell/cantrip choices, and feature sub-choices (e.g. multiclassing into Fighter → Fighting Style;
+into Rogue → Expertise). Live: Fighter 1 → `plan {classId: Wizard}` returns from 0/to 1/totalAfter 2 + Wizard
+spell choices; `apply` → character has Fighter 1 + Wizard 1.
+- **Known simplification (documented):** multiclassing does NOT apply the RAW *reduced* multiclass proficiency
+  grants — a new class still contributes its **full** proficiency grants (the existing create-path approximation).
+  Multiclass ability-score prerequisites aren't enforced either (DM tool). If you route Multiclass through the
+  engine, surface that to the DM. (See the question at the top.)
+
+## Build / status
+- `dotnet build DMTool.slnx` → **0 errors**; `dotnet test` → **61/61 pass** (+1 multiclass-in test); codescan
+  **A** (the only 2 flags are Kevin's local Azure publish scaffolding, not app code); 0 cross-module dupes.
+- Migrations **039 + 040** idempotent. IIS pool `DMTool` running; `/api/health` → ok. DB `DMTools_local` **through 040**.
+- Commit on `origin/master`: `b2fa276`.
