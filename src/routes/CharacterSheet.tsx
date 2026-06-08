@@ -444,21 +444,6 @@ function EquipRow({
   );
 }
 
-// Build the unarmored AC breakdown text ("10 base + 3 DEX + 3 other"), omitting
-// zero components — surfaced for characters with no worn armor (Monk, Barbarian,
-// unarmored casters) so the AC source is still visible when nothing is equipped.
-function acParts(ab: CharacterResponse["armorClassBreakdown"]): string {
-  if (!ab) return "";
-  const parts = [`${ab.base} base`];
-  const add = (v: number, label: string) => {
-    if (v) parts.push(`${v > 0 ? "+" : "−"}${Math.abs(v)} ${label}`);
-  };
-  add(ab.dexterity, "DEX");
-  add(ab.shield, "shield");
-  add(ab.other, "other");
-  return parts.join(" ");
-}
-
 function EquippedBlock({ character }: { character: CharacterResponse }) {
   const c = character;
   const ab = c.armorClassBreakdown;
@@ -481,13 +466,9 @@ function EquippedBlock({ character }: { character: CharacterResponse }) {
             }
           />
         ) : (
-          <li className="prof-list__row prof-list__row--equip">
-            <span className="prof-list__name">{ab?.source ?? "Unarmored"}</span>
-            <span className="prof-list__val text-faint">
-              AC {ab?.total ?? c.armorClass}
-              {acParts(ab) && ` · ${acParts(ab)}`}
-            </span>
-          </li>
+          // No worn armor (Monk/Barbarian/unarmored caster) — show the AC source
+          // as a row consistent with the others; the AC math lives in the AC tooltip.
+          <EquipRow name={ab?.source ?? "Unarmored"} slot="armor" />
         )}
         {c.equippedShield && (
           <EquipRow
