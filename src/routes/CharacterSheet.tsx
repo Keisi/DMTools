@@ -486,10 +486,8 @@ function EquippedBlock({ character }: { character: CharacterResponse }) {
             <EquipRow key={w.id} name={w.name} slot="weapon" />
           ))
         ) : (
-          <li className="prof-list__row prof-list__row--equip">
-            <span className="prof-list__name text-faint">No weapons equipped</span>
-            <span className="prof-list__val text-faint">unarmed</span>
-          </li>
+          // Parallel to the unarmored row above, same EquipRow layout for alignment.
+          <EquipRow name="Unarmed" slot="weapon" />
         )}
       </ul>
     </section>
