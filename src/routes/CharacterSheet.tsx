@@ -447,9 +447,9 @@ function EquipRow({
 function EquippedBlock({ character }: { character: CharacterResponse }) {
   const c = character;
   const ab = c.armorClassBreakdown;
-  // Always render: an unarmored/unarmed character (e.g. a Monk) still has a
-  // derived AC and an attack option, so the block surfaces those instead of
-  // self-hiding when no gear is worn.
+  // Always render: an unarmored character (e.g. a Monk) still has a derived AC,
+  // so the block surfaces its source row instead of self-hiding when no armor
+  // is worn. (The unarmed attack itself lives in the Attacks block.)
   return (
     <section className="panel sheet__block">
       <h3 className="sheet__block-title">Equipped</h3>
@@ -481,14 +481,11 @@ function EquippedBlock({ character }: { character: CharacterResponse }) {
             }
           />
         )}
-        {c.equippedWeapons.length > 0 ? (
-          c.equippedWeapons.map((w) => (
-            <EquipRow key={w.id} name={w.name} slot="weapon" />
-          ))
-        ) : (
-          // Parallel to the unarmored row above, same EquipRow layout for alignment.
-          <EquipRow name="Unarmed" slot="weapon" />
-        )}
+        {/* Only real equipped weapons here — the unarmed strike is a proper
+            entry in weaponAttacks now (backend 2ecb950), shown under Attacks. */}
+        {c.equippedWeapons.map((w) => (
+          <EquipRow key={w.id} name={w.name} slot="weapon" />
+        ))}
       </ul>
     </section>
   );
