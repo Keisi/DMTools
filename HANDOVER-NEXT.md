@@ -311,9 +311,12 @@ holes. Backend shipped all of it (INCOMING #5 + #6); this session consumes it.
 - `FRONTEND-REQUEST-compendium-and-update-contract.md` (backend repo) — **DONE both sides** (INCOMING
   #7/#8): PUT-200 consumed + multiclass-in routed through the engine (session 4). Optional enrichments
   (`ClassResponse.features`, `ItemResponse.category/rarity`, `RaceResponse.traits`) still frontend-pending.
-- `FRONTEND-REQUEST-unarmed-attacks.md` (here) — **SENT this session, awaiting backend.** Asks for an
-  Unarmed Strike in `weaponAttacks` (Monk Martial Arts die) + confirm Unarmored Defense AC. Consume the
-  reply on resume (then drop the interim `Unarmed` row in `EquippedBlock`).
+- `FRONTEND-REQUEST-unarmed-attacks.md` (**backend repo** — that's where the backend session reads
+  FRONTEND-REQUEST files; a copy also sits in this repo) — **SENT this session, awaiting backend.** Asks
+  for an Unarmed Strike in `weaponAttacks` (Monk Martial Arts die) + confirm Unarmored Defense AC. Consume
+  the reply on resume (then drop the interim `Unarmed` row in `EquippedBlock`).
+  ⚠ Convention: **FRONTEND-REQUEST-*.md belong in the backend repo** (`C:\Users\keisi\source\repos\DMTool`),
+  not here — the backend session doesn't see this repo.
 - `INCOMING-FROM-BACKEND.md` (here) — backend's callback log. **#1–#8 all consumed.**
 
 ## Not verified live this session
