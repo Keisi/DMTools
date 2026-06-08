@@ -657,3 +657,107 @@ Backend cleared a four-item deferral/standing-offer backlog. One item reverses a
 - `dotnet build DMTool.slnx` → **0 errors**; `dotnet test` → **71/71** (+8: Remarkable Athlete x4, multiclass prereq x4); codescan **A** (only the 2 Azure-scaffolding flags); 0 dupes. Migrations **042-045** idempotent. DB `DMTools_local` **through 045**.
 - Commits on `origin/master`: `d9beed9` (Paladin slots) + `8637a75` (invocations + Tier-1 folds + multiclass prereqs) + `bec9ccb` (handover doc). HEAD `bec9ccb`.
 - This callback was **appended by the backend session but intentionally NOT committed** — committing in this repo is the frontend session's responsibility (avoids sweeping your staged WIP).
+
+---
+
+# INCOMING #10 — Multiclass choice-grants (Bard/Ranger/Rogue) + focused HP-override endpoint
+
+**DB `DMTools_local` through migration 048. Build 0 errors, 91/91 tests (+1), codescan A (only the 2 Azure-scaffolding PII flags, not app code), 0 cross-module dupes, migration 048 idempotent. Live IIS round-trips green.** Two self-contained additions; both **additive / non-breaking**.
+
+> Heads-up: this session's work is **not yet committed** (still applied to the live DB + working tree). HEAD on `origin/master` is unchanged from #9 (`bec9ccb`) until Kevin commits.
+
+## 1) Multiclass choice-grants on the level-up plan (migration 048)
+
+RAW, entering a class *as a multiclass* grants a **reduced** set of proficiencies vs. taking it as your starting class. The flat ones were already handled (migration 041). The three **choices** are now surfaced by the level-up engine:
+- **Bard** — one skill of your choice **+** one musical instrument
+- **Ranger** — one skill from the Ranger skill list
+- **Rogue** — one skill from the Rogue skill list
+
+### `POST /api/character/{id}/levelup/plan` — new `multiclassGrants[]`
+The plan response gains `multiclassGrants: SelectionResponse[]`. It is **populated only when the plan enters a class the character doesn't already have** (a multiclass-in) and that class offers such grants (Bard/Ranger/Rogue). It is an **empty array** when advancing an owned class, or entering a class with no choice-grants. Each item is the **same `SelectionResponse` shape you already render** for subclass/feature choices:
+```jsonc
+"multiclassGrants": [
+  { "id": "...", "name": "Bard Multiclass Skill", "type": 1, "choose": 1, "level": 1,
+    "options": [ { "optionId": "<skillId>", "name": "Acrobatics" }, ... all 18 skills ] },
+  { "id": "...", "name": "Bard Multiclass Instrument", "type": 8, "choose": 1, "level": 1,
+    "options": [ { "optionId": "<toolId>", "name": "Lute" }, ... 10 instruments ] }
+]
+```
+- **New `SelectionType` enum value: `Tool = 8`** (enums are NUMBERS over the wire). Its `options[].optionId` point into the **Tools** catalog (`GET /api/tools`); `name` is the tool name. (Existing values unchanged: Skill 1, Subclass 2, Language 3, FightingStyle 4, Expertise 5, Metamagic 6, EldritchInvocation 7.)
+- These grants are **NOT** in `GET /api/classes` → `selections[]` (they're multiclass-only; the normal class skill choice still appears there for starting-class creation). You only ever see them via the **plan**.
+
+### `POST .../levelup/apply` — new `multiclassChoices[]`
+Send the picks with the **same `{ selectionId, optionIds }` shape as `featureChoices`**:
+```jsonc
+{
+  "classId": "<bardId>",
+  "hitPoints": { "mode": 0 },
+  "multiclassChoices": [
+    { "selectionId": "<Bard Multiclass Skill id>",      "optionIds": ["<skillId>"] },
+    { "selectionId": "<Bard Multiclass Instrument id>", "optionIds": ["<toolId>"] }
+  ]
+}
+```
+- Validated against the grant (subset + `choose` count), **relaxable** via `allowHomebrewSelections: true` (same flag as everywhere else). Off-pool / over-count → **400** on `multiclassChoices`.
+- **Empty picks are allowed** (not hard-required — the DM may fill the choice later); a pick for a selection not offered → 400.
+- On success the chosen **skill** appears in `skills[].isProficient = true` and the chosen **instrument** in `toolProficiencies.tools[]` — both in the returned `CharacterResponse` and on a fresh `GET`.
+- Reminder: a multiclass-in still also enforces the **ability-score prerequisite** from #9 (e.g. Bard needs CHA ≥ 13) — `plan` first to surface `multiclassPrerequisite`, then `apply`.
+
+**Suggested UX:** in the Add-Class/level-up dialog, after `plan`, if `multiclassGrants` is non-empty render one picker per grant (a skill dropdown; for Bard, also an instrument dropdown), then include the picks as `multiclassChoices` on `apply`.
+
+## 2) Focused HP-override endpoint — `PUT /api/character/{id}/hp` (no migration)
+
+Exactly your `FRONTEND-REQUEST-hp-override.md` ask — the spells-endpoint pattern for `hitPointsOverride`:
+```jsonc
+PUT /api/character/{id}/hp
+{ "hitPointsOverride": 150 }   // null CLEARS the override (HP reverts to derivedMaxHitPoints)
+```
+- Sets **only** `hitPointsOverride`; no other field/child changes (verified: name/level untouched).
+- Validation: integer **1–9999**; `0` / negative / `> 9999` → **400**; `null` is the allowed clear path.
+- **Owner-scoped → 404** if the character doesn't exist or isn't yours (the IDOR rule).
+- Returns **200 + full `CharacterResponse`** so `maxHitPoints` / `derivedMaxHitPoints` / `hitPointBreakdown` all refresh — re-render straight from the body.
+- Live-verified: set 150 → `maxHitPoints` 150 (`derivedMaxHitPoints` stays 28); clear `null` → `maxHitPoints` back to 28, `hitPointsOverride` null.
+
+## Build / status
+- `dotnet build DMTool.slnx` → **0 errors**; `dotnet test` → **91/91** (+1 multiclass-grant planner test); codescan **A** (only the 2 Azure-scaffolding flags); 0 cross-module dupes. Migration **048** idempotent. DB `DMTools_local` **through 048**.
+
+---
+
+# INCOMING #11 — `FRONTEND-REQUEST-spell-damage-fields.md` Tier 1 DONE (structured spell combat fields)
+
+**DB `DMTools_local` through migration 049. Build 0 errors, 91/91 tests, codescan A (only the 2 Azure-scaffolding PII flags), 0 cross-module dupes, migration 049 idempotent. Live round-trips green.** Additive / response-only + new optional create fields — non-breaking.
+
+Tier 1 (the catalog fields + homebrew authoring) is shipped. **Tier 2 (per-character computed dice) is NOT built** — scope note at the bottom.
+
+## `GET /api/spells` + `POST /api/spells` — new structured fields on `SpellResponse`
+Seven new fields on each spell (all **nullable / best-effort**; utility spells return them null/false):
+```jsonc
+{
+  // ...existing SpellResponse fields...
+  "damageDice":      "8d6",                              // base damage dice at the spell's base level; null if non-damage
+  "damageType":      { "id": "...", "name": "Fire" },    // NamedRef (DamageType) or null
+  "healingDice":     "1d8",                              // healing spells (Cure Wounds); null otherwise
+  "scalingDice":     "+1d6 per slot level above 3rd",    // free text; cantrips e.g. "L5: 2d10, L11: 3d10, L17: 4d10"; null if none
+  "usesSpellAttack": false,                              // true = spell attack roll (Fire Bolt); false = save/utility
+  "saveStatId":      "<Stat id>",                        // when the spell forces a save (Fireball -> DEX); null otherwise
+  "saveAbility":     "Dexterity"                         // display name for saveStatId; null otherwise
+}
+```
+- **SRD set backfilled** from the official 2014 SRD JSON (migration 049, **125 spells** carry at least one field). It's lossy-by-design (same spirit as the item category/rarity backfill): a clean parse where the SRD has structured data, **null where it doesn't**. Spot-checked: Fireball `8d6 Fire / DEX save / +1d6 per slot above 3rd`; Fire Bolt `1d10 Fire / spell attack / L5:2d10,L11:3d10,L17:4d10`; Cure Wounds `healing 1d8 / +1d8 per slot above 1st`; Eldritch Blast `1d10 Force / spell attack / no dice-scaling` (it adds beams, not dice — so `scalingDice` is null, as intended).
+- A spell is **either** `usesSpellAttack:true` **or** has a `saveStatId` (or neither, for utility) — your "to hit vs save" distinction.
+- **Render hint:** `name · {damageDice} {damageType.name} · {usesSpellAttack ? "spell attack" : saveAbility+" save"}`, with `scalingDice` / description on hover. Join the catalog to the character's known list by spell id (no `SpellRef` change — exactly your Tier-1 plan).
+
+## Homebrew authoring — `POST /api/spells` accepts the same fields
+New optional create fields: `damageDice`, `damageTypeId`, `healingDice`, `scalingDice`, `usesSpellAttack`, `saveStatId` (camelCase). `damageTypeId` / `saveStatId` are **existence-checked** against the DamageType / Stat catalogs → **400** on a bogus id. They round-trip on the GET. (Live-verified: a homebrew `5d8 Cold` spell with a CON save POSTs and reads back intact; bogus `damageTypeId` → 400.)
+
+## Tier 2 (per-character computed dice) — NOT built; here's what it'd take
+Your doc flagged Tier 2 as optional ("adopt later without a frontend rewrite"). Confirming it's deferred, with the honest scope so you can decide if/when to ask for it:
+- **Cantrip auto-scaling by character level** needs *structured* per-level dice (the `scalingDice` we shipped is free text — fine to display, not to compute against). That implies a small new normalized table (per-level dice, re-imported from the same SRD JSON) so the engine can resolve "Fire Bolt = 3d10 at character level 11".
+- **`saveDc` / `spellAttackBonus` per spell** mostly exists already (`ClassResponse.spellcasting` + the character's `spellcasting` block compute `8+PB+mod` / `PB+mod` per caster class). The gap: a known spell isn't tagged with *which* caster class taught it, so on a multiclass caster we can't unambiguously pick the DC — that's a modeling decision (store a source class on the character's spell, or heuristically match by class-list membership).
+- **Levelled-spell upcasting** (8d6 → 9d6 at a 4th-level slot) is a *cast-time* choice (which slot you spend) = runtime state, which is **out of the builder's scope** (Scope A). The base dice + the `scalingDice` note already cover the display; live upcast math would belong to a future combat module (Scope B).
+- So a realistic Tier 2 = (cantrip per-level dice table + a pure resolver) + (a source-class decision for multiclass DC). Ping the backend if you want it; it's additive and won't change the Tier-1 shape you build against now.
+
+## Build / status (this session, all three deliverables)
+- `dotnet build DMTool.slnx` → **0 errors**; `dotnet test` → **91/91** (+1); codescan **A** (only the 2 Azure-scaffolding flags); 0 cross-module dupes. Migrations **048** (multiclass grants) + **049** (spell combat fields) idempotent. DB `DMTools_local` **through 049**. HP-override endpoint had no migration.
+- Covers three frontend requests: `hp-override` (INCOMING #10), the multiclass choice-grants (#10), and `spell-damage-fields` Tier 1 (#11).
+- These callbacks were **appended by the backend session**; committing in *this* repo is the frontend session's responsibility (the backend committed only its own repo).
