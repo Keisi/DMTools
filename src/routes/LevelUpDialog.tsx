@@ -318,11 +318,11 @@ export default function LevelUpDialog({
         {multiclass && (
           <p className="text-faint lvl__hint">
             Add a class at level 1 (total {currentTotal}/{MAX_TOTAL_LEVEL}). 5e
-            requires 13+ in both your current and the new class's key abilities;
-            an unmet prerequisite is flagged below with a DM-override option. A
-            "choose a skill/instrument" multiclass grant (Bard/Rogue/Ranger) isn't
-            added automatically — set it via Edit. Advance the class later with
-            Level Up.
+            requires a minimum in both your current and the new class's key
+            abilities; an unmet prerequisite is flagged below with a DM-override
+            option. A "choose a skill/instrument" multiclass grant
+            (Bard/Rogue/Ranger) isn't added automatically — set it via Edit.
+            Advance the class later with Level Up.
           </p>
         )}
 
@@ -508,8 +508,9 @@ function MulticlassPrereqNotice({
     <section className="lvl__block lvl__prereq">
       <h3 className="lvl__block-title">Multiclass requirement not met</h3>
       <p className="text-faint lvl__hint">
-        5e requires 13+ in the key ability of every class you have and the one
-        you're entering. Adjust scores, or tick DM override to multiclass anyway.
+        This edition requires the minimum below in the key ability of every class
+        you have and the one you're entering. Adjust scores, or tick DM override
+        to multiclass anyway.
       </p>
       <ul className="lvl__prereq-list">
         {prereq.classes.map((c) => (

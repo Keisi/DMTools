@@ -118,6 +118,11 @@ export default function CharacterBuilder() {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // DM override for an illegal multiclass build (backend mig. 046 enforces the
+  // edition's multiclass ability-score prereq at create). Sets
+  // allowHomebrewSelections so the server lets it through; the server 400 still
+  // drives the messaging when it's left off.
+  const [dmOverrideCreate, setDmOverrideCreate] = useState(false);
 
   useEffect(() => {
     reference.races().then(setRaces).catch(() => setRaces([]));
@@ -741,6 +746,9 @@ export default function CharacterBuilder() {
       // Re-submitting class-granted skills/languages would bust the Selection budgets;
       // the homebrew flag relaxes the subset/count checks (level gates still apply).
       payload.allowHomebrewSelections = true;
+    } else if (dmOverrideCreate) {
+      // Create path: only set when the DM opted to bypass the multiclass prereq.
+      payload.allowHomebrewSelections = true;
     }
     return payload;
   }
@@ -983,6 +991,18 @@ export default function CharacterBuilder() {
           />
         )}
       </div>
+
+      {step === STEPS.length - 1 && !isEdit && picks.length > 1 && (
+        <label className="builder__dm-override">
+          <input
+            type="checkbox"
+            checked={dmOverrideCreate}
+            onChange={(e) => setDmOverrideCreate(e.target.checked)}
+          />
+          DM override — allow this multiclass even if it doesn't meet the
+          edition's ability-score prerequisite for each class's key ability.
+        </label>
+      )}
 
       {error && <p className="builder__error">{error}</p>}
 

@@ -313,6 +313,11 @@ export interface EditionResponse {
   description?: string | null;
   code?: string | null;
   isDefault: boolean;
+  // Minimum ability score (in a class's primary ability/abilities) required to
+  // multiclass into/out of it under this edition (backend migration 046). null =
+  // inherit the system default (currently 13) — NOT "no rule". Prefer the
+  // level-up plan's per-ability minimumScore over `?? 13` for display.
+  multiclassMinimumAbilityScore?: number | null;
 }
 
 export interface FeatAbilityModifierResponse {

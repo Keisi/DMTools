@@ -206,6 +206,16 @@
   font-size: var(--fs-sm);
 }
 
+/* DM-override toggle on the multiclass create path (backend mig. 046 prereq). */
+.builder__dm-override {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
 /* ---- Multiclass list ---- */
 .builder__hint {
   margin-bottom: var(--sp-4);
