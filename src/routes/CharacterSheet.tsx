@@ -608,7 +608,7 @@ function spellInline(c: SpellCombat): string {
     parts.push(
       c.dice + (c.damageType ? ` ${c.damageType}` : "") + (c.isHealing ? " heal" : ""),
     );
-  if (c.mode === "attack") parts.push("atk");
+  if (c.mode === "attack") parts.push("spell attack");
   else if (c.mode === "save") parts.push(`${c.saveAbility ?? "save"} save`);
   return parts.join(" · ");
 }
