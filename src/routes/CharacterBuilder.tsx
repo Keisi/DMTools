@@ -884,6 +884,7 @@ export default function CharacterBuilder() {
                 base={abilities}
                 improvements={improvements}
                 earned={earnedAsiCount}
+                primaryStats={proficiency.primaryStats}
                 onChange={setImprovement}
               />
             )}

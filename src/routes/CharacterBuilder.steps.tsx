@@ -789,12 +789,14 @@ export function ImprovementsPanel({
   base,
   improvements,
   earned,
+  primaryStats,
   onChange,
 }: {
   stats: StatResponse[];
   base: Record<string, number>;
   improvements: Record<string, number>;
   earned: number;
+  primaryStats: Set<string>;
   onChange: (statId: string, amount: number) => void;
 }) {
   const total = Object.values(improvements).reduce((a, b) => a + b, 0);
@@ -815,7 +817,10 @@ export function ImprovementsPanel({
           const inc = improvements[s.id] ?? 0;
           return (
             <div key={s.id} className="builder__ability">
-              <span className="builder__ability-name">{s.code ?? s.name}</span>
+              <span className="builder__ability-name">
+                {s.code ?? s.name}
+                {primaryStats.has(s.id) && <PrimaryTag />}
+              </span>
               <div className="builder__stepper">
                 <button
                   type="button"
