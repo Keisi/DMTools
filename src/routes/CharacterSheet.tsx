@@ -601,8 +601,9 @@ function spellCombat(s: SpellResponse): SpellCombat {
     scaling: s.scalingDice ?? null,
   };
 }
-// Compact right-side summary, e.g. "1d10 Fire · atk" or "8d6 Fire · DEX save".
-function spellInline(c: SpellCombat): string {
+// Compact summary, e.g. "dmg 8d6 Fire · DEX save · ↑ upcasts". The scaling marker
+// reads "scales" for cantrips (char-level) and "upcasts" for levelled spells.
+function spellInline(c: SpellCombat, level: number): string {
   const parts: string[] = [];
   if (c.dice)
     parts.push(
@@ -610,6 +611,7 @@ function spellInline(c: SpellCombat): string {
     );
   if (c.mode === "attack") parts.push("spell attack");
   else if (c.mode === "save") parts.push(`${c.saveAbility ?? "save"} save`);
+  if (c.scaling) parts.push(level === 0 ? "↑ scales" : "↑ upcasts");
   return parts.join(" · ");
 }
 function spellTip(s: SpellResponse, c: SpellCombat): string {
@@ -620,7 +622,8 @@ function spellTip(s: SpellResponse, c: SpellCombat): string {
     );
   if (c.mode === "attack") lines.push("Spell attack roll");
   else if (c.mode === "save") lines.push(`${c.saveAbility ?? "ability"} saving throw`);
-  if (c.scaling) lines.push(`Scaling: ${c.scaling}`);
+  if (c.scaling)
+    lines.push(`${s.level === 0 ? "Scales" : "Upcast"}: ${c.scaling}`);
   if (s.range) lines.push(`Range ${s.range}`);
   if (s.castingTime) lines.push(`Cast ${s.castingTime}`);
   return lines.join("\n");
@@ -686,7 +689,7 @@ function SpellcastingBlock({
               {g.spells.map((s) => {
                 const cat = spellsById.get(s.id);
                 const combat = cat ? spellCombat(cat) : null;
-                const inline = combat ? spellInline(combat) : "";
+                const inline = combat ? spellInline(combat, s.level) : "";
                 // Combat spells get the mechanics summary on hover; utility spells
                 // (no dice/save) fall back to the spell's description.
                 const tooltip =
