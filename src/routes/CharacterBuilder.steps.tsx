@@ -825,15 +825,7 @@ export function ImprovementsPanel({
                 >
                   −
                 </button>
-                <span className="builder__stepper-val">
-                  {b}
-                  {inc > 0 && (
-                    <span className="text-faint">
-                      {" "}
-                      +{inc} = {b + inc}
-                    </span>
-                  )}
-                </span>
+                <span className="builder__stepper-val">{b}</span>
                 <button
                   type="button"
                   className="btn"
@@ -843,6 +835,14 @@ export function ImprovementsPanel({
                   +
                 </button>
               </div>
+              {/* Annotation on its own line so the stepper row stays aligned with
+                  the untouched stats across the grid (instead of wrapping inside
+                  the value and spreading the buttons). */}
+              {inc > 0 && (
+                <span className="builder__ability-delta text-faint">
+                  +{inc} = {b + inc}
+                </span>
+              )}
             </div>
           );
         })}
@@ -976,9 +976,8 @@ export function SpellsStep({
   if (!cantrips && !spells)
     return (
       <p className="text-faint">
-        No spells to choose at creation. Prepared casters (Cleric, Druid, Paladin, Wizard)
-        prepare from the full list in play; non-casters have none. You can add spells later
-        via Edit.
+        No spells to choose at creation for this build. Prepared casters (Cleric, Druid,
+        Paladin, Wizard) prepare from their full class list in play; non-casters have none.
       </p>
     );
   return (

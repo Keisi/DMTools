@@ -314,6 +314,13 @@
   font-family: var(--font-mono);
   font-size: var(--fs-lg);
 }
+/* ASI improvement annotation — sits on its own line under the stepper so cells
+   with points allocated don't push their +/- buttons out of line with the rest. */
+.builder__ability-delta {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
 .builder__equip-note {
   font-size: var(--fs-xs);
   line-height: 1.5;

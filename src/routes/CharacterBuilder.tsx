@@ -670,9 +670,22 @@ export default function CharacterBuilder() {
   }
 
   function buildPayload(): CharacterRequest {
+    // The backend caps each improvement leg's `amount` at 1-2 (one ASI = +2 to
+    // one stat or +1 to two); legs repeat a stat to accumulate. So a +N total on
+    // one stat must be split into floor(N/2) legs of 2 plus a leg of 1 if N is
+    // odd — not sent as a single { amount: N }, which 400s ("Amount 1..2").
     const improvementList = Object.entries(improvements)
       .filter(([, amount]) => amount > 0)
-      .map(([statId, amount]) => ({ statId, amount }));
+      .flatMap(([statId, amount]) => {
+        const legs: { statId: string; amount: number }[] = [];
+        let left = amount;
+        while (left > 0) {
+          const leg = Math.min(2, left);
+          legs.push({ statId, amount: leg });
+          left -= leg;
+        }
+        return legs;
+      });
     const payload: CharacterRequest = {
       name: name.trim(),
       description: description.trim() || undefined,
