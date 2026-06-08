@@ -1,12 +1,49 @@
 # Handover — DMTool-FrontEnd (for the next session)
 
-> **▶ NEXT ACTION ON RESUME:** live-verify the new builder steps with **spectral** — the
-> session-3 work (Choices/Spells steps + ability improvements, commit `4c0f2fa`) is
-> node-verified at the payload level against `:3501` but **not yet browser-clicked**.
-> Build a Fighter L1 (must pick a Fighting Style — the formerly-stranded L1 choice), a
-> Sorcerer L5 (Metamagic + cantrips + spells + the L4 ASI), and a Fighter/Wizard
-> multiclass; confirm each saves and renders on the sheet. Use the `spectral batch` recipe
-> in `CLAUDE.md` (inject the JWT into `localStorage['dmtool.jwt']`, navigate, `--screenshot`).
+> **▶ NEXT ACTION ON RESUME:** the greenlit **INCOMING #7/#8** items are DONE + pushed (see the
+> "DONE 2026-06-08 (session 4)" block below). Remaining optional, already-shipped-backend-side UI
+> enrichments to wire when desired: `ClassResponse.features` (feature-by-level), `ItemResponse.category`/
+> `rarity` (compendium facets), `RaceResponse.traits` (named racial traits). Also still open: extend the
+> builder **Review** step to list chosen styles/metamagic/expertise/spells/improvements, an app-level
+> **ErrorBoundary**, and live-verifying the 401→login redirect + Compendium grouping. See the TODO below.
+
+> **✓ DONE 2026-06-08 (this session):** the session-3 builder steps are **live browser-verified
+> end-to-end**. Built a **Fighter L1** (Fighting Style "Archery" → sheet Sub-features), a
+> **Sorcerer L5** (2 metamagic + 5 cantrips/6 spells + L4 ASI: base 10 +2 = eff 13), and a
+> **Fighter/Wizard multiclass** (Fighter=starting class, Wizard self-skips its prepared-caster
+> spell step) — each created through the actual wizard UI and confirmed on the API + sheet
+> screenshots.
+>
+> **⚠ Tooling note — spectral cannot drive interactions in this app.** `spectral batch` hangs
+> indefinitely on ANY state-changing action (native `click`/`fill` OR eval-`.click()`) — its
+> post-action stability wait never resolves after a React re-render (reproduced against both the
+> dev server and the production preview; read-only eval/navigate batches complete fine, and a
+> Promise-returning eval also hangs). **Workaround that works: a tiny Node CDP driver** over
+> Node 24's built-in `WebSocket` — launch headless Chrome with `--remote-debugging-port=9222`,
+> then `Runtime.evaluate` to click/read with Node controlling the inter-step delays (no hang).
+> The driver + per-build action generators are in `%TEMP%` (`cdp.cjs`, `gen2/gen3/gen5.cjs`).
+> Two gotchas baked into the generators: (1) a same-element repeated click (e.g. the ASI `+`)
+> needs a re-render between clicks because the handler captures a stale `inc` — use two evals
+> with a sleep, not one eval clicking twice; different-id chip toggles batch fine in one eval.
+> (2) `npm run preview` now proxies `/api` (added `preview.proxy` to `vite.config.ts`).
+
+> **✓ DONE 2026-06-08 (session 4) — INCOMING #7/#8 consumed, multiclass routed through the engine.**
+> Commits `ac3e54c` + `e4892b8`, **pushed** to `origin/main` (gates green: `tsc -b` + eslint; `oby
+> verify` delta 0). (1) **PUT-200:** `characters.update()` now returns the PUT body directly — the
+> follow-up GET is gone (`PUT /api/character/{id}` → `200 + CharacterResponse`, backend `b2fa276`;
+> live-verified 12.5KB body). (2) **Multiclass via the level-up engine:** the sheet's Multiclass action
+> now opens `LevelUpDialog` in a new `mode="multiclass"` that plans/applies an **unowned** classId at L1
+> (engine `fromLevel 0 → 1`), so the new class's L1 HP, subclass, caster spells, and feature sub-choices
+> (Fighter→Fighting Style, Rogue→Expertise) all flow through the same plan/apply machinery. The bulk-PUT
+> `AddClassDialog` + the orphaned `characterResponseToRequest` helper were **retired** (deletes landed in
+> `351ca79`). **Live-verified via the Node CDP driver** (Sorcerer 5 → +Fighter w/ Archery → Sorcerer 5 /
+> Fighter 1 · Level 6; Sorcerer-excluded picker, "Add Fighter" button, in-place sheet re-render +
+> screenshots). (3) **INCOMING #8:** backend made multiclass proficiencies **RAW-correct** (migration
+> 041, no contract change) — the dialog's DM caveat was corrected accordingly (only unenforced ability
+> prereqs + un-applied "choose a skill/instrument" multiclass grants remain as caveats).
+>
+> ⚠ Test chars mutated by verification (throwaway, under `dungeonmaster`): **"Spectral Fighter L1"** →
+> Fighter 1/Sorcerer 1; **"Spectral Sorcerer L5"** (`a0a73a5c…`) → Sorcerer 5/Fighter 1.
 
 Refreshed 2026-06-08. This is the authoritative "where things stand + what to do
 next" doc. Companion: `FRONTEND-CONTEXT.md` (architecture/API map) and `CLAUDE.md`
@@ -16,10 +53,10 @@ contract is its `Models/*` + `Entities/Enums/*`.
 
 ## Current state
 - **Git:** repo on `main`, remote `origin` (Azure DevOps `DMTools-Frontend`).
-  Latest commit `4c0f2fa` (full-fidelity above-L1 / multiclass character creation —
-  Choices + Spells builder steps + ability-improvements) — pushed. Prior `2c4cc81`
-  (multiclass-from-sheet, compendium detail, 401 redirect, PUT-204 fix). All work
-  committed + pushed; critical-review marker stamped for HEAD.
+  Latest commit `e4892b8` (multiclass routed through the level-up engine). Prior:
+  `ac3e54c` (PUT-200 GET-drop), `351ca79` (INCOMING #8 docs + AddClassDialog/helper
+  deletes), `4c0f2fa` (full-fidelity above-L1 / multiclass creation). All work
+  committed + **pushed**; critical-review markers stamped per HEAD.
 - **Gates:** `npm run build` (`tsc -b && vite build`) and `npm run lint` both GREEN.
   There is **no test runner** — `tsc -b` + eslint are the correctness gates.
   (`oby verify`'s build step is a false negative here — `os error 193`; trust npm.)
@@ -185,16 +222,22 @@ holes. Backend shipped all of it (INCOMING #5 + #6); this session consumes it.
 - 401-redirect and Compendium render not yet click-verified live (build/lint green).
 
 ## TODO — next session
-- [ ] **Live-click the new builder steps** (spectral): build a Fighter L1 (must pick a
-  Fighting Style — the formerly-stranded L1 choice), a Sorcerer L5 (Metamagic + cantrips
-  + spells + the L4 ASI), and a Fighter/Wizard multiclass; confirm save + sheet render.
-  (Payload is node-verified against `:3501`, but not yet browser-clicked.)
+- [x] **Live-click the new builder steps** — DONE 2026-06-08 (Fighter L1, Sorcerer L5,
+  Fighter/Wizard multiclass; all created through the wizard UI + verified on API/sheet).
+  Driven via the Node CDP driver, not spectral (spectral can't click here — see banner).
+- [x] **INCOMING #7 — drop the extra GET in `characters.update()`** — DONE 2026-06-08
+  (`ac3e54c`). Pool verified on `b2fa276` (PUT → 200 + 12.5KB body); `update()` returns it directly.
+- [x] **INCOMING #7 — multiclass-in question answered + shipped** — DONE 2026-06-08 (`e4892b8`).
+  Decided: route the sheet's Multiclass action through `levelup/plan`+`apply` (`LevelUpDialog`
+  `mode="multiclass"`); bulk-PUT `AddClassDialog` retired. INCOMING #8 confirmed this is the
+  intended path + made multiclass proficiencies RAW-correct (migration 041). CDP-verified live.
+- [ ] **INCOMING #7 — optional UI enrichments** now available: `ClassResponse.features`
+  (feature-by-level), `ItemResponse.category`/`rarity` (compendium facets), `RaceResponse.traits`
+  (named racial traits). Wire into compendium/sheet/race-detail when desired.
 - [ ] Optionally extend the **Review** step to list the chosen fighting styles / metamagic
   / expertise / spells / improvements (currently collected + saved but not shown on Review).
-- [ ] Live-verify (spectral screenshot) the multiclass dialog success path, the 401→login
-  redirect, and the Compendium grouping/detail render.
-- [ ] If backend returns the body on PUT (see handover), drop the extra GET in
-  `characters.update()`.
+- [ ] Live-verify (Node CDP driver) the 401→login redirect and the Compendium grouping/detail
+  render. (The multiclass dialog success path is now CDP-verified — see the session-4 banner.)
 - [ ] Consider an app-level **ErrorBoundary** (baseline `async-no-error-boundary` gap) so
   a render throw shows a fallback instead of a blank screen — would have surfaced the
   PUT-204 bug as an error, not a white screen.
@@ -225,10 +268,12 @@ holes. Backend shipped all of it (INCOMING #5 + #6); this session consumes it.
 - `FRONTEND-REQUEST-hp-ac-breakdown.md` (backend repo) — DONE (tooltips render the math).
 - `CHARACTER-CREATION-HANDOFF-FROM-FRONTEND.md` (here) — DONE (INCOMING #5; #1–#5).
 - `FRONTEND-REQUEST-spellcasting-progression.md` (here) — DONE (INCOMING #6).
-- `FRONTEND-REQUEST-compendium-and-update-contract.md` (backend repo) — **OPEN**: the one
-  live ask is PUT returning 200+body (we still PUT-then-GET in `characters.update()`);
-  multiclass-in via the level-up engine is an optional future item. Neither blocks anything.
-- `INCOMING-FROM-BACKEND.md` (here) — backend's callback log. **#1–#6 all consumed.**
+- `FRONTEND-REQUEST-compendium-and-update-contract.md` (backend repo) — **DONE backend-side**
+  (INCOMING #7, `b2fa276`): PUT now 200+body; `ClassResponse.features`, `ItemResponse.category/rarity`,
+  `RaceResponse.traits` all shipped; multiclass-in engine built. **Frontend consumption pending**
+  (drop the extra GET; decide multiclass-in routing; optional enrichments) — see TODO.
+- `INCOMING-FROM-BACKEND.md` (here) — backend's callback log. **#1–#6 consumed; #7 NEW (2026-06-08),
+  not yet consumed** (PUT-200, feature/item/race enrichments, multiclass-in + a question for Kevin).
 
 ## Not verified live this session
 The builder/edit/inventory/level-up changes passed `tsc` + eslint + `oby verify`
