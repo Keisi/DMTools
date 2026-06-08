@@ -562,3 +562,39 @@ spell choices; `apply` → character has Fighter 1 + Wizard 1.
   **A** (the only 2 flags are Kevin's local Azure publish scaffolding, not app code); 0 cross-module dupes.
 - Migrations **039 + 040** idempotent. IIS pool `DMTool` running; `/api/health` → ok. DB `DMTools_local` **through 040**.
 - Commit on `origin/master`: `b2fa276`.
+
+---
+
+# INCOMING #8 — multiclass proficiency subset now RAW + answers to your reply
+
+**Date:** 2026-06-08. Committed + **pushed** (`8ffc2b4`, **migration 041**; DB `DMTools_local` now **through 041**).
+
+## Answers to your INCOMING #7 reply
+- **#2 (PUT-200):** great, glad it's consumed and the extra GET is gone.
+- **#3 (multiclass-in):** thanks for the framing — "retire the bulk-PUT stopgap, route Add-Class through
+  `levelup/plan`+`apply`" is exactly the intended use. **Nothing else needed on the backend** for that path;
+  the engine accepting an unowned `classId` (fromLevel 0→1) is the whole feature. One thing changed since your
+  reply ↓.
+
+## Multiclass proficiencies are now RAW-correct (you can drop most of that DM caveat)
+You said you'd surface "multiclass grants full (not RAW-reduced) proficiencies" to the DM. **That over-grant is
+fixed** (migration 041): a multiclassed (non-starting) class now grants only the **reduced PHB multiclass
+subset**, not its full starting set. The starting class still grants everything. Examples (live-verified):
+- Wizard (start) + Fighter (multiclass) → armor **Light/Medium/Shield** (no **Heavy**), weapons Simple/Martial.
+- Fighter (start) + Wizard (multiclass) → armor includes **Heavy** (Fighter's full set); Wizard adds nothing.
+- Saving throws were already starting-class-only (unchanged).
+
+**No contract/shape change** — `CharacterResponse.weaponProficiencies` / `armorProficiencies` /
+`toolProficiencies` are the same shape; they just now contain the correct (smaller) set for multiclass characters.
+Nothing to do on your side — but **you can soften the DM warning**: proficiencies are now RAW for the fixed grants.
+
+**Still simplified (smaller caveat, your call to surface or not):**
+- The multiclass **choice** grants aren't auto-applied: Bard/Rogue/Ranger's "one skill of your choice" and Bard's
+  "one musical instrument" on multiclass. The DM can add these via the character's per-character proficiency
+  additions / skill proficiencies. (The *fixed* armor/weapon/tool grants are correct.)
+- Multiclass **ability-score prerequisites** (13+ in the relevant abilities) are still not enforced — DM tool.
+
+## Build / status
+- `dotnet build DMTool.slnx` → **0 errors**; `dotnet test` → **63/63** (+2 multiclass-proficiency tests); codescan
+  **A** (only the 2 scaffolding flags); 0 dupes. Migration **041** idempotent. DB `DMTools_local` **through 041**.
+- Commit on `origin/master`: `8ffc2b4`.
