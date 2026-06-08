@@ -187,7 +187,19 @@ export default function CharacterBuilder() {
         setAbilities(
           Object.fromEntries(ch.abilityScores.map((a) => [a.statId, a.base])),
         );
-        setSkillIds(ch.skills.filter((s) => s.isProficient).map((s) => s.skillId));
+        // Class skill picks ONLY — exclude the skills the background auto-grants
+        // (the backend re-grants those from backgroundId). Including them inflated
+        // the class "choose N" counter (the 4/2 bug) and showed a spurious
+        // "duplicate a class skill pick" warning.
+        const bgSkillIds = new Set(
+          bgs.find((b) => b.id === ch.background?.id)?.skills.map((s) => s.id) ??
+            [],
+        );
+        setSkillIds(
+          ch.skills
+            .filter((s) => s.isProficient && !bgSkillIds.has(s.skillId))
+            .map((s) => s.skillId),
+        );
         // Above-L1 improvements + sub-feature choices + known spells, recovered so an
         // edit-save round-trips them (the wizard now owns these, not just carry-through).
         setImprovements(
@@ -724,8 +736,12 @@ export default function CharacterBuilder() {
       experience: original?.experience ?? 0,
       age,
       hasJackOfAllTrades: original?.hasJackOfAllTrades ?? false,
-      // Class skills, with any picked for Expertise upgraded to level 2.
-      skillProficiencies: skillIds.map((id) => ({
+      // Class skills, with any picked for Expertise upgraded to level 2. Union in
+      // expertiseSkillIds so an Expertise applied to a background-granted skill
+      // (which isn't in skillIds) still round-trips with its level-2 upgrade.
+      skillProficiencies: Array.from(
+        new Set([...skillIds, ...expertiseSkillIds]),
+      ).map((id) => ({
         skillId: id,
         level: expertiseSkillIds.includes(id)
           ? SkillProficiencyLevel.Expertise
