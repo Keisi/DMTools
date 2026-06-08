@@ -22,6 +22,7 @@ import {
 import { ApiError } from "../api/client";
 import LevelUpDialog from "./LevelUpDialog";
 import ManageSpellsDialog from "./ManageSpellsDialog";
+import { MAX_TOTAL_LEVEL } from "./CharacterBuilder.steps";
 import "./CharacterSheet.css";
 
 const fmtMod = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
@@ -188,6 +189,12 @@ export default function CharacterSheet() {
           <div className="sheet__actions">
             <button
               className="btn btn--primary"
+              disabled={c.level >= MAX_TOTAL_LEVEL}
+              title={
+                c.level >= MAX_TOTAL_LEVEL
+                  ? `At the level cap (${MAX_TOTAL_LEVEL}).`
+                  : undefined
+              }
               onClick={() => setLevelingUp(true)}
             >
               Level Up
@@ -195,7 +202,16 @@ export default function CharacterSheet() {
             <Link to={`/character/${c.id}/edit`} className="btn">
               Edit
             </Link>
-            <button className="btn" onClick={() => setAddingClass(true)}>
+            <button
+              className="btn"
+              disabled={c.level >= MAX_TOTAL_LEVEL}
+              title={
+                c.level >= MAX_TOTAL_LEVEL
+                  ? `At the level cap (${MAX_TOTAL_LEVEL}).`
+                  : undefined
+              }
+              onClick={() => setAddingClass(true)}
+            >
               Multiclass
             </button>
             {c.spellcasting.length > 0 && (
