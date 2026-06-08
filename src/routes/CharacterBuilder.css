@@ -7,6 +7,18 @@
   justify-content: space-between;
   margin-bottom: var(--sp-5);
 }
+/* Cancel is the "leave the wizard" affordance. It used to be ghost text, so the
+   first instinct was to hit Back to close. Give it a crimson outline so it reads
+   as the obvious exit, and fill on hover to confirm the discard intent. */
+.builder__cancel {
+  border-color: var(--c-crimson-500);
+  color: var(--text);
+}
+.builder__cancel:hover {
+  background: var(--action);
+  border-color: var(--c-crimson-600);
+  color: #fff;
+}
 
 .builder__steps {
   display: flex;

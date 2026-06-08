@@ -98,6 +98,7 @@ export function BuilderNav({
   onBack,
   onNext,
   onCreate,
+  hideBack,
   backDisabled,
 }: {
   isLast: boolean;
@@ -108,15 +109,22 @@ export function BuilderNav({
   onBack: () => void;
   onNext: () => void;
   onCreate: () => void;
+  hideBack: boolean;
   backDisabled: boolean;
 }) {
   const verb = isEdit ? "Save Changes" : "Create Character";
   const busyVerb = isEdit ? "Saving..." : "Creating...";
   return (
     <div className="builder__nav">
-      <button className="btn" disabled={backDisabled} onClick={onBack}>
-        Back
-      </button>
+      {/* On the first step Back does nothing, so hide it. The empty span keeps
+          space-between alignment so the primary action stays on the right. */}
+      {hideBack ? (
+        <span aria-hidden="true" />
+      ) : (
+        <button className="btn" disabled={backDisabled} onClick={onBack}>
+          Back
+        </button>
+      )}
       {isLast ? (
         <button
           className="btn btn--primary"

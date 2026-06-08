@@ -786,7 +786,7 @@ export default function CharacterBuilder() {
         <h1>{isEdit ? "Edit Character" : "New Character"}</h1>
         <Link
           to={isEdit ? `/character/${editId}` : "/vault"}
-          className="btn btn--ghost"
+          className="btn builder__cancel"
         >
           Cancel
         </Link>
@@ -988,7 +988,8 @@ export default function CharacterBuilder() {
         onBack={() => setStep((s) => s - 1)}
         onNext={() => setStep((s) => s + 1)}
         onCreate={save}
-        backDisabled={step === 0 || busy}
+        hideBack={step === 0}
+        backDisabled={busy}
       />
     </div>
   );
