@@ -687,13 +687,17 @@ function SpellcastingBlock({
                 const cat = spellsById.get(s.id);
                 const combat = cat ? spellCombat(cat) : null;
                 const inline = combat ? spellInline(combat) : "";
+                // Combat spells get the mechanics summary on hover; utility spells
+                // (no dice/save) fall back to the spell's description.
+                const tooltip =
+                  inline && cat
+                    ? spellTip(cat, combat!)
+                    : (cat?.description ?? undefined);
                 return (
                   <li
                     key={s.id}
-                    className={"sheet__spell-row" + (inline ? " tip" : "")}
-                    data-tooltip={
-                      inline && cat ? spellTip(cat, combat!) : undefined
-                    }
+                    className={"sheet__spell-row" + (tooltip ? " tip" : "")}
+                    data-tooltip={tooltip}
                   >
                     <span className="sheet__spell-name">{s.name}</span>
                     {inline && (
