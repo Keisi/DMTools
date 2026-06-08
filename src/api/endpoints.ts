@@ -42,13 +42,11 @@ export const characters = {
   get: (id: string) => api.get<CharacterResponse>(`/api/character/${id}`),
   create: (body: CharacterRequest) =>
     api.post<CharacterResponse>("/api/character", body),
-  // PUT returns 204 No Content (not the updated character), so re-fetch to resolve
-  // with the fresh CharacterResponse. Callers (builder edit-save, sheet multiclass)
-  // rely on the returned character; without the GET they'd receive undefined.
-  update: async (id: string, body: CharacterRequest): Promise<CharacterResponse> => {
-    await api.put<void>(`/api/character/${id}`, body);
-    return api.get<CharacterResponse>(`/api/character/${id}`);
-  },
+  // PUT returns 200 + the updated CharacterResponse (backend b2fa276), consistent
+  // with create + levelup/apply. Callers (builder edit-save, sheet multiclass) use
+  // the returned character directly — no follow-up GET needed.
+  update: (id: string, body: CharacterRequest) =>
+    api.put<CharacterResponse>(`/api/character/${id}`, body),
   remove: (id: string) => api.del<void>(`/api/character/${id}`),
 
   levelUpPlan: (id: string, req: LevelUpPlanRequest) =>
