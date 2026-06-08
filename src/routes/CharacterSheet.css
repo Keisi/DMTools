@@ -234,10 +234,6 @@
 .sheet__caster {
   margin-bottom: var(--sp-3);
 }
-.sheet__spelllist {
-  font-size: var(--fs-sm);
-  line-height: 1.5;
-}
 .sheet__spell-group + .sheet__spell-group {
   margin-top: var(--sp-3);
 }
@@ -246,6 +242,30 @@
   font-size: var(--fs-sm);
   color: var(--text-muted);
   margin-bottom: var(--sp-1);
+}
+.sheet__spell-empty {
+  font-size: var(--fs-sm);
+  padding-left: var(--sp-3);
+}
+.sheet__spells {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+/* Name + combat info on one left-aligned line (name in body font, dice/save as a
+   faint mono continuation), wrapping as a unit — no ragged right-hand column. */
+.sheet__spell-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-sm);
+}
+.sheet__spell-info {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
 }
 .sheet__features {
   list-style: none;

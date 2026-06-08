@@ -680,9 +680,9 @@ function SpellcastingBlock({
             )}
           </h4>
           {g.spells.length === 0 ? (
-            <p className="text-faint sheet__spelllist">No spells prepared.</p>
+            <p className="text-faint sheet__spell-empty">No spells prepared.</p>
           ) : (
-            <ul className="prof-list sheet__spelllist">
+            <ul className="sheet__spells">
               {g.spells.map((s) => {
                 const cat = spellsById.get(s.id);
                 const combat = cat ? spellCombat(cat) : null;
@@ -690,14 +690,14 @@ function SpellcastingBlock({
                 return (
                   <li
                     key={s.id}
-                    className={"prof-list__row" + (inline ? " tip" : "")}
+                    className={"sheet__spell-row" + (inline ? " tip" : "")}
                     data-tooltip={
                       inline && cat ? spellTip(cat, combat!) : undefined
                     }
                   >
-                    <span className="prof-list__name">{s.name}</span>
+                    <span className="sheet__spell-name">{s.name}</span>
                     {inline && (
-                      <span className="prof-list__val text-faint">{inline}</span>
+                      <span className="sheet__spell-info">{inline}</span>
                     )}
                   </li>
                 );
