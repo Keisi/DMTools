@@ -22,6 +22,7 @@ import {
 import { ApiError } from "../api/client";
 import LevelUpDialog from "./LevelUpDialog";
 import ManageSpellsDialog from "./ManageSpellsDialog";
+import EditHpDialog from "./EditHpDialog";
 import { MAX_TOTAL_LEVEL } from "./CharacterBuilder.steps";
 import "./CharacterSheet.css";
 
@@ -63,6 +64,7 @@ export default function CharacterSheet() {
   const [levelingUp, setLevelingUp] = useState(false);
   const [addingClass, setAddingClass] = useState(false);
   const [managingSpells, setManagingSpells] = useState(false);
+  const [editingHp, setEditingHp] = useState(false);
   const [items, setItems] = useState<ItemResponse[]>([]);
   const [allClasses, setAllClasses] = useState<ClassResponse[]>([]);
 
@@ -219,6 +221,9 @@ export default function CharacterSheet() {
                 Manage Spells
               </button>
             )}
+            <button className="btn" onClick={() => setEditingHp(true)}>
+              Edit HP
+            </button>
           </div>
         </div>
         <div className="sheet__vitals">
@@ -362,6 +367,17 @@ export default function CharacterSheet() {
           onApplied={(updated) => {
             setC(updated);
             setManagingSpells(false);
+          }}
+        />
+      )}
+
+      {editingHp && (
+        <EditHpDialog
+          character={c}
+          onClose={() => setEditingHp(false)}
+          onApplied={(updated) => {
+            setC(updated);
+            setEditingHp(false);
           }}
         />
       )}
