@@ -259,8 +259,14 @@
   flex-wrap: wrap;
   align-items: baseline;
   column-gap: var(--sp-2);
-  padding: var(--sp-1) var(--sp-3);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius-sm);
   font-size: var(--fs-sm);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+/* Row highlight on hover, matching the Equipped / Attacks (prof-list) boxes. */
+.sheet__spell-row:hover {
+  background: var(--bg-raised);
 }
 .sheet__spell-info {
   font-family: var(--font-mono);
