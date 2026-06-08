@@ -57,20 +57,31 @@ export default function ManageSpellsDialog({
   // matched case-insensitively against SpellResponse.classes — plus any spell the
   // character already has (even if off-class), so an existing pick is always
   // visible and removable rather than a hidden-but-counted selection.
-  const { cantripPool, spellPool } = useMemo(() => {
+  const { cantripPool, spellPool, maxSpellLevel } = useMemo(() => {
     const casters = new Set(spellcasting.map((sc) => sc.class.toLowerCase()));
     const owned = new Set(current.map((s) => s.id));
-    const include = (s: SpellResponse) =>
-      owned.has(s.id) || s.classes.some((c) => casters.has(c.toLowerCase()));
+    // Highest castable spell level = highest slot level the character has. 5e
+    // doesn't cap how MANY spells you can have per level, but you can't prepare/
+    // know a spell above your highest slot — so don't offer those.
+    let maxLevel = 0;
+    for (const sc of spellcasting)
+      for (const slot of sc.spellSlots)
+        if (slot.level > maxLevel) maxLevel = slot.level;
+    const inClass = (s: SpellResponse) =>
+      s.classes.some((c) => casters.has(c.toLowerCase()));
     const cantrips: SpellResponse[] = [];
     const levelled: SpellResponse[] = [];
     for (const s of catalog) {
-      if (!include(s)) continue;
-      (s.level === 0 ? cantrips : levelled).push(s);
+      const isOwned = owned.has(s.id);
+      if (!isOwned && !inClass(s)) continue;
+      if (s.level === 0) cantrips.push(s);
+      // Offer levelled spells only up to the max castable level; always keep an
+      // already-known spell visible (even if over-level) so it can be removed.
+      else if (isOwned || s.level <= maxLevel) levelled.push(s);
     }
     cantrips.sort((a, b) => a.name.localeCompare(b.name));
     levelled.sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
-    return { cantripPool: cantrips, spellPool: levelled };
+    return { cantripPool: cantrips, spellPool: levelled, maxSpellLevel: maxLevel };
   }, [catalog, spellcasting, current]);
 
   // Rules-as-written targets (advisory; selection isn't capped). Cantrips are
@@ -156,7 +167,10 @@ export default function ManageSpellsDialog({
             <p className="text-faint mng__hint">
               Editing spells for {spellcasting.map((sc) => sc.class).join(", ")}.
               The counts below are what 5e suggests; selection isn't capped, so a
-              DM can prepare/swap freely. Saving replaces the whole list.
+              DM can prepare/swap freely.
+              {maxSpellLevel > 0 &&
+                ` Levelled spells are offered up to level ${maxSpellLevel} (your highest slot). 5e sets no per-level count limit — only the total and the max castable level.`}{" "}
+              Saving replaces the whole list.
             </p>
 
             <SpellList
