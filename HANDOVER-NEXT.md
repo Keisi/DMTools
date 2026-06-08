@@ -1,11 +1,15 @@
 # Handover — DMTool-FrontEnd (for the next session)
 
-> **▶ NEXT ACTION ON RESUME:** the greenlit **INCOMING #7/#8** items are DONE + pushed (see the
-> "DONE 2026-06-08 (session 4)" block below). Remaining optional, already-shipped-backend-side UI
-> enrichments to wire when desired: `ClassResponse.features` (feature-by-level), `ItemResponse.category`/
-> `rarity` (compendium facets), `RaceResponse.traits` (named racial traits). Also still open: extend the
-> builder **Review** step to list chosen styles/metamagic/expertise/spells/improvements, an app-level
-> **ErrorBoundary**, and live-verifying the 401→login redirect + Compendium grouping. See the TODO below.
+> **▶ NEXT ACTION ON RESUME:** check the backend's reply to **`FRONTEND-REQUEST-unarmed-attacks.md`**
+> (sent this session). When the backend returns an **Unarmed Strike** in `weaponAttacks` (Monk Martial
+> Arts die etc.), it renders in the Attacks block automatically — then **drop the interim "Unarmed"
+> placeholder row** in `EquippedBlock` (`CharacterSheet.tsx`). Other still-open optional items (all
+> backend-shipped, frontend-pending): wire `ClassResponse.features` (feature-by-level), `ItemResponse.category`/
+> `rarity` (compendium facets), `RaceResponse.traits`; extend the builder **Review** step to list chosen
+> styles/metamagic/expertise/spells/improvements; app-level **ErrorBoundary**; live-verify 401→login + Compendium.
+>
+> **⚠ After pulling, hard-refresh the browser (Ctrl+Shift+R):** the tooltip positioner is installed in
+> `main.tsx`, and Vite HMR does NOT re-run entry-point side-effects on hot reload — an open tab stays stale.
 
 > **✓ DONE 2026-06-08 (this session):** the session-3 builder steps are **live browser-verified
 > end-to-end**. Built a **Fighter L1** (Fighting Style "Archery" → sheet Sub-features), a
@@ -45,6 +49,41 @@
 > ⚠ Test chars mutated by verification (throwaway, under `dungeonmaster`): **"Spectral Fighter L1"** →
 > Fighter 1/Sorcerer 1; **"Spectral Sorcerer L5"** (`a0a73a5c…`) → Sorcerer 5/Fighter 1.
 
+> **✓ DONE 2026-06-08 (session 5) — UI polish sweep + mobile fixes (all pushed, `tsc`+eslint green).**
+> All CDP-verified at 390px (iPhone 12 Pro) and desktop. Commits `9139007`→`ec679af`.
+> - **Level-up dialog:** Apply label stays one line (`9139007`); a "choose 0" spell/cantrip section is
+>   hidden (Bard 1→2 has no new cantrip) (`3eea4bf`); dialog sits above the sticky nav (z `--z-modal`,
+>   was 50) + tighter mobile padding so it never overruns a narrow viewport.
+> - **Builder:** Back hidden on step 1 (was dead UI), Cancel restyled to a crimson-outlined exit (`456354e`);
+>   **ASI panel only shows when ASIs are actually earned** (per *class* level 4/8/12/16/19 +Fighter 6/14
+>   +Rogue 10 — so Paladin 1/Cleric 1 shows none), hint states earned count + budget; ability-grid labels
+>   reserve the PRIMARY-tag height so CHA/STR/WIS columns align (`a71c800`). Background dup-skill warning
+>   **already worked** (verified: pick Religion → Acolyte shows ⚠ Religion + swap note).
+> - **Collapse:** sheet Features + Compendium entries collapse by default (native `<details>`, shared
+>   `.disclosure` primitive in theme.css); Compendium keeps header+meta (level/school/Cantrip, casting
+>   time, range) visible, folds only the description (`a71c800`).
+> - **Filters:** ALL catalog searches (spells, cantrips, equipment, inventory, compendium) now
+>   **prefix-match** (`startsWith`), not substring (`a71c800`).
+> - **Mobile:** vitals render as a uniform grid — equal-size tiles, pinned label line-height so a wrapped
+>   "Pass. Perc" doesn't grow its row; responsive nav (wordmark hidden ≤560, "Sign out" one line, `41242c4`).
+> - **Tooltip cutoff — ROOT CAUSE FOUND (`8879fe4`):** hidden `.tip::after` tooltips (visibility:hidden,
+>   still in layout) ran past the viewport for right-edge hosts, adding ~72px of **horizontal page scroll**
+>   on mobile — that scroll is what made tooltips AND the dialog look cut off. Fixed by `overflow-x: clip`
+>   on `.shell__main` (clip, not hidden → vertical tooltips still show, sticky nav untouched). Also added a
+>   JS positioner (`src/lib/tooltips.ts`, installed in `main.tsx`) that nudges edge tooltips on-screen via
+>   `--tooltip-shift`. **NOTE: hard-refresh needed** — HMR doesn't re-run main.tsx side-effects.
+> - **Monk/unarmored Equipped block (`3558ccd`,`e900a13`,`ec679af`):** the block no longer self-hides when
+>   nothing is worn — shows `Unarmored | armor` and `Unarmed | weapon` rows (both via `EquipRow`, aligned;
+>   AC math stays in the AC-vital tooltip). The **real** unarmed-strike attack die belongs server-side →
+>   sent **`FRONTEND-REQUEST-unarmed-attacks.md`** (asks backend for an Unarmed Strike in `weaponAttacks`
+>   + confirm Unarmored Defense AC). When it ships, the strike shows in the Attacks block and the interim
+>   `Unarmed` row in `EquippedBlock` should be removed.
+>
+> **CDP driver note:** `cdp.cjs` in `%TEMP%` now supports `CDP_W`/`CDP_H` env vars for exact viewport
+> emulation (set `mobile:false`+screenWidth so innerWidth matches) and a `{hover:"selector"}` action
+> (`Input.dispatchMouseEvent`). Use `CDP_W=390 CDP_H=844` for iPhone 12 Pro. (Earlier `mobile:true` runs
+> reported innerWidth ~84px too wide — fixed.)
+
 Refreshed 2026-06-08. This is the authoritative "where things stand + what to do
 next" doc. Companion: `FRONTEND-CONTEXT.md` (architecture/API map) and `CLAUDE.md`
 (commands, constraints, spectral recipe, quality-gate notes). Backend lives at
@@ -53,9 +92,10 @@ contract is its `Models/*` + `Entities/Enums/*`.
 
 ## Current state
 - **Git:** repo on `main`, remote `origin` (Azure DevOps `DMTools-Frontend`).
-  Latest commit `e4892b8` (multiclass routed through the level-up engine). Prior:
-  `ac3e54c` (PUT-200 GET-drop), `351ca79` (INCOMING #8 docs + AddClassDialog/helper
-  deletes), `4c0f2fa` (full-fidelity above-L1 / multiclass creation). All work
+  Latest commit `ec679af` (Equipped-row alignment). Session-5 UI sweep is
+  `9139007`→`ec679af` (see the session-5 done block above); session-4 was
+  `ac3e54c`+`e4892b8`. **Only `vite.config.ts` is uncommitted** (a prior-session
+  `preview.proxy` edit, not this session's — left as-is). All other work
   committed + **pushed**; critical-review markers stamped per HEAD.
 - **Gates:** `npm run build` (`tsc -b && vite build`) and `npm run lint` both GREEN.
   There is **no test runner** — `tsc -b` + eslint are the correctness gates.
@@ -268,12 +308,13 @@ holes. Backend shipped all of it (INCOMING #5 + #6); this session consumes it.
 - `FRONTEND-REQUEST-hp-ac-breakdown.md` (backend repo) — DONE (tooltips render the math).
 - `CHARACTER-CREATION-HANDOFF-FROM-FRONTEND.md` (here) — DONE (INCOMING #5; #1–#5).
 - `FRONTEND-REQUEST-spellcasting-progression.md` (here) — DONE (INCOMING #6).
-- `FRONTEND-REQUEST-compendium-and-update-contract.md` (backend repo) — **DONE backend-side**
-  (INCOMING #7, `b2fa276`): PUT now 200+body; `ClassResponse.features`, `ItemResponse.category/rarity`,
-  `RaceResponse.traits` all shipped; multiclass-in engine built. **Frontend consumption pending**
-  (drop the extra GET; decide multiclass-in routing; optional enrichments) — see TODO.
-- `INCOMING-FROM-BACKEND.md` (here) — backend's callback log. **#1–#6 consumed; #7 NEW (2026-06-08),
-  not yet consumed** (PUT-200, feature/item/race enrichments, multiclass-in + a question for Kevin).
+- `FRONTEND-REQUEST-compendium-and-update-contract.md` (backend repo) — **DONE both sides** (INCOMING
+  #7/#8): PUT-200 consumed + multiclass-in routed through the engine (session 4). Optional enrichments
+  (`ClassResponse.features`, `ItemResponse.category/rarity`, `RaceResponse.traits`) still frontend-pending.
+- `FRONTEND-REQUEST-unarmed-attacks.md` (here) — **SENT this session, awaiting backend.** Asks for an
+  Unarmed Strike in `weaponAttacks` (Monk Martial Arts die) + confirm Unarmored Defense AC. Consume the
+  reply on resume (then drop the interim `Unarmed` row in `EquippedBlock`).
+- `INCOMING-FROM-BACKEND.md` (here) — backend's callback log. **#1–#8 all consumed.**
 
 ## Not verified live this session
 The builder/edit/inventory/level-up changes passed `tsc` + eslint + `oby verify`
