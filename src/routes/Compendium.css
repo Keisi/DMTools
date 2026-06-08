@@ -120,3 +120,49 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Collapsible compendium entry (native <details>): header + meta live in the
+   summary (always visible for scanning — level/school/Cantrip, casting time,
+   range, …); the long description expands on click. Collapsed by default. */
+.compendium__entry {
+  display: flex;
+  flex-direction: column;
+}
+.compendium__entry-head {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  position: relative;
+  padding-left: 1.3em;
+}
+.compendium__entry-head::-webkit-details-marker {
+  display: none;
+}
+.compendium__entry-head::before {
+  content: "\25B8"; /* ▸ */
+  position: absolute;
+  left: 0;
+  top: 0.15em;
+  color: var(--text-faint);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.compendium__entry[open] > .compendium__entry-head::before {
+  transform: rotate(90deg);
+}
+.compendium__entry-head:hover::before {
+  color: var(--accent);
+}
+.compendium__entry-body {
+  margin-top: var(--sp-2);
+  padding-left: 1.3em;
+}
+/* Expanded body shows the full text — the collapse governs length now, so the
+   4-line clamp on the description is no longer wanted. */
+.compendium__entry-body .compendium__row-desc {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+  overflow: visible;
+}

@@ -145,6 +145,11 @@
   gap: var(--sp-2);
 }
 .builder__ability-name {
+  display: flex;
+  align-items: center;
+  /* Reserve the primary-tag's height so tagged (CHA/STR/WIS) and untagged cells
+     keep their inputs/steppers on the same baseline across the grid. */
+  min-height: 1.5rem;
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
   color: var(--text-muted);

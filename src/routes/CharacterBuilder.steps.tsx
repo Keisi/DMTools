@@ -788,22 +788,26 @@ export function ImprovementsPanel({
   stats,
   base,
   improvements,
+  earned,
   onChange,
 }: {
   stats: StatResponse[];
   base: Record<string, number>;
   improvements: Record<string, number>;
+  earned: number;
   onChange: (statId: string, amount: number) => void;
 }) {
   const total = Object.values(improvements).reduce((a, b) => a + b, 0);
+  const budget = earned * 2; // each ASI = +2 to one or +1 to two
   return (
     <div className="builder__improvements">
       <h4 className="builder__equip-title">Ability Score Improvements</h4>
       <p className="text-faint builder__hint">
-        Above level 1: allocate the points your character earned from Ability Score
-        Improvements (levels 4 / 8 / 12 / 16 / 19, plus class extras — Fighter 6 / 14,
-        Rogue 10). Each ASI is +2 to one or +1 to two. Prefer a feat instead? Add it in
-        the Feats step. These keep your base scores intact ({total} allocated).
+        Your classes have earned <strong>{earned}</strong> Ability Score Improvement
+        {earned === 1 ? "" : "s"} (levels 4 / 8 / 12 / 16 / 19, plus Fighter 6 / 14 and
+        Rogue 10) — up to <strong>{budget}</strong> points (each ASI is +2 to one or +1 to
+        two). Prefer a feat instead? Take it in the Feats step. These keep your base scores
+        intact ({total}/{budget} allocated).
       </p>
       <div className="builder__abilities">
         {stats.map((s) => {
@@ -919,7 +923,7 @@ function SpellPickList({ title, pick }: { title: string; pick: SpellPick }) {
   const q = query.trim().toLowerCase();
   const shown = q
     ? pick.pool.filter(
-        (s) => pick.chosen.includes(s.id) || s.name.toLowerCase().includes(q),
+        (s) => pick.chosen.includes(s.id) || s.name.toLowerCase().startsWith(q),
       )
     : pick.pool;
   return (
@@ -1163,7 +1167,7 @@ function InventorySection({
     if (q.length === 0) return [];
     const inCart = new Set(inventory.map((i) => i.itemId));
     return items
-      .filter((i) => i.name.toLowerCase().includes(q) && !inCart.has(i.id))
+      .filter((i) => i.name.toLowerCase().startsWith(q) && !inCart.has(i.id))
       .slice(0, 30);
   }, [query, items, inventory]);
 

@@ -10,6 +10,10 @@ import "./styles/animations.css";
 
 import { AuthProvider } from "./auth/AuthContext";
 import App from "./App";
+import { installTooltipPositioner } from "./lib/tooltips";
+
+// Keep edge-hugging tooltips on-screen (CSS pseudo-tooltips can't self-flip).
+installTooltipPositioner();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

@@ -28,6 +28,37 @@
   flex-wrap: wrap;
   gap: var(--sp-3);
 }
+/* Mobile: lay the vitals out as a uniform grid (matching the ability-score grid)
+   instead of content-width chips, so HP / AC / Init / Speed / Prof / Pass.Perc
+   tiles are all the same size. */
+@media (max-width: 640px) {
+  .sheet__vitals {
+    flex: 1 1 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  }
+  .sheet__vitals .vital {
+    /* Uniform tiles: centered content + a reserved two-line label area below so
+       a wrapped label ("Pass. Perc") and single-line labels produce equal-height
+       boxes across every row. */
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-1);
+  }
+  .sheet__vitals .vital__label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    /* Pin line-height so exactly two lines == the reserved min-height; a
+       single-line label then occupies the same space as a wrapped one. */
+    line-height: 1.2;
+    min-height: 2.4em;
+  }
+}
 .vital {
   min-width: 64px;
   padding: var(--sp-2) var(--sp-3);

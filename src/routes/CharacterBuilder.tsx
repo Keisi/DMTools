@@ -241,6 +241,22 @@ export default function CharacterBuilder() {
     () => picks.reduce((sum, p) => sum + p.level, 0),
     [picks],
   );
+  // ASIs are earned per CLASS level (RAW: 4/8/12/16/19, plus Fighter 6/14 and
+  // Rogue 10), not per character level — so e.g. Paladin 1 / Cleric 1 earns none.
+  // The reference API doesn't expose the schedule, but it's standard for SRD
+  // classes, so derive it from each pick's class name + level.
+  const earnedAsiCount = useMemo(() => {
+    const asiLevelsFor = (name: string | undefined) => {
+      const levels = [4, 8, 12, 16, 19];
+      if (name === "Fighter") levels.push(6, 14);
+      if (name === "Rogue") levels.push(10);
+      return levels;
+    };
+    return picks.reduce((sum, p) => {
+      const name = classes.find((c) => c.id === p.classId)?.name;
+      return sum + asiLevelsFor(name).filter((l) => p.level >= l).length;
+    }, 0);
+  }, [picks, classes]);
   // Skill choices come from the starting class (the 5e source of initial skills).
   const skillSelection = useMemo(() => {
     const startId = startingClassId ?? picks[0]?.classId;
@@ -841,11 +857,12 @@ export default function CharacterBuilder() {
                 setAbilities((prev) => ({ ...prev, [statId]: value }))
               }
             />
-            {totalLevel > 1 && (
+            {earnedAsiCount > 0 && (
               <ImprovementsPanel
                 stats={defaultStats}
                 base={abilities}
                 improvements={improvements}
+                earned={earnedAsiCount}
                 onChange={setImprovement}
               />
             )}

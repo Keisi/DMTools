@@ -5,14 +5,27 @@
   display: grid;
   place-items: center;
   padding: var(--sp-4);
-  z-index: 50;
+  /* Above the sticky nav (--z-nav: 100) — was 50, so the nav rendered on top of
+     the dialog on mobile. */
+  z-index: var(--z-modal);
 }
 
 .lvl {
   width: min(560px, 100%);
+  max-width: 100%;
   max-height: 90vh;
   overflow-y: auto;
   padding: var(--sp-5);
+}
+/* Tighten the gutter + inner padding on phones so the dialog never crowds or
+   overruns a narrow viewport. */
+@media (max-width: 560px) {
+  .lvl-backdrop {
+    padding: var(--sp-2);
+  }
+  .lvl {
+    padding: var(--sp-4);
+  }
 }
 
 .lvl__head {

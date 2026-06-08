@@ -744,7 +744,7 @@ function SpellChoice({
   // Filter the pool by name; always keep already-selected entries visible so a
   // search can't hide a pick. Casting pools get large, so a filter matters here.
   const shown = q
-    ? pool.filter((s) => selected.includes(s.id) || s.name.toLowerCase().includes(q))
+    ? pool.filter((s) => selected.includes(s.id) || s.name.toLowerCase().startsWith(q))
     : pool;
   return (
     <section className="lvl__block">

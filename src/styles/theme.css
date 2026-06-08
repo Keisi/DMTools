@@ -153,11 +153,15 @@ h3 {
   transition: opacity var(--dur-fast) var(--ease-out),
     transform var(--dur-fast) var(--ease-out);
 }
+/* The bubble can be nudged horizontally by --tooltip-shift (set in JS, see
+   src/lib/tooltips.ts) to stay on-screen near a viewport edge; the arrow
+   (::before) stays centered on the host. */
 .tip::after {
   content: attr(data-tooltip);
   bottom: calc(100% + var(--tooltip-gap));
   width: max-content;
-  max-width: var(--tooltip-max-width);
+  max-width: min(var(--tooltip-max-width), 92vw);
+  transform: translate(calc(-50% + var(--tooltip-shift, 0px)), 4px);
   white-space: pre-line;
   padding: var(--tooltip-pad-y) var(--tooltip-pad-x);
   background: var(--tooltip-bg);
@@ -188,6 +192,11 @@ h3 {
   visibility: visible;
   transform: translate(-50%, 0);
 }
+/* Keep the edge nudge applied to the bubble when shown (the arrow stays put). */
+.tip:hover::after,
+.tip:focus-visible::after {
+  transform: translate(calc(-50% + var(--tooltip-shift, 0px)), 0);
+}
 @media (prefers-reduced-motion: reduce) {
   .tip::after,
   .tip::before {
@@ -214,6 +223,34 @@ h3 {
   max-width: var(--layout-max);
   margin: 0 auto;
   padding: var(--sp-5) var(--sp-4);
+}
+
+/* Collapsible disclosure (native <details>). Collapsed by default; the summary
+   row carries a rotating chevron and any always-visible info. Used by the sheet
+   Features block and the Compendium entries. */
+.disclosure__head {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-2);
+}
+.disclosure__head::-webkit-details-marker {
+  display: none;
+}
+.disclosure__head::before {
+  content: "\25B8"; /* ▸ */
+  align-self: center;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.disclosure[open] > .disclosure__head::before {
+  transform: rotate(90deg);
+}
+.disclosure__head:hover::before {
+  color: var(--accent);
 }
 
 /* Generic layout helpers */

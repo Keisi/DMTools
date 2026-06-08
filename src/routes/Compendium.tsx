@@ -120,9 +120,9 @@ export default function Compendium() {
   }, [tab]);
 
   const loading = loadedTab !== tab;
-  const q = filter.toLowerCase();
+  const q = filter.trim().toLowerCase();
   const shown = (rows ?? []).filter((r) =>
-    (r as { name: string }).name.toLowerCase().includes(q),
+    (r as { name: string }).name.toLowerCase().startsWith(q),
   );
   const groups = loadedTab ? groupRows(loadedTab, shown) : [];
   // While searching, force every group open so matches can't hide behind a collapse.
@@ -251,49 +251,78 @@ function Desc({ text }: { text?: string | null }) {
   return <p className="compendium__row-desc text-faint">{text}</p>;
 }
 
+// Collapsed-by-default entry: the summary (name + tags + meta) stays visible so
+// you can still scan action cost / range / "Cantrip" / school at a glance; the
+// long description body expands on click. Entries with no body render flat.
+function EntryShell({
+  summary,
+  body,
+}: {
+  summary: ReactNode;
+  body: ReactNode;
+}) {
+  if (!body) return <>{summary}</>;
+  return (
+    <details className="compendium__entry">
+      <summary className="compendium__entry-head">{summary}</summary>
+      <div className="compendium__entry-body">{body}</div>
+    </details>
+  );
+}
+
 function SpellEntry({ s }: { s: SpellResponse }) {
   const meta = [s.castingTime, s.range, s.components, s.duration]
     .filter(Boolean)
     .join(" · ");
   return (
-    <>
-      <Header
-        name={s.name}
-        tags={[
-          spellLevelLabel(s.level),
-          SPELL_SCHOOL_LABEL[s.school],
-          s.concentration ? "Concentration" : null,
-          s.ritual ? "Ritual" : null,
-        ]}
-      />
-      {meta && <Meta>{meta}</Meta>}
-      {s.classes.length > 0 && (
-        <Meta>Classes: {s.classes.join(", ")}</Meta>
-      )}
-      <Desc text={s.description} />
-      {s.higherLevel && (
-        <p className="compendium__row-desc text-faint">
-          <strong>At higher levels:</strong> {s.higherLevel}
-        </p>
-      )}
-    </>
+    <EntryShell
+      summary={
+        <>
+          <Header
+            name={s.name}
+            tags={[
+              spellLevelLabel(s.level),
+              SPELL_SCHOOL_LABEL[s.school],
+              s.concentration ? "Concentration" : null,
+              s.ritual ? "Ritual" : null,
+            ]}
+          />
+          {meta && <Meta>{meta}</Meta>}
+          {s.classes.length > 0 && <Meta>Classes: {s.classes.join(", ")}</Meta>}
+        </>
+      }
+      body={
+        s.description || s.higherLevel ? (
+          <>
+            <Desc text={s.description} />
+            {s.higherLevel && (
+              <p className="compendium__row-desc text-faint">
+                <strong>At higher levels:</strong> {s.higherLevel}
+              </p>
+            )}
+          </>
+        ) : null
+      }
+    />
   );
 }
 
 function ItemEntry({ it }: { it: ItemResponse }) {
   return (
-    <>
-      <Header
-        name={it.name}
-        tags={[
-          `${it.cost} gp`,
-          `${it.weight} lb`,
-          it.isMagic ? "Magic" : null,
-          it.requiresAttunement ? "Attunement" : null,
-        ]}
-      />
-      <Desc text={it.description} />
-    </>
+    <EntryShell
+      summary={
+        <Header
+          name={it.name}
+          tags={[
+            `${it.cost} gp`,
+            `${it.weight} lb`,
+            it.isMagic ? "Magic" : null,
+            it.requiresAttunement ? "Attunement" : null,
+          ]}
+        />
+      }
+      body={it.description ? <Desc text={it.description} /> : null}
+    />
   );
 }
 
@@ -314,37 +343,43 @@ function RaceEntry({ r }: { r: RaceResponse }) {
     .map((d) => `${RESIST_WORD[d.kind]} ${d.damageType}`)
     .join(", ");
   return (
-    <>
-      <Header name={r.name} tags={[SIZE_LABEL[r.size]]} />
-      {speeds && <Meta>{speeds}</Meta>}
-      {mods && <Meta>Ability: {mods}</Meta>}
-      {r.languages.length > 0 && (
-        <Meta>Languages: {r.languages.map((l) => l.name).join(", ")}</Meta>
-      )}
-      {resists && <Meta>{resists}</Meta>}
-      <Desc text={r.description} />
-    </>
+    <EntryShell
+      summary={
+        <>
+          <Header name={r.name} tags={[SIZE_LABEL[r.size]]} />
+          {speeds && <Meta>{speeds}</Meta>}
+          {mods && <Meta>Ability: {mods}</Meta>}
+          {r.languages.length > 0 && (
+            <Meta>Languages: {r.languages.map((l) => l.name).join(", ")}</Meta>
+          )}
+          {resists && <Meta>{resists}</Meta>}
+        </>
+      }
+      body={r.description ? <Desc text={r.description} /> : null}
+    />
   );
 }
 
 function ClassEntry({ c }: { c: ClassResponse }) {
   return (
-    <>
-      <Header
-        name={c.name}
-        tags={[
-          `Hit die d${c.hitDie}`,
-          c.primaryAbilities.length > 0
-            ? `Primary ${c.primaryAbilities.map((a) => a.name).join("/")}`
-            : null,
-        ]}
-      />
-      {c.subclasses.length > 0 && (
-        <Meta>
-          Subclasses: {c.subclasses.map((s) => s.name).join(", ")}
-        </Meta>
-      )}
-      <Desc text={c.description} />
-    </>
+    <EntryShell
+      summary={
+        <>
+          <Header
+            name={c.name}
+            tags={[
+              `Hit die d${c.hitDie}`,
+              c.primaryAbilities.length > 0
+                ? `Primary ${c.primaryAbilities.map((a) => a.name).join("/")}`
+                : null,
+            ]}
+          />
+          {c.subclasses.length > 0 && (
+            <Meta>Subclasses: {c.subclasses.map((s) => s.name).join(", ")}</Meta>
+          )}
+        </>
+      }
+      body={c.description ? <Desc text={c.description} /> : null}
+    />
   );
 }

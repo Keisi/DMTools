@@ -568,12 +568,25 @@ function FeaturesBlock({ features }: { features: CharacterFeatureResponse[] }) {
       <ul className="sheet__features">
         {features.map((f, i) => (
           <li key={`${f.name}-${i}`}>
-            <span className="prof-list__name">{f.name}</span>{" "}
-            <span className="text-faint">
-              · {f.source} L{f.level}
-            </span>
-            {f.description && (
-              <p className="text-muted sheet__feature-desc">{f.description}</p>
+            {f.description ? (
+              // Collapsed by default — the descriptions make this block very long,
+              // so show just the name/source and let the DM expand on demand.
+              <details className="disclosure">
+                <summary className="disclosure__head">
+                  <span className="prof-list__name">{f.name}</span>{" "}
+                  <span className="text-faint">
+                    · {f.source} L{f.level}
+                  </span>
+                </summary>
+                <p className="text-muted sheet__feature-desc">{f.description}</p>
+              </details>
+            ) : (
+              <>
+                <span className="prof-list__name">{f.name}</span>{" "}
+                <span className="text-faint">
+                  · {f.source} L{f.level}
+                </span>
+              </>
             )}
           </li>
         ))}
@@ -718,7 +731,7 @@ function InventoryBlock({
     const q = query.trim().toLowerCase();
     if (!q) return [];
     return items
-      .filter((i) => i.name.toLowerCase().includes(q) && !owned.has(i.id))
+      .filter((i) => i.name.toLowerCase().startsWith(q) && !owned.has(i.id))
       .slice(0, 20);
   }, [query, items, owned]);
 
