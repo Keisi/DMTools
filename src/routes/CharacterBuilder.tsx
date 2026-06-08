@@ -173,7 +173,17 @@ export default function CharacterBuilder() {
           })),
         );
         setStartingClassId(ch.startingClassId ?? ch.classes[0]?.classId ?? null);
-        setAbilityMode("manual");
+        // Re-open in point-buy when the stored base scores are a legal point-buy
+        // spread (every default stat 8-15 and within the 27-point budget);
+        // otherwise manual, so rolled/homebrew characters aren't clamped or
+        // locked out of advancing by the point-buy gate.
+        const fitsPointBuy =
+          ch.abilityScores.every(
+            (a) => a.base >= POINT_MIN && a.base <= POINT_MAX,
+          ) &&
+          ch.abilityScores.reduce((sum, a) => sum + pointCost(a.base), 0) <=
+            POINT_BUDGET;
+        setAbilityMode(fitsPointBuy ? "pointbuy" : "manual");
         setAbilities(
           Object.fromEntries(ch.abilityScores.map((a) => [a.statId, a.base])),
         );
