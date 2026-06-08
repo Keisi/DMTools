@@ -238,6 +238,15 @@
   font-size: var(--fs-sm);
   line-height: 1.5;
 }
+.sheet__spell-group + .sheet__spell-group {
+  margin-top: var(--sp-3);
+}
+.sheet__spell-level {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin-bottom: var(--sp-1);
+}
 .sheet__features {
   list-style: none;
   padding: 0;

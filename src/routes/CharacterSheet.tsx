@@ -640,6 +640,12 @@ function SpellcastingBlock({
   prof: number;
 }) {
   if (spellcasting.length === 0 && spells.length === 0) return null;
+  // Aggregate slots per spell level across all caster classes — annotated on each
+  // level group so the slots stay visible next to that level's spells.
+  const slotsByLevel = new Map<number, number>();
+  for (const sc of spellcasting)
+    for (const slot of sc.spellSlots)
+      slotsByLevel.set(slot.level, (slotsByLevel.get(slot.level) ?? 0) + slot.count);
   const casterTip = (sc: SpellcastingResponse) => {
     const m = modByName.get(sc.ability) ?? 0;
     return `Save DC = 8 + proficiency ${fmtMod(prof)} + ${sc.ability} mod ${fmtMod(m)} = ${sc.saveDc}\nSpell attack = proficiency + ability mod = ${fmtMod(sc.spellAttackBonus)}`;
@@ -667,38 +673,57 @@ function SpellcastingBlock({
           </p>
         </div>
       ))}
-      {spells.length > 0 && (
-        <ul className="prof-list sheet__spelllist">
-          {[...spells]
-            .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name))
-            .map((s) => {
-              const cat = spellsById.get(s.id);
-              const combat = cat ? spellCombat(cat) : null;
-              const inline = combat ? spellInline(combat) : "";
-              return (
-                <li
-                  key={s.id}
-                  className={"prof-list__row" + (inline ? " tip" : "")}
-                  data-tooltip={
-                    inline && cat ? spellTip(cat, combat!) : undefined
-                  }
-                >
-                  <span className="prof-list__name">
-                    {s.name}
-                    {s.level > 0 && (
-                      <span className="text-faint"> · L{s.level}</span>
+      {spells.length > 0 &&
+        spellLevelGroups(spells).map((g) => (
+          <div key={g.level} className="sheet__spell-group">
+            <h4 className="sheet__spell-level">
+              {g.level === 0 ? "Cantrips" : `Level ${g.level}`}
+              {slotsByLevel.has(g.level) && (
+                <span className="text-faint">
+                  {" "}
+                  · {slotsByLevel.get(g.level)} slot
+                  {slotsByLevel.get(g.level) === 1 ? "" : "s"}
+                </span>
+              )}
+            </h4>
+            <ul className="prof-list sheet__spelllist">
+              {g.spells.map((s) => {
+                const cat = spellsById.get(s.id);
+                const combat = cat ? spellCombat(cat) : null;
+                const inline = combat ? spellInline(combat) : "";
+                return (
+                  <li
+                    key={s.id}
+                    className={"prof-list__row" + (inline ? " tip" : "")}
+                    data-tooltip={
+                      inline && cat ? spellTip(cat, combat!) : undefined
+                    }
+                  >
+                    <span className="prof-list__name">{s.name}</span>
+                    {inline && (
+                      <span className="prof-list__val text-faint">{inline}</span>
                     )}
-                  </span>
-                  {inline && (
-                    <span className="prof-list__val text-faint">{inline}</span>
-                  )}
-                </li>
-              );
-            })}
-        </ul>
-      )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
     </section>
   );
+}
+
+// Group known spells by spell level (ascending), each group's spells sorted by name.
+function spellLevelGroups(
+  spells: SpellRef[],
+): { level: number; spells: SpellRef[] }[] {
+  const levels = [...new Set(spells.map((s) => s.level))].sort((a, b) => a - b);
+  return levels.map((level) => ({
+    level,
+    spells: spells
+      .filter((s) => s.level === level)
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  }));
 }
 
 function FeaturesBlock({ features }: { features: CharacterFeatureResponse[] }) {
