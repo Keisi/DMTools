@@ -100,6 +100,11 @@ export default function LevelUpDialog({
   // DM override for an unmet multiclass ability-score prerequisite — sends
   // allowHomebrewSelections so the backend (mig. 045) lets the multiclass through.
   const [dmOverride, setDmOverride] = useState(false);
+  // RAW reduced multiclass choice-grants (Bard skill+instrument, Ranger/Rogue
+  // skill), keyed by selectionId. Optional — the backend allows empty picks.
+  const [multiclassChoices, setMulticlassChoices] = useState<
+    Record<string, string[]>
+  >({});
 
   // Feat catalog for the "take a feat instead of an ASI" choice (loaded once).
   const [feats, setFeats] = useState<FeatResponse[]>([]);
@@ -130,6 +135,7 @@ export default function LevelUpDialog({
         setCantripIds([]);
         setSpellIds([]);
         setFeatureChoices({});
+        setMulticlassChoices({});
         setDmOverride(false);
       })
       .catch((err) => {
@@ -244,13 +250,16 @@ export default function LevelUpDialog({
 
   // Toggle a sub-feature option, capping the pick count at the selection's `choose`.
   function toggleFeature(selectionId: string, optionId: string, choose: number) {
-    setFeatureChoices((prev) => {
-      const cur = prev[selectionId] ?? [];
-      if (cur.includes(optionId))
-        return { ...prev, [selectionId]: cur.filter((x) => x !== optionId) };
-      if (cur.length >= choose) return prev;
-      return { ...prev, [selectionId]: [...cur, optionId] };
-    });
+    setFeatureChoices((prev) => toggleInMap(prev, selectionId, optionId, choose));
+  }
+  function toggleMulticlass(
+    selectionId: string,
+    optionId: string,
+    choose: number,
+  ) {
+    setMulticlassChoices((prev) =>
+      toggleInMap(prev, selectionId, optionId, choose),
+    );
   }
 
   async function apply() {
@@ -282,6 +291,13 @@ export default function LevelUpDialog({
         ? plan.featureChoices.map((fc) => ({
             selectionId: fc.selection.id,
             optionIds: featureChoices[fc.selection.id] ?? [],
+          }))
+        : undefined,
+      // Multiclass choice-grant picks (Bard/Ranger/Rogue); empty picks allowed.
+      multiclassChoices: plan.multiclassGrants.length
+        ? plan.multiclassGrants.map((g) => ({
+            selectionId: g.id,
+            optionIds: multiclassChoices[g.id] ?? [],
           }))
         : undefined,
       // Bypass the RAW multiclass ability-score gate only when the DM opted in.
@@ -425,6 +441,22 @@ export default function LevelUpDialog({
               />
             ))}
 
+            {/* RAW reduced multiclass choice-grants (Bard/Ranger/Rogue). Optional
+                — the backend allows applying with empty picks (fill later). */}
+            {plan.multiclassGrants.map((g) => (
+              <FeatureChoice
+                key={g.id}
+                choice={{
+                  featureName: g.name,
+                  source: "Multiclass grant (optional — can set later)",
+                  selection: g,
+                }}
+                skills={skills}
+                selected={multiclassChoices[g.id] ?? []}
+                onToggle={(optionId) => toggleMulticlass(g.id, optionId, g.choose)}
+              />
+            ))}
+
             {plan.gainedFeatures.length > 0 && (
               <GainsList plan={plan} />
             )}
@@ -453,6 +485,20 @@ export default function LevelUpDialog({
     </div>,
     document.body,
   );
+}
+
+// Toggle an option in a {selectionId: optionId[]} map, capped at `choose`.
+function toggleInMap(
+  prev: Record<string, string[]>,
+  selectionId: string,
+  optionId: string,
+  choose: number,
+): Record<string, string[]> {
+  const cur = prev[selectionId] ?? [];
+  if (cur.includes(optionId))
+    return { ...prev, [selectionId]: cur.filter((x) => x !== optionId) };
+  if (cur.length >= choose) return prev;
+  return { ...prev, [selectionId]: [...cur, optionId] };
 }
 
 // Toggle an id in a string[] setter, respecting an optional max count.
