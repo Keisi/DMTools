@@ -444,17 +444,33 @@ function EquipRow({
   );
 }
 
+// Build the unarmored AC breakdown text ("10 base + 3 DEX + 3 other"), omitting
+// zero components — surfaced for characters with no worn armor (Monk, Barbarian,
+// unarmored casters) so the AC source is still visible when nothing is equipped.
+function acParts(ab: CharacterResponse["armorClassBreakdown"]): string {
+  if (!ab) return "";
+  const parts = [`${ab.base} base`];
+  const add = (v: number, label: string) => {
+    if (v) parts.push(`${v > 0 ? "+" : "−"}${Math.abs(v)} ${label}`);
+  };
+  add(ab.dexterity, "DEX");
+  add(ab.shield, "shield");
+  add(ab.other, "other");
+  return parts.join(" ");
+}
+
 function EquippedBlock({ character }: { character: CharacterResponse }) {
   const c = character;
-  const hasGear =
-    !!c.equippedArmor || !!c.equippedShield || c.equippedWeapons.length > 0;
-  if (!hasGear) return null;
+  const ab = c.armorClassBreakdown;
+  // Always render: an unarmored/unarmed character (e.g. a Monk) still has a
+  // derived AC and an attack option, so the block surfaces those instead of
+  // self-hiding when no gear is worn.
   return (
     <section className="panel sheet__block">
       <h3 className="sheet__block-title">Equipped</h3>
       <hr className="rule" />
       <ul className="prof-list">
-        {c.equippedArmor && (
+        {c.equippedArmor ? (
           <EquipRow
             name={c.equippedArmor.name}
             slot="armor"
@@ -464,6 +480,14 @@ function EquippedBlock({ character }: { character: CharacterResponse }) {
                 : undefined
             }
           />
+        ) : (
+          <li className="prof-list__row prof-list__row--equip">
+            <span className="prof-list__name">{ab?.source ?? "Unarmored"}</span>
+            <span className="prof-list__val text-faint">
+              AC {ab?.total ?? c.armorClass}
+              {acParts(ab) && ` · ${acParts(ab)}`}
+            </span>
+          </li>
         )}
         {c.equippedShield && (
           <EquipRow
@@ -476,9 +500,16 @@ function EquippedBlock({ character }: { character: CharacterResponse }) {
             }
           />
         )}
-        {c.equippedWeapons.map((w) => (
-          <EquipRow key={w.id} name={w.name} slot="weapon" />
-        ))}
+        {c.equippedWeapons.length > 0 ? (
+          c.equippedWeapons.map((w) => (
+            <EquipRow key={w.id} name={w.name} slot="weapon" />
+          ))
+        ) : (
+          <li className="prof-list__row prof-list__row--equip">
+            <span className="prof-list__name text-faint">No weapons equipped</span>
+            <span className="prof-list__val text-faint">unarmed</span>
+          </li>
+        )}
       </ul>
     </section>
   );
