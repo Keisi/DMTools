@@ -73,6 +73,15 @@
 
 .shell__main {
   animation: fade-in var(--dur-base) var(--ease-out);
+  /* Hidden `.tip::after` tooltips sit in layout (visibility:hidden) and extend
+     past the viewport for right-edge hosts, which added ~72px of horizontal page
+     scroll on mobile (so the page shifted and tooltips/dialogs looked cut off).
+     Clip horizontal overflow here — `clip` (not `hidden`) leaves the vertical
+     axis visible so tooltips above their host still show, and doesn't disturb the
+     sticky nav (a sibling, not a descendant). Shown tooltips are nudged back
+     inside the viewport by the positioner, so they're never clipped. */
+  overflow-x: clip;
+  overflow-y: visible;
 }
 
 /* Keep the auth action (Sign out / Log in) on a single line — it was wrapping
