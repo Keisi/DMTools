@@ -15,6 +15,7 @@ import {
   type LevelUpApplyRequest,
   type LevelUpPlanResponse,
   type LevelUpSpellPoolEntryResponse,
+  type MulticlassPrerequisiteResponse,
   type SkillBonusResponse,
 } from "../api/types";
 import { MAX_TOTAL_LEVEL } from "./CharacterBuilder.steps";
@@ -36,10 +37,11 @@ type AsiMode = "asi" | "feat";
  * sub-choices (Fighter→Fighting Style, Rogue→Expertise) all flow through the
  * same plan/apply machinery. The picker then lists `addableClasses` instead of
  * the owned classes. The engine grants RAW-correct multiclass proficiencies
- * (backend migration 041); the remaining DM-tool approximations — surfaced as a
- * hint here — are that multiclass ability prerequisites (13+) aren't enforced
- * and the "choose a skill/instrument" multiclass grants (Bard/Rogue/Ranger)
- * aren't auto-applied (add via Edit).
+ * (backend migration 041) and enforces the RAW ability-score prerequisites
+ * (13+; migration 045) — the plan's `multiclassPrerequisite` drives the notice
+ * + DM-override toggle here. The remaining DM-tool approximation is that the
+ * "choose a skill/instrument" multiclass grants (Bard/Rogue/Ranger) aren't
+ * auto-applied (add via Edit).
  */
 export default function LevelUpDialog({
   characterId,
@@ -95,6 +97,9 @@ export default function LevelUpDialog({
   const [featureChoices, setFeatureChoices] = useState<Record<string, string[]>>(
     {},
   );
+  // DM override for an unmet multiclass ability-score prerequisite — sends
+  // allowHomebrewSelections so the backend (mig. 045) lets the multiclass through.
+  const [dmOverride, setDmOverride] = useState(false);
 
   // Feat catalog for the "take a feat instead of an ASI" choice (loaded once).
   const [feats, setFeats] = useState<FeatResponse[]>([]);
@@ -125,6 +130,7 @@ export default function LevelUpDialog({
         setCantripIds([]);
         setSpellIds([]);
         setFeatureChoices({});
+        setDmOverride(false);
       })
       .catch((err) => {
         if (!active) return;
@@ -179,6 +185,10 @@ export default function LevelUpDialog({
   const featuresOk = (plan?.featureChoices ?? []).every(
     (fc) => (featureChoices[fc.selection.id]?.length ?? 0) === fc.selection.choose,
   );
+  // Multiclass ability-score prerequisite (present only on a multiclass-in): the
+  // RAW 13+ gate. Unmet blocks Apply unless the DM ticks the override.
+  const prereq = plan?.multiclassPrerequisite ?? null;
+  const prereqOk = !prereq || prereq.isMet || dmOverride;
   const canApply =
     !!plan &&
     hpOk &&
@@ -187,6 +197,7 @@ export default function LevelUpDialog({
     cantripsOk &&
     spellsOk &&
     featuresOk &&
+    prereqOk &&
     !busy;
 
   // What's still required before Apply works — surfaced next to the button so a
@@ -218,6 +229,7 @@ export default function LevelUpDialog({
                 featureChoices[fc.selection.id]?.length ?? 0
               } chosen)`,
           ),
+        !prereqOk ? "the multiclass ability prerequisite (or DM override)" : null,
       ].filter(Boolean)
     : [];
 
@@ -272,6 +284,8 @@ export default function LevelUpDialog({
             optionIds: featureChoices[fc.selection.id] ?? [],
           }))
         : undefined,
+      // Bypass the RAW multiclass ability-score gate only when the DM opted in.
+      allowHomebrewSelections: dmOverride || undefined,
     };
     try {
       const updated = await characters.levelUpApply(characterId, req);
@@ -304,10 +318,11 @@ export default function LevelUpDialog({
         {multiclass && (
           <p className="text-faint lvl__hint">
             Add a class at level 1 (total {currentTotal}/{MAX_TOTAL_LEVEL}). 5e
-            requires 13+ in both your current and the new class's key abilities —
-            this tool doesn't enforce that. A "choose a skill/instrument"
-            multiclass grant (Bard/Rogue/Ranger) isn't added automatically — set
-            it via Edit. Advance the class later with Level Up.
+            requires 13+ in both your current and the new class's key abilities;
+            an unmet prerequisite is flagged below with a DM-override option. A
+            "choose a skill/instrument" multiclass grant (Bard/Rogue/Ranger) isn't
+            added automatically — set it via Edit. Advance the class later with
+            Level Up.
           </p>
         )}
 
@@ -340,6 +355,14 @@ export default function LevelUpDialog({
               {plan.className} {plan.fromLevel} → {plan.toLevel} · total level{" "}
               {plan.totalLevelAfter}
             </p>
+
+            {prereq && !prereq.isMet && (
+              <MulticlassPrereqNotice
+                prereq={prereq}
+                override={dmOverride}
+                onOverride={setDmOverride}
+              />
+            )}
 
             <HpChoice
               plan={plan}
@@ -466,6 +489,57 @@ function ClassPicker({
         </button>
       ))}
     </div>
+  );
+}
+
+// Shown only on a multiclass-in whose RAW ability prerequisite is unmet. Lists
+// each class with its required abilities (AND vs OR per requiresAll) and flags
+// the failing ones, then offers a DM-override toggle that relaxes the gate.
+function MulticlassPrereqNotice({
+  prereq,
+  override,
+  onOverride,
+}: {
+  prereq: MulticlassPrerequisiteResponse;
+  override: boolean;
+  onOverride: (v: boolean) => void;
+}) {
+  return (
+    <section className="lvl__block lvl__prereq">
+      <h3 className="lvl__block-title">Multiclass requirement not met</h3>
+      <p className="text-faint lvl__hint">
+        5e requires 13+ in the key ability of every class you have and the one
+        you're entering. Adjust scores, or tick DM override to multiclass anyway.
+      </p>
+      <ul className="lvl__prereq-list">
+        {prereq.classes.map((c) => (
+          <li key={c.classId} className={c.isMet ? "" : "lvl__prereq--fail"}>
+            <strong>{c.className}</strong>{" "}
+            <span className="text-faint">
+              ({c.requiresAll ? "all of" : "one of"}):
+            </span>{" "}
+            {c.abilities.map((a, i) => (
+              <span
+                key={a.statId}
+                className={a.isMet ? "" : "lvl__prereq--fail"}
+              >
+                {i > 0 && ", "}
+                {a.statName} {a.characterScore}/{a.minimumScore}
+                {a.isMet ? " ✓" : " ✗"}
+              </span>
+            ))}
+          </li>
+        ))}
+      </ul>
+      <label className="lvl__prereq-override">
+        <input
+          type="checkbox"
+          checked={override}
+          onChange={(e) => onOverride(e.target.checked)}
+        />
+        DM override — multiclass despite the unmet prerequisite
+      </label>
+    </section>
   );
 }
 

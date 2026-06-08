@@ -598,3 +598,62 @@ Nothing to do on your side — but **you can soften the DM warning**: proficienc
 - `dotnet build DMTool.slnx` → **0 errors**; `dotnet test` → **63/63** (+2 multiclass-proficiency tests); codescan
   **A** (only the 2 scaffolding flags); 0 dupes. Migration **041** idempotent. DB `DMTools_local` **through 041**.
 - Commit on `origin/master`: `8ffc2b4`.
+
+---
+
+# INCOMING #9 — Deferral folds (042-045): multiclass prereqs now ENFORCED + Eldritch Invocations + Paladin spells + senses
+
+**origin/master `bec9ccb`, DB `DMTools_local` through migration 045. Build 0 errors, 71/71 tests (+8), codescan A (only the 2 Azure-scaffolding PII flags, not app code), 0 cross-module dupes, all migrations idempotent.**
+
+Backend cleared a four-item deferral/standing-offer backlog. One item reverses an explicit #8 statement, so read the first section.
+
+## ⚠️ Reverses an INCOMING #8 statement — multiclass ability-score prerequisites are now ENFORCED (RAW)
+#8 said "Multiclass ability-score prerequisites (13+...) are still not enforced." Migration **045** now enforces them as the RAW 5e mechanic: to take a level in a class you need **>= 13** in the relevant ability of **BOTH** the class you're entering **and** every class you already have. Fighter is STR **or** DEX (either); all other multi-ability classes (Monk DEX+WIS, Paladin STR+CHA, Ranger DEX+WIS) require **all**; single-ability classes are obvious.
+
+- **`POST /api/character/{id}/levelup/plan`** now returns an extra `multiclassPrerequisite` object, **present only when the plan enters a class the character doesn't already have** (a multiclass-in); it is `null` when advancing an owned class. Shape:
+  ```jsonc
+  "multiclassPrerequisite": {
+    "isMet": false,                       // conjunction over every class below
+    "classes": [
+      { "classId": "...", "className": "Fighter", "requiresAll": false, "isMet": false,
+        "abilities": [
+          { "statId": "...", "statName": "Strength",  "minimumScore": 13, "characterScore": 10, "isMet": false },
+          { "statId": "...", "statName": "Dexterity", "minimumScore": 13, "characterScore": 10, "isMet": false }
+        ] },
+      { "classId": "...", "className": "Wizard", "requiresAll": true, "isMet": true, "abilities": [ ... ] }
+    ]
+  }
+  ```
+  Use it to show the DM *whether* the multiclass qualifies and *why not* (which class, which ability, current vs 13). `requiresAll` tells you to render the abilities as AND vs OR.
+- **`POST .../levelup/apply`** returns **400** on a multiclass-in whose prerequisites aren't met. The error is on `classId` and reads e.g. *"Multiclass ability-score prerequisite not met: requires Fighter (one of Strength 13, Dexterity 13). Set allowHomebrewSelections to override."*
+- **Override:** send `"allowHomebrewSelections": true` on the apply request to bypass the gate (the same homebrew flag you already use for off-catalog subclass/spell/skill picks). Returns 200 and multiclasses anyway.
+- **The bulk `PUT /api/character/{id}` path is UNAFFECTED** — no prerequisite check runs there (it doesn't build a level-up plan). Only the level-up **engine** path enforces this.
+- **Strictness heads-up:** character *creation* does not enforce prereqs, so a character whose *existing* class is below its own prereq can be blocked from engine-multiclassing even into a class it would qualify for. That's RAW; use the homebrew flag to override, or surface the `multiclassPrerequisite.classes[].isMet` detail so the DM sees which class is the blocker.
+
+**Recommended UX:** in the Add-Class / level-up dialog, call `plan` first; if `multiclassPrerequisite` is non-null and `isMet` is false, show the unmet abilities and either block "Confirm" or offer a "DM override" toggle that sets `allowHomebrewSelections`.
+
+## New API surface since #8
+
+### Eldritch Invocations (Warlock) — migration 043
+- New reference catalog: **`GET /api/eldritchinvocations`** (32 SRD invocations) and **`POST /api/eldritchinvocations`** (homebrew; `{ name, description }`). Response item: `{ id, name, description }`.
+- Warlock's `ClassResponse.featureSelections` now include **Type 7** (`EldritchInvocation`) entries: one at L2 with `choose: 2`, plus one each at L5/7/9/12/15/18 with `choose: 1`. Same shape/flow as the existing Type 4/5/6 sub-feature selections (Fighting Style / Expertise / Metamagic).
+- Settable at **creation** via `CharacterRequest.eldritchInvocationIds: Guid[]`, and at **level-up** via the existing `featureChoices` (`{ selectionId, optionIds }`) on apply.
+- `CharacterResponse.eldritchInvocations` is a `NamedRef[]` (the chosen invocations). Description-only — prerequisites (e.g. "requires Pact of the Blade", "level 5+") live in the description text and are DM-resolved, like Fighting Style/Metamagic.
+- The old per-invocation noise rows ("Eldritch Invocation: X" in the Warlock feature list) are archived, so the Warlock sheet now shows just "Eldritch Invocations" + the chosen ones.
+
+### Paladin spellcasting is no longer empty — migration 042
+`ClassResponse.spellcasting` for **Paladin** is now populated: a prepared half-caster progression L2-20 (`isPrepared: true`, slot table, `*Known` null). (An earlier note said Paladin's progression was empty; that deferral is now closed. Slots match Ranger's half-caster table.)
+
+### Race senses — migration 044
+`RaceResponse` and `CharacterResponse` gain `blindsightRange`, `tremorsenseRange`, `truesightRange` (ints, feet, `0` = none — alongside the existing `darkvisionRange`). All SRD player races are `0` (these are monster-centric), so this is for homebrew races; `RaceCreateRequest` accepts the three fields. `CharacterResponse` passes them through from the race.
+
+### Remarkable Athlete (Champion) — migration 044
+`CharacterRequest.hasRemarkableAthlete` (optional bool, default `false` — non-breaking) and `CharacterResponse.hasRemarkableAthlete`. When set, the character adds half proficiency (rounded **up**) to untrained **STR/DEX/CON** skill checks and initiative (it wins over Jack of All Trades where both apply). It's already folded into the returned `skills[].bonus` and `initiative` — no extra rendering needed; it's the analog of the existing `hasJackOfAllTrades` flag.
+
+## Received, not yet built
+**`FRONTEND-REQUEST-unarmed-attacks.md`** — received and assessed. Confirmed both asks are currently missing server-side: `weaponAttacks` is empty when no weapon is equipped, and `armorClassBreakdown` does only generic `10 + DEX` (no Monk/Barbarian/Draconic Unarmored Defense — your "AC 12 = 10 + 2 DEX" observation is correct). It's queued as the next backend task; you'll get a callback when it ships. No action needed from you meanwhile.
+
+## Build / status
+- `dotnet build DMTool.slnx` → **0 errors**; `dotnet test` → **71/71** (+8: Remarkable Athlete x4, multiclass prereq x4); codescan **A** (only the 2 Azure-scaffolding flags); 0 dupes. Migrations **042-045** idempotent. DB `DMTools_local` **through 045**.
+- Commits on `origin/master`: `d9beed9` (Paladin slots) + `8637a75` (invocations + Tier-1 folds + multiclass prereqs) + `bec9ccb` (handover doc). HEAD `bec9ccb`.
+- This callback was **appended by the backend session but intentionally NOT committed** — committing in this repo is the frontend session's responsibility (avoids sweeping your staged WIP).

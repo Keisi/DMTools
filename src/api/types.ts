@@ -99,6 +99,7 @@ export const SelectionType = {
   FightingStyle: 4,
   Expertise: 5,
   Metamagic: 6,
+  EldritchInvocation: 7,
 } as const;
 export type SelectionType = (typeof SelectionType)[keyof typeof SelectionType];
 
@@ -190,6 +191,11 @@ export interface RaceResponse {
   climbSpeed: number;
   flySpeed: number;
   darkvisionRange: number;
+  // Other senses (feet; 0 = none). All SRD player races are 0 — these exist for
+  // homebrew races (backend migration 044).
+  blindsightRange: number;
+  tremorsenseRange: number;
+  truesightRange: number;
   abilityModifiers: RaceAbilityModifierResponse[];
   languages: LanguageResponse[];
   damageResistances: RaceDamageResistanceResponse[];
@@ -420,6 +426,13 @@ export interface MetamagicResponse {
   name: string;
   description?: string | null;
 }
+// GET /api/eldritchinvocations (Warlock). Plans carry options inline (Type 7);
+// fetch this only for a standalone browse view. Prerequisites live in the text.
+export interface EldritchInvocationResponse {
+  id: string;
+  name: string;
+  description?: string | null;
+}
 
 // ---- Character: request (CharacterContracts.cs / CharacterRequest) ----
 
@@ -505,6 +518,9 @@ export interface CharacterRequest extends CharacterDetails {
   savingThrowProficiencyAdditions?: string[] | null;
   skillProficiencies?: SkillProficiencyRequest[] | null;
   hasJackOfAllTrades: boolean;
+  // Champion's Remarkable Athlete: half proficiency (rounded up) to untrained
+  // STR/DEX/CON checks + initiative. Optional, defaults false (backend mig. 044).
+  hasRemarkableAthlete?: boolean;
   spellIds?: string[] | null;
   featIds?: string[] | null;
   backgroundId?: string | null;
@@ -517,6 +533,9 @@ export interface CharacterRequest extends CharacterDetails {
   // skillProficiencies[].level = 2, not here.
   fightingStyleIds?: string[] | null;
   metamagicIds?: string[] | null;
+  // Warlock Eldritch Invocations chosen at creation. Existence-checked; the
+  // catalog is GET /api/eldritchinvocations (backend migration 043).
+  eldritchInvocationIds?: string[] | null;
   // Ability-score improvements baked in at creation for an above-L1 character
   // (preserves the base/improvement split instead of inflating base scores).
   // Each leg adds `amount` to a stat; legs may repeat a stat (they accumulate).
@@ -731,6 +750,10 @@ export interface CharacterResponse extends CharacterDetails {
   climbSpeed: number;
   flySpeed: number;
   darkvisionRange: number;
+  // Other senses (feet; 0 = none) — passed through from the race (backend mig. 044).
+  blindsightRange: number;
+  tremorsenseRange: number;
+  truesightRange: number;
   languages: NamedRef[];
   damageResistances: DamageResistanceResponse[];
   age: number;
@@ -745,6 +768,8 @@ export interface CharacterResponse extends CharacterDetails {
   passivePerception: number;
   skills: SkillBonusResponse[];
   hasJackOfAllTrades: boolean;
+  // Champion's Remarkable Athlete (already folded into skills[].bonus + initiative).
+  hasRemarkableAthlete: boolean;
   resources: CharacterResourceResponse[];
   features: CharacterFeatureResponse[];
   spellcasting: SpellcastingResponse[];
@@ -754,6 +779,8 @@ export interface CharacterResponse extends CharacterDetails {
   // skills[] as level === Expertise (2).
   fightingStyles: NamedRef[];
   metamagics: NamedRef[];
+  // Warlock Eldritch Invocations ([] when none); description-only, like fightingStyles.
+  eldritchInvocations: NamedRef[];
   maxHitPoints: number;
   derivedMaxHitPoints: number;
   hitPointsOverride?: number | null;
@@ -830,6 +857,33 @@ export interface FeatureChoiceResponse {
   selection: SelectionResponse;
 }
 
+/**
+ * RAW multiclass ability-score prerequisites (backend migration 045). Present on
+ * the plan ONLY when entering a class the character doesn't already have (a
+ * multiclass-in); null when advancing an owned class. `requiresAll` says whether
+ * the class's abilities are an AND (e.g. Paladin STR+CHA) or an OR (Fighter
+ * STR|DEX). `isMet` (top-level) is the conjunction over every class. When unmet,
+ * apply returns 400 unless allowHomebrewSelections is sent.
+ */
+export interface MulticlassPrerequisiteAbility {
+  statId: string;
+  statName: string;
+  minimumScore: number;
+  characterScore: number;
+  isMet: boolean;
+}
+export interface MulticlassPrerequisiteClass {
+  classId: string;
+  className: string;
+  requiresAll: boolean;
+  isMet: boolean;
+  abilities: MulticlassPrerequisiteAbility[];
+}
+export interface MulticlassPrerequisiteResponse {
+  isMet: boolean;
+  classes: MulticlassPrerequisiteClass[];
+}
+
 export interface LevelUpPlanResponse {
   classId: string;
   className: string;
@@ -841,6 +895,8 @@ export interface LevelUpPlanResponse {
   subclassChoice?: SelectionResponse | null;
   spellChoices?: LevelUpSpellChoicesResponse | null;
   featureChoices: FeatureChoiceResponse[];
+  // Non-null only on a multiclass-in; null when advancing an owned class.
+  multiclassPrerequisite?: MulticlassPrerequisiteResponse | null;
   gainedFeatures: CharacterFeatureResponse[];
   gainedResources: CharacterResourceResponse[];
   newSpellSlots: SpellSlotResponse[];

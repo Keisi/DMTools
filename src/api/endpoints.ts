@@ -11,6 +11,7 @@ import type {
   CharacterRequest,
   CharacterResponse,
   ClassResponse,
+  EldritchInvocationResponse,
   FeatResponse,
   FightingStyleResponse,
   InventoryAddRequest,
@@ -82,6 +83,8 @@ export const reference = {
   fightingStyles: () =>
     api.get<FightingStyleResponse[]>("/api/fightingstyles"),
   metamagics: () => api.get<MetamagicResponse[]>("/api/metamagics"),
+  eldritchInvocations: () =>
+    api.get<EldritchInvocationResponse[]>("/api/eldritchinvocations"),
   // ...armorcategories, weaponcategories, editions, statuseffects
 };
 
