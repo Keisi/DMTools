@@ -988,8 +988,9 @@ export function SpellsStep({
   return (
     <div className="builder__spells">
       <p className="text-muted builder__hint">
-        Known spells for {casterNames.join(", ")} at your chosen level. (Prepared casters
-        aren't shown — they prepare in play.)
+        Cantrips and known spells for {casterNames.join(", ")} at your chosen level.
+        (Prepared casters choose cantrips here; their levelled spells are prepared
+        from the full list in play, so they aren't listed.)
       </p>
       {cantrips && <SpellPickList title="Cantrips" pick={cantrips} />}
       {spells && <SpellPickList title="Spells" pick={spells} />}

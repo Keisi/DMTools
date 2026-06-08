@@ -362,9 +362,13 @@ export default function CharacterBuilder() {
     [skillIds, skills],
   );
 
-  // Known-caster spell plan: cumulative cantrips/spells known at each caster class's
-  // chosen level, plus the unioned pools filtered to each class's max spell level.
-  // Prepared casters and non-casters contribute nothing (they self-skip).
+  // Cantrips/spells chosen at creation per caster class at its chosen level, plus
+  // the unioned pools filtered to each class's max spell level. Cantrips are KNOWN
+  // for every caster (incl. prepared Cleric/Druid/Wizard — backend mig. 047), so
+  // prepared casters contribute their cantrips here; their LEVELLED spells are
+  // prepared from the full list in play, so they add no levelled requirement/pool.
+  // Half-casters (Paladin) have no cantrips (cantripsKnown null) and, being
+  // prepared, no levelled picks — they contribute nothing. Non-casters self-skip.
   const spellPlan = useMemo(() => {
     let cantripsNeed = 0;
     let spellsNeed = 0;
@@ -374,18 +378,21 @@ export default function CharacterBuilder() {
     for (const p of picks) {
       const cls = classes.find((c) => c.id === p.classId);
       const sc = cls?.spellcasting;
-      if (!cls || !sc || sc.isPrepared) continue;
+      if (!cls || !sc) continue;
       const row = sc.progression
         .filter((r) => r.classLevel <= p.level)
         .sort((a, b) => b.classLevel - a.classLevel)[0];
       if (!row) continue;
+      const cantrips = row.cantripsKnown ?? 0;
+      const levelled = sc.isPrepared ? 0 : (row.spellsKnown ?? 0);
+      if (cantrips === 0 && levelled === 0) continue; // contributes no picks
       casterNames.push(cls.name);
-      cantripsNeed += row.cantripsKnown ?? 0;
-      spellsNeed += row.spellsKnown ?? 0;
+      cantripsNeed += cantrips;
+      spellsNeed += levelled;
       for (const s of spells) {
         if (!s.classes?.includes(cls.name)) continue;
         if (s.level === 0) cantripPool.set(s.id, { id: s.id, name: s.name, level: 0 });
-        else if (s.level <= row.maxSpellLevel)
+        else if (!sc.isPrepared && s.level <= row.maxSpellLevel)
           spellPool.set(s.id, { id: s.id, name: s.name, level: s.level });
       }
     }
