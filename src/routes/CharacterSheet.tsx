@@ -11,6 +11,7 @@ import {
   type CharacterResourceResponse,
   type CharacterResponse,
   type CharacterStatusEffectResponse,
+  type ClassResponse,
   type EncumbranceResponse,
   type ItemResponse,
   type NamedRef,
@@ -20,7 +21,6 @@ import {
 } from "../api/types";
 import { ApiError } from "../api/client";
 import LevelUpDialog from "./LevelUpDialog";
-import AddClassDialog from "./AddClassDialog";
 import "./CharacterSheet.css";
 
 const fmtMod = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
@@ -61,6 +61,7 @@ export default function CharacterSheet() {
   const [levelingUp, setLevelingUp] = useState(false);
   const [addingClass, setAddingClass] = useState(false);
   const [items, setItems] = useState<ItemResponse[]>([]);
+  const [allClasses, setAllClasses] = useState<ClassResponse[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -76,9 +77,11 @@ export default function CharacterSheet() {
       );
   }, [id]);
 
-  // The item catalog backs the inventory "add" picker (loaded once, optional).
+  // The item catalog backs the inventory "add" picker; the class catalog backs
+  // the Multiclass dialog's "add which class" picker (both loaded once, optional).
   useEffect(() => {
     reference.items().then(setItems).catch(() => setItems([]));
+    reference.classes().then(setAllClasses).catch(() => setAllClasses([]));
   }, []);
 
   if (error)
@@ -312,8 +315,15 @@ export default function CharacterSheet() {
       )}
 
       {addingClass && (
-        <AddClassDialog
-          character={c}
+        <LevelUpDialog
+          characterId={c.id}
+          classes={c.classes}
+          abilityScores={c.abilityScores}
+          skills={c.skills}
+          mode="multiclass"
+          addableClasses={allClasses.filter(
+            (rc) => !c.classes.some((cc) => cc.classId === rc.id),
+          )}
           onClose={() => setAddingClass(false)}
           onApplied={(updated) => {
             setC(updated);

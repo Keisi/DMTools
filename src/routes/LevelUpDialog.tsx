@@ -9,6 +9,7 @@ import {
   type AbilityScoreResponse,
   type CharacterClassResponse,
   type CharacterResponse,
+  type ClassResponse,
   type FeatResponse,
   type FeatureChoiceResponse,
   type LevelUpApplyRequest,
@@ -16,6 +17,7 @@ import {
   type LevelUpSpellPoolEntryResponse,
   type SkillBonusResponse,
 } from "../api/types";
+import { MAX_TOTAL_LEVEL } from "./CharacterBuilder.steps";
 import "./LevelUpDialog.css";
 
 // At an ASI level a character either bumps ability scores or takes a feat — never both.
@@ -27,12 +29,25 @@ type AsiMode = "asi" | "feat";
  * POST .../levelup/apply. On success it hands the updated character back so the
  * sheet re-renders. At an ASI level the player chooses between distributing two
  * ability points or taking a feat; HP, subclass, and spell picks are all handled.
+ *
+ * In `mode: "multiclass"` it adds a class the character doesn't have yet (the
+ * engine accepts an unowned classId and plans it as that class's first level —
+ * fromLevel 0 → 1), so the new class's L1 HP, subclass, spells, and feature
+ * sub-choices (Fighter→Fighting Style, Rogue→Expertise) all flow through the
+ * same plan/apply machinery. The picker then lists `addableClasses` instead of
+ * the owned classes. The engine grants RAW-correct multiclass proficiencies
+ * (backend migration 041); the remaining DM-tool approximations — surfaced as a
+ * hint here — are that multiclass ability prerequisites (13+) aren't enforced
+ * and the "choose a skill/instrument" multiclass grants (Bard/Rogue/Ranger)
+ * aren't auto-applied (add via Edit).
  */
 export default function LevelUpDialog({
   characterId,
   classes,
   abilityScores,
   skills,
+  mode = "levelup",
+  addableClasses = [],
   onClose,
   onApplied,
 }: {
@@ -40,11 +55,24 @@ export default function LevelUpDialog({
   classes: CharacterClassResponse[];
   abilityScores: AbilityScoreResponse[];
   skills: SkillBonusResponse[];
+  mode?: "levelup" | "multiclass";
+  addableClasses?: ClassResponse[];
   onClose: () => void;
   onApplied: (updated: CharacterResponse) => void;
 }) {
+  const multiclass = mode === "multiclass";
+  // Picker option list + initial selection differ by mode: level-up advances an
+  // owned class (auto-select when there's only one); multiclass adds an unowned
+  // one (auto-select when only one is addable).
+  const pickerOptions = multiclass
+    ? addableClasses.map((c) => ({ id: c.id, label: c.name }))
+    : classes.map((c) => ({ id: c.classId, label: `${c.name} ${c.level}` }));
+  const showPicker = multiclass || classes.length > 1;
+  const currentTotal = classes.reduce((sum, c) => sum + c.level, 0);
+  const atCap = multiclass && currentTotal >= MAX_TOTAL_LEVEL;
+
   const [classId, setClassId] = useState<string | null>(
-    classes.length === 1 ? classes[0].classId : null,
+    pickerOptions.length === 1 && !atCap ? pickerOptions[0].id : null,
   );
   const [plan, setPlan] = useState<LevelUpPlanResponse | null>(null);
   // Which class `plan`/`error` currently reflect; while it lags classId we're loading.
@@ -267,15 +295,37 @@ export default function LevelUpDialog({
         aria-label="Level up"
       >
         <header className="lvl__head">
-          <h2>Level Up</h2>
+          <h2>{multiclass ? "Multiclass" : "Level Up"}</h2>
           <button className="btn btn--ghost" onClick={onClose}>
             Close
           </button>
         </header>
 
-        {classes.length > 1 && (
+        {multiclass && (
+          <p className="text-faint lvl__hint">
+            Add a class at level 1 (total {currentTotal}/{MAX_TOTAL_LEVEL}). 5e
+            requires 13+ in both your current and the new class's key abilities —
+            this tool doesn't enforce that. A "choose a skill/instrument"
+            multiclass grant (Bard/Rogue/Ranger) isn't added automatically — set
+            it via Edit. Advance the class later with Level Up.
+          </p>
+        )}
+
+        {atCap && (
+          <p className="text-faint">
+            At the level cap ({MAX_TOTAL_LEVEL}) — you can't add another class.
+          </p>
+        )}
+        {multiclass && !atCap && addableClasses.length === 0 && (
+          <p className="text-faint">
+            No other classes available to add (still loading, or this character
+            already has every class).
+          </p>
+        )}
+
+        {showPicker && !atCap && (!multiclass || addableClasses.length > 0) && (
           <ClassPicker
-            classes={classes}
+            options={pickerOptions}
             selected={classId}
             onPick={setClassId}
           />
@@ -367,7 +417,11 @@ export default function LevelUpDialog({
                 disabled={!canApply}
                 onClick={apply}
               >
-                {busy ? "Applying..." : `Apply — Level ${plan.toLevel}`}
+                {busy
+                  ? "Applying..."
+                  : multiclass
+                    ? `Add ${plan.className}`
+                    : `Apply — Level ${plan.toLevel}`}
               </button>
             </div>
           </>
@@ -392,25 +446,23 @@ function toggle(
 }
 
 function ClassPicker({
-  classes,
+  options,
   selected,
   onPick,
 }: {
-  classes: CharacterClassResponse[];
+  options: { id: string; label: string }[];
   selected: string | null;
   onPick: (id: string) => void;
 }) {
   return (
     <div className="lvl__classes">
-      {classes.map((c) => (
+      {options.map((o) => (
         <button
-          key={c.classId}
-          className={
-            "lvl__class" + (c.classId === selected ? " lvl__class--on" : "")
-          }
-          onClick={() => onPick(c.classId)}
+          key={o.id}
+          className={"lvl__class" + (o.id === selected ? " lvl__class--on" : "")}
+          onClick={() => onPick(o.id)}
         >
-          {c.name} {c.level}
+          {o.label}
         </button>
       ))}
     </div>
