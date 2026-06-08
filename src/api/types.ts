@@ -554,6 +554,17 @@ export interface CharacterRequest extends CharacterDetails {
   statusEffects?: CharacterStatusEffectRequest[] | null;
 }
 
+// Focused spell-list update (PUT /api/character/{id}/spells, backend 827c50d).
+// Full replacement of the known/prepared list — cantripIds + spellIds are unioned
+// (the stored list is flat; a spell's own level distinguishes a cantrip). Both
+// optional; {} or empty arrays clears the list. Existence-checked only (no count
+// or class-list gate). Returns 200 + the updated CharacterResponse. Safer than a
+// whole-character PUT for spell edits — it touches only the spell list.
+export interface UpdateSpellsRequest {
+  cantripIds?: string[] | null;
+  spellIds?: string[] | null;
+}
+
 // Play-time inventory ops (mutate one stack; the whole-character PUT also works).
 export interface InventoryAddRequest {
   itemId: string;

@@ -21,6 +21,7 @@ import {
 } from "../api/types";
 import { ApiError } from "../api/client";
 import LevelUpDialog from "./LevelUpDialog";
+import ManageSpellsDialog from "./ManageSpellsDialog";
 import "./CharacterSheet.css";
 
 const fmtMod = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
@@ -60,6 +61,7 @@ export default function CharacterSheet() {
   const [error, setError] = useState<string | null>(null);
   const [levelingUp, setLevelingUp] = useState(false);
   const [addingClass, setAddingClass] = useState(false);
+  const [managingSpells, setManagingSpells] = useState(false);
   const [items, setItems] = useState<ItemResponse[]>([]);
   const [allClasses, setAllClasses] = useState<ClassResponse[]>([]);
 
@@ -196,6 +198,11 @@ export default function CharacterSheet() {
             <button className="btn" onClick={() => setAddingClass(true)}>
               Multiclass
             </button>
+            {c.spellcasting.length > 0 && (
+              <button className="btn" onClick={() => setManagingSpells(true)}>
+                Manage Spells
+              </button>
+            )}
           </div>
         </div>
         <div className="sheet__vitals">
@@ -328,6 +335,19 @@ export default function CharacterSheet() {
           onApplied={(updated) => {
             setC(updated);
             setAddingClass(false);
+          }}
+        />
+      )}
+
+      {managingSpells && (
+        <ManageSpellsDialog
+          characterId={c.id}
+          spells={c.spells}
+          spellcasting={c.spellcasting}
+          onClose={() => setManagingSpells(false)}
+          onApplied={(updated) => {
+            setC(updated);
+            setManagingSpells(false);
           }}
         />
       )}

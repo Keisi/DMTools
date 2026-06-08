@@ -27,6 +27,7 @@ import type {
   SkillResponse,
   SpellResponse,
   StatResponse,
+  UpdateSpellsRequest,
   WeaponResponse,
 } from "./types";
 
@@ -54,6 +55,12 @@ export const characters = {
     api.post<LevelUpPlanResponse>(`/api/character/${id}/levelup/plan`, req),
   levelUpApply: (id: string, req: LevelUpApplyRequest) =>
     api.post<CharacterResponse>(`/api/character/${id}/levelup/apply`, req),
+
+  // Replace the whole known/prepared spell list (cantrips + levelled) in one call
+  // — the safe write path for spell edits outside the full builder. Returns the
+  // updated character.
+  updateSpells: (id: string, body: UpdateSpellsRequest) =>
+    api.put<CharacterResponse>(`/api/character/${id}/spells`, body),
 
   inventoryAdd: (id: string, body: InventoryAddRequest) =>
     api.post<CharacterResponse>(`/api/character/${id}/inventory/add`, body),
