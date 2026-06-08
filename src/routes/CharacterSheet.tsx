@@ -16,6 +16,7 @@ import {
   type ItemResponse,
   type NamedRef,
   type SpellRef,
+  type SpellResponse,
   type SpellcastingResponse,
   type WeaponAttackResponse,
 } from "../api/types";
@@ -67,6 +68,7 @@ export default function CharacterSheet() {
   const [editingHp, setEditingHp] = useState(false);
   const [items, setItems] = useState<ItemResponse[]>([]);
   const [allClasses, setAllClasses] = useState<ClassResponse[]>([]);
+  const [spellCatalog, setSpellCatalog] = useState<SpellResponse[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -87,7 +89,18 @@ export default function CharacterSheet() {
   useEffect(() => {
     reference.items().then(setItems).catch(() => setItems([]));
     reference.classes().then(setAllClasses).catch(() => setAllClasses([]));
+    // Spell catalog backs the dice/save display in the Spellcasting block (the
+    // character's spell refs are thin; we join by id to the catalog's fields).
+    reference.spells().then(setSpellCatalog).catch(() => setSpellCatalog([]));
   }, []);
+
+  // Known spells joined to their catalog combat fields (Tier 1). Tier 2 will add
+  // per-character computed dice onto the spell refs themselves; consume via the
+  // spellCombat() resolver so only that resolver changes, not this wiring.
+  const spellsById = useMemo(
+    () => new Map(spellCatalog.map((s) => [s.id, s])),
+    [spellCatalog],
+  );
 
   if (error)
     return (
@@ -309,6 +322,7 @@ export default function CharacterSheet() {
         <SpellcastingBlock
           spellcasting={c.spellcasting}
           spells={c.spells}
+          spellsById={spellsById}
           modByName={modByName}
           prof={prof}
         />
@@ -566,14 +580,62 @@ function ResourcesBlock({
   );
 }
 
+// Normalized spell combat descriptor. Tier 1 reads the catalog SpellResponse;
+// when Tier 2 ships per-character computed dice on the character's spell refs,
+// change ONLY this resolver to prefer those — the render below stays the same.
+type SpellCombat = {
+  dice: string | null; // damage or healing dice to display
+  isHealing: boolean;
+  damageType: string | null;
+  mode: "attack" | "save" | null; // spell-attack roll vs saving throw vs neither
+  saveAbility: string | null;
+  scaling: string | null; // free-text scaling note (tooltip)
+};
+function spellCombat(s: SpellResponse): SpellCombat {
+  return {
+    dice: s.damageDice ?? s.healingDice ?? null,
+    isHealing: !s.damageDice && !!s.healingDice,
+    damageType: s.damageType?.name ?? null,
+    mode: s.usesSpellAttack ? "attack" : s.saveStatId ? "save" : null,
+    saveAbility: s.saveAbility ?? null,
+    scaling: s.scalingDice ?? null,
+  };
+}
+// Compact right-side summary, e.g. "1d10 Fire · atk" or "8d6 Fire · DEX save".
+function spellInline(c: SpellCombat): string {
+  const parts: string[] = [];
+  if (c.dice)
+    parts.push(
+      c.dice + (c.damageType ? ` ${c.damageType}` : "") + (c.isHealing ? " heal" : ""),
+    );
+  if (c.mode === "attack") parts.push("atk");
+  else if (c.mode === "save") parts.push(`${c.saveAbility ?? "save"} save`);
+  return parts.join(" · ");
+}
+function spellTip(s: SpellResponse, c: SpellCombat): string {
+  const lines: string[] = [];
+  if (c.dice)
+    lines.push(
+      `${c.isHealing ? "Healing" : "Damage"} ${c.dice}${c.damageType ? ` ${c.damageType}` : ""}`,
+    );
+  if (c.mode === "attack") lines.push("Spell attack roll");
+  else if (c.mode === "save") lines.push(`${c.saveAbility ?? "ability"} saving throw`);
+  if (c.scaling) lines.push(`Scaling: ${c.scaling}`);
+  if (s.range) lines.push(`Range ${s.range}`);
+  if (s.castingTime) lines.push(`Cast ${s.castingTime}`);
+  return lines.join("\n");
+}
+
 function SpellcastingBlock({
   spellcasting,
   spells,
+  spellsById,
   modByName,
   prof,
 }: {
   spellcasting: SpellcastingResponse[];
   spells: SpellRef[];
+  spellsById: Map<string, SpellResponse>;
   modByName: Map<string, number>;
   prof: number;
 }) {
@@ -606,11 +668,34 @@ function SpellcastingBlock({
         </div>
       ))}
       {spells.length > 0 && (
-        <p className="text-muted sheet__spelllist">
-          {spells
-            .map((s) => (s.level === 0 ? s.name : `${s.name} (L${s.level})`))
-            .join(", ")}
-        </p>
+        <ul className="prof-list sheet__spelllist">
+          {[...spells]
+            .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name))
+            .map((s) => {
+              const cat = spellsById.get(s.id);
+              const combat = cat ? spellCombat(cat) : null;
+              const inline = combat ? spellInline(combat) : "";
+              return (
+                <li
+                  key={s.id}
+                  className={"prof-list__row" + (inline ? " tip" : "")}
+                  data-tooltip={
+                    inline && cat ? spellTip(cat, combat!) : undefined
+                  }
+                >
+                  <span className="prof-list__name">
+                    {s.name}
+                    {s.level > 0 && (
+                      <span className="text-faint"> · L{s.level}</span>
+                    )}
+                  </span>
+                  {inline && (
+                    <span className="prof-list__val text-faint">{inline}</span>
+                  )}
+                </li>
+              );
+            })}
+        </ul>
       )}
     </section>
   );
