@@ -663,29 +663,24 @@ function SpellcastingBlock({
           <p className="prof-list__name">{sc.class}</p>
           <p className="text-faint">
             {sc.ability} · save DC {sc.saveDc} · atk {fmtMod(sc.spellAttackBonus)}
-            {sc.spellSlots.length > 0 && (
-              <>
-                {" "}
-                · slots{" "}
-                {sc.spellSlots.map((s) => `L${s.level}×${s.count}`).join(", ")}
-              </>
-            )}
           </p>
         </div>
       ))}
-      {spells.length > 0 &&
-        spellLevelGroups(spells).map((g) => (
-          <div key={g.level} className="sheet__spell-group">
-            <h4 className="sheet__spell-level">
-              {g.level === 0 ? "Cantrips" : `Level ${g.level}`}
-              {slotsByLevel.has(g.level) && (
-                <span className="text-faint">
-                  {" "}
-                  · {slotsByLevel.get(g.level)} slot
-                  {slotsByLevel.get(g.level) === 1 ? "" : "s"}
-                </span>
-              )}
-            </h4>
+      {spellLevelGroups(spells, slotsByLevel).map((g) => (
+        <div key={g.level} className="sheet__spell-group">
+          <h4 className="sheet__spell-level">
+            {g.level === 0 ? "Cantrips" : `Level ${g.level}`}
+            {slotsByLevel.has(g.level) && (
+              <span className="text-faint">
+                {" "}
+                · {slotsByLevel.get(g.level)} slot
+                {slotsByLevel.get(g.level) === 1 ? "" : "s"}
+              </span>
+            )}
+          </h4>
+          {g.spells.length === 0 ? (
+            <p className="text-faint sheet__spelllist">No spells prepared.</p>
+          ) : (
             <ul className="prof-list sheet__spelllist">
               {g.spells.map((s) => {
                 const cat = spellsById.get(s.id);
@@ -707,23 +702,32 @@ function SpellcastingBlock({
                 );
               })}
             </ul>
-          </div>
-        ))}
+          )}
+        </div>
+      ))}
     </section>
   );
 }
 
-// Group known spells by spell level (ascending), each group's spells sorted by name.
+// Spell-level groups (ascending): every level the character has unlocked (a slot
+// for) plus any level that has known spells, so an unlocked-but-empty level still
+// shows (with a "no spells prepared" note). Cantrips (0) appear only when known.
 function spellLevelGroups(
   spells: SpellRef[],
+  slotsByLevel: Map<number, number>,
 ): { level: number; spells: SpellRef[] }[] {
-  const levels = [...new Set(spells.map((s) => s.level))].sort((a, b) => a - b);
-  return levels.map((level) => ({
-    level,
-    spells: spells
-      .filter((s) => s.level === level)
-      .sort((a, b) => a.name.localeCompare(b.name)),
-  }));
+  const levelSet = new Set<number>([
+    ...spells.map((s) => s.level),
+    ...slotsByLevel.keys(),
+  ]);
+  return [...levelSet]
+    .sort((a, b) => a - b)
+    .map((level) => ({
+      level,
+      spells: spells
+        .filter((s) => s.level === level)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    }));
 }
 
 function FeaturesBlock({ features }: { features: CharacterFeatureResponse[] }) {
