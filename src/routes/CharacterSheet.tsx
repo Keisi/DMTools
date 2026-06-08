@@ -662,7 +662,8 @@ function SpellcastingBlock({
         >
           <p className="prof-list__name">{sc.class}</p>
           <p className="text-faint">
-            {sc.ability} · save DC {sc.saveDc} · atk {fmtMod(sc.spellAttackBonus)}
+            {sc.ability} · save DC {sc.saveDc} · spell atk{" "}
+            {fmtMod(sc.spellAttackBonus)}
           </p>
         </div>
       ))}
