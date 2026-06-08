@@ -809,12 +809,24 @@ function SpellChoice({
   onToggle: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  // Hide when there's nothing to show: an empty pool, or an explicit "choose 0"
-  // (e.g. Bard 1->2 grants no new cantrip — known count is unchanged at this
-  // level). `count` null/undefined is the prepared-caster "known list" case,
-  // which still renders as informational below.
+  // Hide when there's nothing to choose: an empty pool, or an explicit "choose 0"
+  // (e.g. Bard 1->2 grants no new cantrip — known count is unchanged at this level).
   if (pool.length === 0 || count === 0) return null;
-  const informational = isUnset(count);
+  // `count` null/undefined is the prepared-caster case: per the backend contract
+  // there's no known-spell step (you prepare from the full list). Don't render a
+  // disabled pick-list (reads as broken) — show a short note instead.
+  if (isUnset(count)) {
+    return (
+      <section className="lvl__block">
+        <h3 className="lvl__block-title">{title}</h3>
+        <p className="text-faint lvl__hint">
+          Prepared caster — {title.toLowerCase()} come from this class's full
+          list rather than a fixed known set, so there's nothing to choose at
+          level-up.
+        </p>
+      </section>
+    );
+  }
   const q = query.trim().toLowerCase();
   // Filter the pool by name; always keep already-selected entries visible so a
   // search can't hide a pick. Casting pools get large, so a filter matters here.
@@ -824,10 +836,7 @@ function SpellChoice({
   return (
     <section className="lvl__block">
       <h3 className="lvl__block-title">
-        {title}
-        {!informational
-          ? ` — choose ${count} (${selected.length}/${count})`
-          : " (known list)"}
+        {title} — choose {count} ({selected.length}/{count})
       </h3>
       {pool.length > 8 && (
         <input
@@ -844,7 +853,6 @@ function SpellChoice({
             <button
               key={s.id}
               className={"lvl__option" + (on ? " lvl__option--on" : "")}
-              disabled={informational}
               onClick={() => onToggle(s.id)}
             >
               {s.name}
