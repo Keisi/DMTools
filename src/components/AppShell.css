@@ -74,3 +74,28 @@
 .shell__main {
   animation: fade-in var(--dur-base) var(--ease-out);
 }
+
+/* Keep the auth action (Sign out / Log in) on a single line — it was wrapping
+   to two lines in the sticky nav at mobile widths, blowing out the fixed nav
+   height and eating the right edge. */
+.shell__actions .btn {
+  white-space: nowrap;
+}
+
+/* Mobile: brand wordmark + links + action don't all fit on one row, so the bar
+   overflowed. Tighten the gaps and drop the "DMTool" wordmark (the d20 mark
+   stays as the home affordance) so everything fits on one line. */
+@media (max-width: 560px) {
+  .shell__nav-inner {
+    gap: var(--sp-3);
+  }
+  .shell__brand-text {
+    display: none;
+  }
+  .shell__links {
+    gap: var(--sp-1);
+  }
+  .shell__link {
+    padding: var(--sp-2);
+  }
+}
