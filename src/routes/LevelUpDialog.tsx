@@ -734,7 +734,11 @@ function SpellChoice({
   onToggle: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  if (pool.length === 0) return null;
+  // Hide when there's nothing to show: an empty pool, or an explicit "choose 0"
+  // (e.g. Bard 1->2 grants no new cantrip — known count is unchanged at this
+  // level). `count` null/undefined is the prepared-caster "known list" case,
+  // which still renders as informational below.
+  if (pool.length === 0 || count === 0) return null;
   const informational = isUnset(count);
   const q = query.trim().toLowerCase();
   // Filter the pool by name; always keep already-selected entries visible so a
