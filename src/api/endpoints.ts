@@ -27,6 +27,7 @@ import type {
   SkillResponse,
   SpellResponse,
   StatResponse,
+  UpdateHpRequest,
   UpdateSpellsRequest,
   WeaponResponse,
 } from "./types";
@@ -61,6 +62,11 @@ export const characters = {
   // updated character.
   updateSpells: (id: string, body: UpdateSpellsRequest) =>
     api.put<CharacterResponse>(`/api/character/${id}/spells`, body),
+
+  // Set/clear the HP override (number sets, null clears -> derived). Returns the
+  // updated character — the safe focused write path for the Edit HP quick-action.
+  updateHp: (id: string, body: UpdateHpRequest) =>
+    api.put<CharacterResponse>(`/api/character/${id}/hp`, body),
 
   inventoryAdd: (id: string, body: InventoryAddRequest) =>
     api.post<CharacterResponse>(`/api/character/${id}/inventory/add`, body),

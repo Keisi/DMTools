@@ -100,6 +100,7 @@ export const SelectionType = {
   Expertise: 5,
   Metamagic: 6,
   EldritchInvocation: 7,
+  Tool: 8,
 } as const;
 export type SelectionType = (typeof SelectionType)[keyof typeof SelectionType];
 
@@ -224,6 +225,17 @@ export interface SpellResponse {
   ritual: boolean;
   higherLevel?: string | null;
   classes: string[];
+  // Structured combat fields (backend mig. 049; all nullable/best-effort). A spell
+  // is either usesSpellAttack OR has a saveStatId, or neither (utility). scalingDice
+  // is free text. Tier 2 (per-character computed dice) will layer onto these without
+  // changing the shape — consume via a resolver, not these fields directly.
+  damageDice?: string | null;
+  damageType?: NamedRef | null;
+  healingDice?: string | null;
+  scalingDice?: string | null;
+  usesSpellAttack: boolean;
+  saveStatId?: string | null;
+  saveAbility?: string | null;
 }
 
 export interface ItemResponse {
@@ -563,6 +575,13 @@ export interface CharacterRequest extends CharacterDetails {
 export interface UpdateSpellsRequest {
   cantripIds?: string[] | null;
   spellIds?: string[] | null;
+}
+
+// Focused HP-override update (PUT /api/character/{id}/hp, backend mig.-less #10).
+// A number (1-9999) sets the override; null clears it (HP reverts to
+// derivedMaxHitPoints). Returns 200 + the updated CharacterResponse.
+export interface UpdateHpRequest {
+  hitPointsOverride: number | null;
 }
 
 // Play-time inventory ops (mutate one stack; the whole-character PUT also works).
@@ -913,6 +932,11 @@ export interface LevelUpPlanResponse {
   featureChoices: FeatureChoiceResponse[];
   // Non-null only on a multiclass-in; null when advancing an owned class.
   multiclassPrerequisite?: MulticlassPrerequisiteResponse | null;
+  // RAW reduced multiclass choice-grants (backend mig. 048): populated only on a
+  // multiclass-in into a class that offers them (Bard skill + instrument, Ranger/
+  // Rogue skill); [] otherwise. Each is a SelectionResponse with inline options
+  // (type 1 = Skill, type 8 = Tool). Echo picks back as multiclassChoices on apply.
+  multiclassGrants: SelectionResponse[];
   gainedFeatures: CharacterFeatureResponse[];
   gainedResources: CharacterResourceResponse[];
   newSpellSlots: SpellSlotResponse[];
@@ -942,5 +966,8 @@ export interface LevelUpApplyRequest {
   cantripIds?: string[] | null;
   spellIds?: string[] | null;
   featureChoices?: FeatureChoiceApply[] | null;
+  // Picks for the plan's multiclassGrants (same {selectionId, optionIds} shape as
+  // featureChoices). Empty picks are allowed (DM may fill later).
+  multiclassChoices?: FeatureChoiceApply[] | null;
   allowHomebrewSelections?: boolean;
 }
