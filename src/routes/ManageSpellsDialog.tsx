@@ -2,13 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { characters, reference } from "../api/endpoints";
 import { ApiError } from "../api/client";
-import type {
-  CharacterResponse,
-  SpellcastingResponse,
-  SpellRef,
-  SpellResponse,
-} from "../api/types";
+import type { CharacterResponse, SpellResponse } from "../api/types";
 import "./ManageSpellsDialog.css";
+
+const abilityMod = (effective: number) => Math.floor((effective - 10) / 2);
 
 /**
  * Quick spell editor opened from the sheet — a lighter path than the full Edit
@@ -17,24 +14,22 @@ import "./ManageSpellsDialog.css";
  * known/prepared list with exactly the ids sent and returns the updated
  * character (existence-checked only, no count/class gate — a DM may pick freely).
  *
- * The pool is the spells available to the character's caster classes (from
- * spellcasting[].class), split into cantrips (level 0) and levelled spells.
- * Selections are uncapped: for prepared casters this is "which spells are
- * prepared", for known casters it's the known list — either way the DM owns it.
+ * Selection is uncapped (DM tool), but we surface the rules-as-written target per
+ * tier so the player knows how many they "should" have: cantrips = cantripsKnown;
+ * levelled = spellsKnown for known casters, or (casting mod + class level) for
+ * prepared casters (Cleric/Druid/Wizard). Exceeding it shows a soft warning, not
+ * a block. The levelled list is grouped by spell level to tame its length.
  */
 export default function ManageSpellsDialog({
-  characterId,
-  spells: current,
-  spellcasting,
+  character,
   onClose,
   onApplied,
 }: {
-  characterId: string;
-  spells: SpellRef[];
-  spellcasting: SpellcastingResponse[];
+  character: CharacterResponse;
   onClose: () => void;
   onApplied: (updated: CharacterResponse) => void;
 }) {
+  const { id: characterId, spells: current, spellcasting } = character;
   const [catalog, setCatalog] = useState<SpellResponse[]>([]);
   const [cantripIds, setCantripIds] = useState<string[]>(
     current.filter((s) => s.level === 0).map((s) => s.id),
@@ -78,12 +73,47 @@ export default function ManageSpellsDialog({
     return { cantripPool: cantrips, spellPool: levelled };
   }, [catalog, spellcasting, current]);
 
-  // Advisory cantrip target (sum of cantripsKnown across caster classes), shown
-  // as guidance only — selection isn't capped.
-  const cantripTarget = spellcasting.reduce(
-    (sum, sc) => sum + (sc.cantripsKnown ?? 0),
-    0,
-  );
+  // Rules-as-written targets (advisory; selection isn't capped). Cantrips are
+  // KNOWN for every caster. Levelled: known casters expose spellsKnown; prepared
+  // casters prepare (casting-ability mod + class level), which the API doesn't
+  // return, so derive it from the character's scores + caster levels.
+  const { cantripTarget, spellTarget, spellTargetLabel } = useMemo(() => {
+    const modByName = new Map(
+      character.abilityScores.map((a) => [a.name, abilityMod(a.effective)]),
+    );
+    const levelByClass = new Map(
+      character.classes.map((c) => [c.name, c.level]),
+    );
+    let cantrips = 0;
+    let spells = 0;
+    let anyPrepared = false;
+    let anyKnown = false;
+    for (const sc of spellcasting) {
+      cantrips += sc.cantripsKnown ?? 0;
+      const known = sc.spellsKnown;
+      if (known === null || known === undefined) {
+        // Prepared caster: prepares (mod + class level), minimum 1.
+        const mod = modByName.get(sc.ability) ?? 0;
+        const lvl = levelByClass.get(sc.class) ?? 0;
+        spells += Math.max(1, mod + lvl);
+        anyPrepared = true;
+      } else {
+        spells += known;
+        anyKnown = true;
+      }
+    }
+    const label =
+      anyPrepared && !anyKnown
+        ? "prepared"
+        : anyKnown && !anyPrepared
+          ? "known"
+          : "suggested";
+    return {
+      cantripTarget: cantrips,
+      spellTarget: spells,
+      spellTargetLabel: label,
+    };
+  }, [character.abilityScores, character.classes, spellcasting]);
 
   async function save() {
     setBusy(true);
@@ -125,8 +155,8 @@ export default function ManageSpellsDialog({
           <>
             <p className="text-faint mng__hint">
               Editing spells for {spellcasting.map((sc) => sc.class).join(", ")}.
-              Selections aren't capped — prepared casters prepare from their full
-              list, so pick whatever's prepared. Saving replaces the whole list.
+              The counts below are what 5e suggests; selection isn't capped, so a
+              DM can prepare/swap freely. Saving replaces the whole list.
             </p>
 
             <SpellList
@@ -135,12 +165,17 @@ export default function ManageSpellsDialog({
               selected={cantripIds}
               onToggle={(id) => toggle(setCantripIds, id)}
               target={cantripTarget > 0 ? cantripTarget : undefined}
+              targetLabel="known"
+              groupByLevel={false}
             />
             <SpellList
               title="Spells"
               pool={spellPool}
               selected={spellIds}
               onToggle={(id) => toggle(setSpellIds, id)}
+              target={spellTarget > 0 ? spellTarget : undefined}
+              targetLabel={spellTargetLabel}
+              groupByLevel
             />
 
             {error && <p className="mng__error">{error}</p>}
@@ -170,19 +205,25 @@ function toggle(
   );
 }
 
-// A searchable, uncapped toggle list for one spell tier.
+// A searchable, uncapped toggle list for one spell tier. Shows an advisory
+// target + a soft over-selection warning, and (for levelled spells) groups the
+// options under per-spell-level headings so a long list stays scannable.
 function SpellList({
   title,
   pool,
   selected,
   onToggle,
   target,
+  targetLabel,
+  groupByLevel,
 }: {
   title: string;
   pool: SpellResponse[];
   selected: string[];
   onToggle: (id: string) => void;
   target?: number;
+  targetLabel: string;
+  groupByLevel: boolean;
 }) {
   const [query, setQuery] = useState("");
   if (pool.length === 0) return null;
@@ -193,15 +234,33 @@ function SpellList({
         (s) => selected.includes(s.id) || s.name.toLowerCase().startsWith(q),
       )
     : pool;
+  const over = target !== undefined && selected.length > target;
+
+  // Group by spell level for the levelled list; cantrips render as one group.
+  const groups = groupByLevel
+    ? [...new Map(shown.map((s) => [s.level, true])).keys()]
+        .sort((a, b) => a - b)
+        .map((lvl) => ({
+          label: `Level ${lvl}`,
+          items: shown.filter((s) => s.level === lvl),
+        }))
+    : [{ label: "", items: shown }];
+
   return (
     <section className="mng__block">
       <h3 className="mng__block-title">
-        {title} <span className="text-faint">({selected.length} selected</span>
-        {target !== undefined && (
-          <span className="text-faint"> · {target} known</span>
-        )}
-        <span className="text-faint">)</span>
+        {title}{" "}
+        <span className="text-faint">
+          ({selected.length} selected
+          {target !== undefined && ` · ${target} ${targetLabel}`})
+        </span>
       </h3>
+      {over && (
+        <p className="mng__warn">
+          ⚠ {selected.length} selected — more than the {target} {targetLabel}.
+          Allowed (DM override), but double-check it's intended.
+        </p>
+      )}
       {pool.length > 8 && (
         <input
           className="input mng__search"
@@ -210,23 +269,27 @@ function SpellList({
           onChange={(e) => setQuery(e.target.value)}
         />
       )}
-      <div className="mng__options">
-        {shown.map((s) => {
-          const on = selected.includes(s.id);
-          return (
-            <button
-              key={s.id}
-              type="button"
-              className={"mng__option" + (on ? " mng__option--on" : "")}
-              onClick={() => onToggle(s.id)}
-            >
-              {s.name}
-              {s.level > 0 && <span className="text-faint"> · L{s.level}</span>}
-            </button>
-          );
-        })}
-        {shown.length === 0 && <span className="text-faint">No matches.</span>}
-      </div>
+      {shown.length === 0 && <span className="text-faint">No matches.</span>}
+      {groups.map((g) => (
+        <div key={g.label || "all"} className="mng__group">
+          {g.label && <h4 className="mng__group-title">{g.label}</h4>}
+          <div className="mng__options">
+            {g.items.map((s) => {
+              const on = selected.includes(s.id);
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={"mng__option" + (on ? " mng__option--on" : "")}
+                  onClick={() => onToggle(s.id)}
+                >
+                  {s.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </section>
   );
 }

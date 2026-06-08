@@ -54,6 +54,23 @@
   margin-bottom: var(--sp-3);
 }
 
+/* Soft over-selection warning (selection is uncapped — this is guidance only). */
+.mng__warn {
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  margin: 0 0 var(--sp-3);
+}
+
+/* Per-spell-level grouping so a long levelled list stays scannable. */
+.mng__group + .mng__group {
+  margin-top: var(--sp-3);
+}
+.mng__group-title {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin-bottom: var(--sp-2);
+}
+
 .mng__options {
   display: flex;
   flex-wrap: wrap;

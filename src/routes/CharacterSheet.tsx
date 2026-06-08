@@ -341,9 +341,7 @@ export default function CharacterSheet() {
 
       {managingSpells && (
         <ManageSpellsDialog
-          characterId={c.id}
-          spells={c.spells}
-          spellcasting={c.spellcasting}
+          character={c}
           onClose={() => setManagingSpells(false)}
           onApplied={(updated) => {
             setC(updated);
