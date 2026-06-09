@@ -770,6 +770,99 @@ Your doc flagged Tier 2 as optional ("adopt later without a frontend rewrite"). 
 
 Resolves the Tier 2 request you flagged as optional in #11. The `spellCombat()` resolver path you described now has machine-readable data to work with.
 
+---
+
+# INCOMING #13 — Subraces vertical DONE (9 SRD subraces + race weapon profs)
+
+**DB `DMTools_local` through migration 051. Build 0 errors. Migration 051 idempotent. Live smoke-test green.**
+
+## What changed
+
+### `GET /api/races` — response shape updated (additive)
+
+`RaceResponse` gains two new fields:
+
+```ts
+subraces: SubraceResponse[]     // empty array for races with no subraces
+```
+
+`AbilityScoreResponse` (inside CharacterResponse) gains a new breakdown field:
+
+```ts
+subraceModifier: number         // was missing before; now explicit (0 for no-subrace)
+```
+
+**`SubraceResponse` shape:**
+```ts
+interface SubraceResponse {
+  id: string
+  raceId: string
+  name: string
+  description: string | null
+  abilityModifiers: { statId: string; stat: string; modifier: number }[]
+  bonusHpPerLevel: number       // Hill Dwarf = 1; others = 0
+  walkingSpeedBonus: number     // Wood Elf = 5; others = 0
+  darkvisionOverride: number    // Dark Elf = 120 (replaces/beats race base); 0 = inherit
+  traits: { name: string; description: string | null }[]
+}
+```
+
+### `CharacterResponse` — new field (additive)
+
+```ts
+subrace: { id: string; name: string } | null   // null when no subrace chosen
+```
+
+### `GET/POST /api/character` — SubraceId now accepted
+
+`CharacterRequest` gains:
+
+```ts
+subraceId?: string | null   // must belong to the selected race; validated server-side
+```
+
+### New endpoint: `POST /api/races/{raceId}/subraces`
+
+Homebrew: add a custom subrace. Body: `SubraceCreateRequest` (name, abilityModifiers, bonusHpPerLevel, walkingSpeedBonus, darkvisionOverride, weaponProficiencies, armorProficiencies, languageIds, traits).
+
+## Seeded SRD subraces (all 9)
+
+| Subrace | Race | +Stat | Special |
+|---|---|---|---|
+| Hill Dwarf | Dwarf | +1 WIS | +1 HP/level |
+| Mountain Dwarf | Dwarf | +2 STR | Light + Medium armor profs |
+| High Elf | Elf | +1 INT | Traits: Cantrip, Extra Language |
+| Wood Elf | Elf | +1 WIS | +5 ft walk speed (35 total) |
+| Dark Elf | Elf | +1 CHA | Darkvision 120 ft; rapier/shortsword/hand crossbow profs |
+| Lightfoot Halfling | Halfling | +1 CHA | Naturally Stealthy trait |
+| Stout Halfling | Halfling | +1 CON | Stout Resilience trait |
+| Forest Gnome | Gnome | +1 DEX | Natural Illusionist, Speak with Small Beasts |
+| Rock Gnome | Gnome | +1 CON | Artificer's Lore, Tinker |
+
+## Race-level weapon proficiencies now modeled
+
+Previously unmodeled. Now the `Character`'s `weaponProficiencies` derived value includes racial grants:
+
+- **Dwarf**: Battleaxe, Handaxe, Light Hammer, Warhammer
+- **Elf**: Longsword, Shortsword, Shortbow, Longbow
+
+These appear in the `weaponProficiencies.weapons` list on `CharacterResponse` alongside class grants.
+
+## How subrace modifiers work
+
+`abilityScores[n].subraceModifier` is the subrace's contribution (0 when no subrace). `effective = base + racialModifier + subraceModifier + featModifier + improvementModifier`. The UI should show all three racial/subrace/feat columns separately for clarity.
+
+`darkvisionRange` on the character is `max(race.darkvisionRange, subrace.darkvisionOverride)` — Dark Elf gets 120 even though base Elf is 60.
+
+## Deferred (not modeled yet — traits only)
+
+- High Elf free wizard cantrip choice
+- High Elf extra language choice  
+- Dark Elf Drow Magic racial spells (Dancing Lights / Faerie Fire / Darkness)
+- Forest Gnome Natural Illusionist (Minor Illusion cantrip)
+
+These are described in the `traits` array. The Selection mechanic for these is a future Scope A item.
+
 ## New field on every spell: `scaling`
 
 `GET /api/spells` and `POST /api/spells` (homebrew) now include a `scaling` field alongside the existing `scalingDice` free-text. Non-scaling spells get `scaling: null`.
