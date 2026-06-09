@@ -7,10 +7,11 @@
 #   AZURE_STATIC_WEB_APPS_API_TOKEN  - secret; SWA deployment token
 #   VITE_API_BASE                    - backend URL, NO trailing slash
 #                                      (paths in src/api already start with /api/)
-trigger:
-  branches:
-    include:
-      - main
+#
+# Manual-only: this pipeline does NOT auto-run on commit/push or PR. Deploy by
+# clicking "Run pipeline" in Azure DevOps (Pipelines -> this pipeline -> Run).
+trigger: none
+pr: none
 
 pool:
   vmImage: ubuntu-latest
