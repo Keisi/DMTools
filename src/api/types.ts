@@ -182,6 +182,18 @@ export interface RaceDamageResistanceResponse {
   kind: ResistanceKind;
 }
 
+export interface SubraceResponse {
+  id: string;
+  raceId: string;
+  name: string;
+  description?: string | null;
+  abilityModifiers: RaceAbilityModifierResponse[];
+  bonusHpPerLevel: number;
+  walkingSpeedBonus: number;
+  darkvisionOverride: number;
+  traits: { name: string; description?: string | null }[];
+}
+
 export interface RaceResponse {
   id: string;
   name: string;
@@ -200,6 +212,7 @@ export interface RaceResponse {
   abilityModifiers: RaceAbilityModifierResponse[];
   languages: LanguageResponse[];
   damageResistances: RaceDamageResistanceResponse[];
+  subraces: SubraceResponse[];
 }
 
 export interface SkillResponse {
@@ -520,6 +533,7 @@ export interface CharacterRequest extends CharacterDetails {
   name: string;
   description?: string | null;
   raceId: string;
+  subraceId?: string | null;
   classes: CharacterClassRequest[];
   abilityScores: AbilityScoreRequest[];
   spellSlots: number;
@@ -639,6 +653,7 @@ export interface AbilityScoreResponse {
   name: string;
   base: number;
   racialModifier: number;
+  subraceModifier: number;
   featModifier: number;
   improvementModifier: number;
   effective: number;
@@ -688,6 +703,7 @@ export interface SpellcastingResponse {
   cantripsKnown?: number | null;
   spellsKnown?: number | null;
   spellSlots: SpellSlotResponse[];
+  isPactMagic: boolean;
 }
 
 export interface SpellRef {
@@ -780,6 +796,7 @@ export interface CharacterResponse extends CharacterDetails {
   name: string;
   description?: string | null;
   race?: RaceRef | null;
+  subrace?: { id: string; name: string } | null;
   background?: NamedRef | null;
   edition?: NamedRef | null;
   size: Size;

@@ -91,6 +91,7 @@ export default function CharacterBuilder() {
   const [age, setAge] = useState(0);
   const [alignment, setAlignment] = useState<Alignment>(Alignment.TrueNeutral);
   const [raceId, setRaceId] = useState<string | null>(null);
+  const [subraceId, setSubraceId] = useState<string | null>(null);
   const [picks, setPicks] = useState<CharacterClassRequest[]>([]);
   const [startingClassId, setStartingClassId] = useState<string | null>(null);
   const [abilities, setAbilities] = useState<Record<string, number>>({});
@@ -174,6 +175,7 @@ export default function CharacterBuilder() {
         setAge(ch.age);
         setAlignment(ch.alignment);
         setRaceId(ch.race?.id ?? null);
+        setSubraceId(ch.subrace?.id ?? null);
         setPicks(
           ch.classes.map((c) => ({
             classId: c.classId,
@@ -742,6 +744,7 @@ export default function CharacterBuilder() {
       name: name.trim(),
       description: description.trim() || undefined,
       raceId: raceId!,
+      subraceId: subraceId ?? undefined,
       classes: picks.map((p) => ({
         classId: p.classId,
         level: p.level,
@@ -915,14 +918,33 @@ export default function CharacterBuilder() {
       <StepNav current={step} valid={stepValid} onGo={setStep} />
 
       <div className="panel builder__body anim-fade-in" key={step}>
-        {step === 0 && (
-          <PickList
-            label="race"
-            items={races}
-            selectedId={raceId}
-            onPick={setRaceId}
-          />
-        )}
+        {step === 0 && (() => {
+          const selectedRace = races.find((r) => r.id === raceId) ?? null;
+          return (
+            <>
+              <PickList
+                label="race"
+                items={races}
+                selectedId={raceId}
+                onPick={(id) => {
+                  setRaceId(id);
+                  setSubraceId(null);
+                }}
+              />
+              {selectedRace && selectedRace.subraces.length > 0 && (
+                <div className="builder__subrace">
+                  <h4 className="builder__section-title">Subrace</h4>
+                  <PickList
+                    label="subrace"
+                    items={selectedRace.subraces}
+                    selectedId={subraceId}
+                    onPick={setSubraceId}
+                  />
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {step === 1 && (
           <ClassStep

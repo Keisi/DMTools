@@ -34,12 +34,12 @@ const fmtMod = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
 // (pure 5e formula, not server state).
 const abilityMod = (effective: number) => Math.floor((effective - 10) / 2);
 // Exact composition of an effective ability score (all parts are in the response).
-const abilityBreakdown = (a: AbilityScoreResponse) =>
-  `Base ${a.base} · racial ${fmtMod(a.racialModifier)} · feat ${fmtMod(
-    a.featModifier,
-  )} · ASI ${fmtMod(a.improvementModifier)}  =  ${a.effective} (mod ${fmtMod(
-    abilityMod(a.effective),
-  )})`;
+const abilityBreakdown = (a: AbilityScoreResponse) => {
+  const parts = [`Base ${a.base}`, `racial ${fmtMod(a.racialModifier)}`];
+  if (a.subraceModifier !== 0) parts.push(`subrace ${fmtMod(a.subraceModifier)}`);
+  parts.push(`feat ${fmtMod(a.featModifier)}`, `ASI ${fmtMod(a.improvementModifier)}`);
+  return `${parts.join(" · ")}  =  ${a.effective} (mod ${fmtMod(abilityMod(a.effective))})`;
+};
 
 const rechargeLabel = (r: ResourceRecharge) =>
   r === ResourceRecharge.ShortRest
@@ -81,7 +81,7 @@ function useSheetOrder(charId: string) {
         const added = BLOCK_KEYS.filter((k) => !filtered.includes(k));
         return [...filtered, ...added];
       }
-    } catch {}
+    } catch { /* corrupt localStorage — ignore */ }
     return [...BLOCK_KEYS];
   });
   const dragIdx = useRef<number | null>(null);
@@ -96,7 +96,7 @@ function useSheetOrder(charId: string) {
       const next = [...prev];
       const [item] = next.splice(from, 1);
       next.splice(toIdx, 0, item);
-      try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch {}
+      try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* storage full — ignore */ }
       return next;
     });
   }
@@ -345,7 +345,7 @@ export default function CharacterSheet() {
         <div className="sheet__id">
           <h1 className="sheet__name">{c.name}</h1>
           <p className="text-muted">
-            {c.race?.name} · {classLine} · Level {c.level}
+            {c.race?.name}{c.subrace ? ` (${c.subrace.name})` : ""} · {classLine} · Level {c.level}
           </p>
           <div className="sheet__actions">
             <button
@@ -747,21 +747,44 @@ function SpellcastingBlock({
   charLevel: number;
 }) {
   if (spellcasting.length === 0 && spells.length === 0) return null;
-  // Aggregate slots per spell level across all caster classes — annotated on each
-  // level group so the slots stay visible next to that level's spells.
+
+  // PHB multiclass combined slots: all non-pact casters share one pool.
+  // Their spellSlots arrays are identical — take from the first; don't sum.
+  const standardCasters = spellcasting.filter((s) => !s.isPactMagic);
+  const pactCasters = spellcasting.filter((s) => s.isPactMagic);
+  const sharedSlots = standardCasters[0]?.spellSlots ?? [];
+
   const slotsByLevel = new Map<number, number>();
-  for (const sc of spellcasting)
+  for (const slot of sharedSlots) slotsByLevel.set(slot.level, slot.count);
+  // Pact magic slots are separate (short-rest) — include them for level-group display.
+  for (const sc of pactCasters)
     for (const slot of sc.spellSlots)
       slotsByLevel.set(slot.level, (slotsByLevel.get(slot.level) ?? 0) + slot.count);
+
   const casterTip = (sc: SpellcastingResponse) => {
     const m = modByName.get(sc.ability) ?? 0;
     return `Save DC = 8 + proficiency ${fmtMod(prof)} + ${sc.ability} mod ${fmtMod(m)} = ${sc.saveDc}\nSpell attack = proficiency + ability mod = ${fmtMod(sc.spellAttackBonus)}`;
   };
+
+  const multiclass = standardCasters.length > 1;
+
   return (
     <section className="panel sheet__block">
       <h3 className="sheet__block-title">Spellcasting</h3>
       <hr className="rule" />
-      {spellcasting.map((sc, i) => (
+
+      {/* Shared slot pool (shown first when multiclassing) */}
+      {multiclass && sharedSlots.length > 0 && (
+        <div className="sheet__caster">
+          <p className="prof-list__name text-faint">Spell Slots (shared)</p>
+          <p className="text-faint">
+            {sharedSlots.map((s) => `L${s.level}: ${s.count}`).join("  ")}
+          </p>
+        </div>
+      )}
+
+      {/* Standard casters: per-class stats */}
+      {standardCasters.map((sc, i) => (
         <div
           key={`${sc.class}-${i}`}
           className="sheet__caster tip"
@@ -771,14 +794,43 @@ function SpellcastingBlock({
           <p className="text-faint">
             {sc.ability} · save DC {sc.saveDc} · spell atk{" "}
             {fmtMod(sc.spellAttackBonus)}
+            {sc.cantripsKnown != null && ` · cantrips ${sc.cantripsKnown}`}
+            {sc.spellsKnown != null && ` · spells ${sc.spellsKnown}`}
           </p>
         </div>
       ))}
+
+      {/* Pact magic: separate short-rest pool */}
+      {pactCasters.map((sc, i) => (
+        <div
+          key={`pact-${sc.class}-${i}`}
+          className="sheet__caster tip"
+          data-tooltip={casterTip(sc)}
+        >
+          <p className="prof-list__name">
+            {sc.class}{" "}
+            <span className="badge">Pact Magic</span>
+          </p>
+          <p className="text-faint">
+            {sc.ability} · save DC {sc.saveDc} · spell atk{" "}
+            {fmtMod(sc.spellAttackBonus)}
+            {sc.cantripsKnown != null && ` · cantrips ${sc.cantripsKnown}`}
+            {sc.spellsKnown != null && ` · spells ${sc.spellsKnown}`}
+          </p>
+          {sc.spellSlots.length > 0 && (
+            <p className="text-faint">
+              {sc.spellSlots.map((s) => `L${s.level}: ${s.count}`).join("  ")}
+              {" · short rest"}
+            </p>
+          )}
+        </div>
+      ))}
+
       {spellLevelGroups(spells, slotsByLevel).map((g) => (
         <div key={g.level} className="sheet__spell-group">
           <h4 className="sheet__spell-level">
             {g.level === 0 ? "Cantrips" : `Level ${g.level}`}
-            {slotsByLevel.has(g.level) && (
+            {!multiclass && slotsByLevel.has(g.level) && (
               <span className="text-faint">
                 {" "}
                 · {slotsByLevel.get(g.level)} slot
