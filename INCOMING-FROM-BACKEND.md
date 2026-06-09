@@ -956,3 +956,104 @@ All 9 SRD damage cantrips + 36 levelled spells populated. The remaining 274 spel
 ## Build / status
 
 - Migration 050 applied; DB through **050**. `dotnet build` 0 errors. Appended by the backend session — commit in this repo is yours.
+
+---
+
+# INCOMING #14 — Subraces vertical committed + Multiclass combined spell slots
+
+**Date:** 2026-06-10. Both repos committed + **pushed to `origin/master`**. DB `DMTools_local` through migration **052**. Build 0 errors, 91/91 tests, codescan A. Test login unchanged: `dungeonmaster` / `Passw0rd!23`.
+
+> **Note on #13:** the subraces content and spell `scaling` field were documented in INCOMING #13 but not yet committed at that time. Both are now committed and live. Nothing changed in their contract since #13 — this is just the commit confirmation.
+
+## Change 1 — `SpellcastingResponse.isPactMagic` (additive, non-breaking)
+
+`GET /api/character/{id}` → `spellcasting[]` each entry gains:
+
+```ts
+interface SpellcastingResponse {
+  // ...all existing fields unchanged...
+  isPactMagic: boolean   // NEW — true only for Warlock
+}
+```
+
+`isPactMagic` is `false` for every class except Warlock. Use it to render a "Pact Magic" label/badge on the Warlock spellcasting row and to distinguish the two pools visually (see below).
+
+## Change 2 — Spell slots now reflect the PHB multiclass combined table (behavior change)
+
+**What was broken:** a character with multiple caster classes (e.g. Bard 3 / Cleric 3) previously showed each class's own independent slot table. That's wrong by the PHB — multiclass casters share a single combined slot pool.
+
+**What's correct now:**
+
+| Character | Before | After |
+|---|---|---|
+| Single caster (Wizard 5) | own table | own table (unchanged) |
+| Multiclass casters (Bard 3 / Cleric 3) | Bard slots + Cleric slots separately | **combined table** (effective level 6) on both entries |
+| Warlock alone | own pact magic table | own pact magic table (unchanged) |
+| Warlock + Wizard 3 | Warlock + Wizard slots separately | **Warlock pact magic unchanged; Wizard shows combined table** |
+
+### The combined slot rule (PHB)
+
+Effective caster level = sum of: `(Full caster class level × 1) + (Half caster class level ÷ 2, rounded down)`. Look that up in the PHB multiclass table → one shared slot pool. Warlock pact magic never contributes to and never benefits from this pool.
+
+SRD class tiers:
+- **Full** (each level counts): Bard, Cleric, Druid, Sorcerer, Wizard
+- **Half** (level ÷ 2 floor): Paladin, Ranger
+- **Pact Magic** (separate pool, short rest): Warlock
+- **None**: Barbarian, Fighter, Monk, Rogue
+
+### What you need to do in the UI
+
+**Type update only — no logic change needed** for single-class characters.
+
+For a multiclass caster, when `spellcasting[]` has more than one entry where `isPactMagic === false`, all those entries' `spellSlots` arrays are **identical** — they reflect the same combined pool. Don't sum them. The simplest correct render:
+
+```ts
+const standardCasters = character.spellcasting.filter(s => !s.isPactMagic);
+const pactCasters     = character.spellcasting.filter(s => s.isPactMagic);
+
+// Shared slot pool: take from the first non-pact entry (all are identical).
+// Render once with a "Spell Slots" header.
+const sharedSlots = standardCasters[0]?.spellSlots ?? [];
+
+// Per-class: render saveDc, spellAttackBonus, cantripsKnown, spellsKnown per entry.
+// Pact magic: render separately with its own slot count + "Pact Magic (short rest)" label.
+```
+
+**Suggested layout when multiclassing:**
+
+```
+Spell Slots (shared)        ← from sharedSlots
+  L1: ●●●●  L2: ●●●  ...
+
+Bard         CHA  DC 14  +6 atk  Cantrips 3  Spells known 4
+Cleric       WIS  DC 15  +7 atk  (prepared)
+
+Warlock — Pact Magic (short rest)
+  L3: ●●
+  CHA  DC 13  +5 atk  Cantrips 3  Spells known 4
+```
+
+Single-class characters: `standardCasters.length === 1` → render that class's own `spellSlots` normally (no "shared" label needed).
+
+## TypeScript type delta
+
+```ts
+// CharacterResponse.spellcasting[]
+interface SpellcastingResponse {
+  class: string
+  ability: string
+  saveDc: number
+  spellAttackBonus: number
+  cantripsKnown: number | null
+  spellsKnown: number | null
+  spellSlots: { level: number; count: number }[]
+  isPactMagic: boolean        // NEW — was missing; now always present
+}
+```
+
+All other response shapes are unchanged. No request changes.
+
+## Build / status
+- `dotnet build DMTool.slnx` → **0 errors**; `dotnet test` → **91/91**; codescan **A**; 0 cross-module dupes.
+- Migration **052** idempotent (adds `SpellcastingTier` int column to `Classes`; backfills all 12 SRD classes). DB `DMTools_local` **through 052**. Next migration: `053_*.sql`.
+- Commits on `origin/master` (backend): subraces vertical + spell scaling (`e49cdaa`), multiclass combined slots (`36e618b`).
