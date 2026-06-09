@@ -44,9 +44,21 @@
 .mng__block {
   margin-bottom: var(--sp-5);
 }
+.mng__block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
 .mng__block-title {
   font-family: var(--font-display);
-  margin-bottom: var(--sp-2);
+  margin-bottom: 0;
+}
+.mng__collapse {
+  font-size: var(--fs-sm);
+  padding: var(--sp-1) var(--sp-2);
+  flex-shrink: 0;
 }
 
 .mng__search {

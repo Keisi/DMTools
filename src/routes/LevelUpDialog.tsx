@@ -614,7 +614,7 @@ function HpChoice({
             checked={mode === LevelUpHitPointMode.Average}
             onChange={() => onMode(LevelUpHitPointMode.Average)}
           />
-          Average ({hp.average} + {fmtSigned(hp.conModifier)} CON)
+          Average ({hp.average}{fmtSigned(hp.conModifier)} CON)
         </label>
         <label>
           <input

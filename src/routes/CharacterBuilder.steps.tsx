@@ -445,6 +445,7 @@ export function AbilitiesStep({
             <PointBuyStat
               key={s.id}
               name={s.code ?? s.name}
+              description={s.description}
               primary={primaryStats.has(s.id)}
               value={abilities[s.id] ?? POINT_MIN}
               remaining={remaining}
@@ -452,7 +453,12 @@ export function AbilitiesStep({
             />
           ) : (
             <label key={s.id} className="builder__ability">
-              <span className="builder__ability-name">
+              <span
+                className={
+                  "builder__ability-name" + (s.description ? " tip" : "")
+                }
+                data-tooltip={s.description ?? undefined}
+              >
                 {s.code ?? s.name}
                 {primaryStats.has(s.id) && <PrimaryTag />}
               </span>
@@ -486,12 +492,14 @@ function PrimaryTag() {
 
 function PointBuyStat({
   name,
+  description,
   primary,
   value,
   remaining,
   onChange,
 }: {
   name: string;
+  description?: string | null;
   primary: boolean;
   value: number;
   remaining: number;
@@ -500,7 +508,10 @@ function PointBuyStat({
   const nextCost = pointCost(value + 1) - pointCost(value);
   return (
     <div className="builder__ability">
-      <span className="builder__ability-name">
+      <span
+        className={"builder__ability-name" + (description ? " tip" : "")}
+        data-tooltip={description ?? undefined}
+      >
         {name}
         {primary && <PrimaryTag />}
       </span>
@@ -863,7 +874,7 @@ export interface ChoiceGroup {
   title: string;
   hint?: string;
   choose: number;
-  options: { optionId: string; name: string }[];
+  options: { optionId: string; name: string; description?: string | null }[];
   chosen: string[];
   onToggle: (optionId: string) => void;
   emptyNote?: string;
@@ -871,13 +882,13 @@ export interface ChoiceGroup {
 
 // Sub-feature choices the character's classes/subclasses grant at their chosen levels:
 // Fighting Style (incl. a Fighter's L1 style, unreachable via level-up), Rogue/Bard
-// Expertise, Sorcerer Metamagic. Empty when the build owes none.
+// Expertise, Sorcerer Metamagic, Warlock Eldritch Invocations. Empty when the build owes none.
 export function ChoicesStep({ groups }: { groups: ChoiceGroup[] }) {
   if (groups.length === 0)
     return (
       <p className="text-faint">
-        This build has no Fighting Style, Expertise, or Metamagic choices at the chosen
-        levels — skip ahead.
+        This build has no Fighting Style, Expertise, Metamagic, or Eldritch Invocation
+        choices at the chosen levels — skip ahead.
       </p>
     );
   return (
@@ -900,7 +911,12 @@ export function ChoicesStep({ groups }: { groups: ChoiceGroup[] }) {
                     key={o.optionId}
                     type="button"
                     disabled={atCap}
-                    className={"builder__chip" + (on ? " builder__chip--on" : "")}
+                    className={
+                      "builder__chip" +
+                      (on ? " builder__chip--on" : "") +
+                      (o.description ? " tip" : "")
+                    }
+                    data-tooltip={o.description ?? undefined}
                     onClick={() => g.onToggle(o.optionId)}
                   >
                     {o.name}
@@ -934,7 +950,9 @@ function SpellPickList({ title, pick }: { title: string; pick: SpellPick }) {
   return (
     <div className="builder__spell-group">
       <h4 className="builder__equip-title">
-        {title} — choose {pick.choose} ({pick.chosen.length}/{pick.choose})
+        {pick.choose > 0
+          ? `${title} — choose ${pick.choose} (${pick.chosen.length}/${pick.choose})`
+          : `${title} — optional (${pick.chosen.length} selected)`}
       </h4>
       {pick.pool.length > 8 && (
         <input
@@ -947,7 +965,7 @@ function SpellPickList({ title, pick }: { title: string; pick: SpellPick }) {
       <div className="builder__chips">
         {shown.map((s) => {
           const on = pick.chosen.includes(s.id);
-          const atCap = !on && pick.chosen.length >= pick.choose;
+          const atCap = pick.choose > 0 && !on && pick.chosen.length >= pick.choose;
           return (
             <button
               key={s.id}
@@ -967,8 +985,9 @@ function SpellPickList({ title, pick }: { title: string; pick: SpellPick }) {
   );
 }
 
-// Known-caster spell selection at creation: cantrips + levelled spells the character
-// knows at its chosen level (prepared casters and non-casters self-hide).
+// Spell selection at creation: required cantrips/spells for known casters, plus an
+// optional pre-population picker for prepared casters (Paladin, Cleric, Druid, Wizard)
+// once they have castable spell levels.
 export function SpellsStep({
   casterNames,
   cantrips,
@@ -978,19 +997,21 @@ export function SpellsStep({
   cantrips: SpellPick | null;
   spells: SpellPick | null;
 }) {
+  const hasPreparedOptional = spells?.choose === 0;
   if (!cantrips && !spells)
     return (
       <p className="text-faint">
-        No spells to choose at creation for this build. Prepared casters (Cleric, Druid,
-        Paladin, Wizard) prepare from their full class list in play; non-casters have none.
+        No spells at this level — either a non-caster, or a prepared caster that hasn't
+        reached their first spell slots yet (e.g. Paladin before level 2).
       </p>
     );
   return (
     <div className="builder__spells">
       <p className="text-muted builder__hint">
-        Cantrips and known spells for {casterNames.join(", ")} at your chosen level.
-        (Prepared casters choose cantrips here; their levelled spells are prepared
-        from the full list in play, so they aren't listed.)
+        Spells for {casterNames.join(", ")} at your chosen level.
+        {hasPreparedOptional
+          ? " Prepared spells are optional here — skip if you prefer to pick them later via Manage Spells on the sheet."
+          : " Known casters must fill their required count before advancing."}
       </p>
       {cantrips && <SpellPickList title="Cantrips" pick={cantrips} />}
       {spells && <SpellPickList title="Spells" pick={spells} />}
@@ -1054,7 +1075,13 @@ export function EquipmentStep({
           : `Not proficient with ${cat}: you can't cast spells and have disadvantage on STR/DEX checks, saves, and attacks while wearing it.`,
     };
   };
-  const bodyArmors = armors.filter((a) => !a.isShield).map(armorOption);
+  const bodyArmors = [...armors]
+    .filter((a) => !a.isShield)
+    .sort((a, b) =>
+      (a.armorCategory ?? "").localeCompare(b.armorCategory ?? "") ||
+      a.name.localeCompare(b.name),
+    )
+    .map(armorOption);
   const shields = armors.filter((a) => a.isShield).map(armorOption);
   return (
     <div className="builder__equip">
@@ -1066,7 +1093,14 @@ export function EquipmentStep({
           <p className="text-faint">No weapons loaded.</p>
         ) : (
           <div className="builder__chips">
-            {weapons.map((w) => {
+            {[...weapons]
+              .sort(
+                (a, b) =>
+                  (a.weaponCategory ?? "").localeCompare(
+                    b.weaponCategory ?? "",
+                  ) || a.name.localeCompare(b.name),
+              )
+              .map((w) => {
               const prof = weaponProficient(w);
               const nonProficient = hasClass && !prof;
               const cat = w.weaponCategory ?? "this weapon";

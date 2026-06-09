@@ -27,7 +27,22 @@ export default function EditHpDialog({
   onClose: () => void;
   onApplied: (updated: CharacterResponse) => void;
 }) {
-  const { id, derivedMaxHitPoints, hitPointsOverride } = character;
+  const { id, derivedMaxHitPoints, hitPointsOverride, hitPointBreakdown, hitDice } =
+    character;
+  // Max possible HP if every hit die were rolled maximum.
+  const rolledMaxHp =
+    hitDice.reduce((sum, hd) => sum + hd.die * hd.count, 0) +
+    hitPointBreakdown.fromConstitution +
+    hitPointBreakdown.other;
+  const breakdownTip = [
+    `Hit dice: ${hitPointBreakdown.fromHitDice} (roll max: ${hitDice.reduce((s, hd) => s + hd.die * hd.count, 0)})`,
+    `CON: ${hitPointBreakdown.fromConstitution > 0 ? "+" : ""}${hitPointBreakdown.fromConstitution}`,
+    hitPointBreakdown.other !== 0
+      ? `Other: ${hitPointBreakdown.other > 0 ? "+" : ""}${hitPointBreakdown.other}`
+      : null,
+  ]
+    .filter((x): x is string => x !== null)
+    .join(" · ");
   const [value, setValue] = useState<number | "">(hitPointsOverride ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,12 +92,16 @@ export default function EditHpDialog({
           </button>
         </header>
 
-        <p className="text-muted hp__derived">
+        <p className="text-muted hp__derived tip" data-tooltip={breakdownTip}>
           Derived max: <strong>{derivedMaxHitPoints}</strong>
+          <span className="text-faint">
+            {" "}
+            · roll max: {rolledMaxHp}
+          </span>
           {isOverridden && (
             <span className="text-faint">
               {" "}
-              · current override {hitPointsOverride}
+              · override {hitPointsOverride}
             </span>
           )}
         </p>

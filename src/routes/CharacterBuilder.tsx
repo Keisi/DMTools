@@ -11,6 +11,7 @@ import {
   type CharacterRequest,
   type CharacterResponse,
   type ClassResponse,
+  type EldritchInvocationResponse,
   type FeatResponse,
   type InventoryItemRequest,
   type ItemResponse,
@@ -97,10 +98,14 @@ export default function CharacterBuilder() {
   const [skillIds, setSkillIds] = useState<string[]>([]);
   // Above-L1 ability-score improvements: statId -> total improvement amount.
   const [improvements, setImprovements] = useState<Record<string, number>>({});
-  // Sub-feature choices (Choices step): fighting styles, metamagic, expertise skills.
+  // Sub-feature choices (Choices step): fighting styles, metamagic, expertise skills,
+  // and Warlock Eldritch Invocations.
   const [fightingStyleIds, setFightingStyleIds] = useState<string[]>([]);
   const [metamagicIds, setMetamagicIds] = useState<string[]>([]);
   const [expertiseSkillIds, setExpertiseSkillIds] = useState<string[]>([]);
+  const [eldritchInvocationIds, setEldritchInvocationIds] = useState<string[]>([]);
+  // Eldritch Invocation catalog (fetched once; options pool for the Choices step).
+  const [eldritchInvocations, setEldritchInvocations] = useState<EldritchInvocationResponse[]>([]);
   // Known-caster spells (Spells step): cantrips (level 0) + levelled spells.
   const [cantripIds, setCantripIds] = useState<string[]>([]);
   const [spellIds, setSpellIds] = useState<string[]>([]);
@@ -149,6 +154,10 @@ export default function CharacterBuilder() {
     reference.backgrounds().then(setBackgrounds).catch(() => setBackgrounds([]));
     reference.items().then(setItems).catch(() => setItems([]));
     reference.spells().then(setSpells).catch(() => setSpells([]));
+    reference
+      .eldritchInvocations()
+      .then(setEldritchInvocations)
+      .catch(() => setEldritchInvocations([]));
   }, [editId]);
 
   // Edit mode: load the existing character and prefill every wizard-owned field.
@@ -211,6 +220,7 @@ export default function CharacterBuilder() {
         );
         setFightingStyleIds(ch.fightingStyles.map((f) => f.id));
         setMetamagicIds(ch.metamagics.map((m) => m.id));
+        setEldritchInvocationIds(ch.eldritchInvocations.map((e) => e.id));
         setExpertiseSkillIds(
           ch.skills
             .filter((s) => s.level === SkillProficiencyLevel.Expertise)
@@ -333,6 +343,7 @@ export default function CharacterBuilder() {
     let fsBudget = 0;
     let mmBudget = 0;
     let exBudget = 0;
+    let eiBudget = 0;
     for (const p of picks) {
       const cls = classes.find((c) => c.id === p.classId);
       if (!cls) continue;
@@ -351,6 +362,8 @@ export default function CharacterBuilder() {
           sel.options.forEach((o) => mm.set(o.optionId, o.name));
         } else if (sel.type === SelectionType.Expertise) {
           exBudget += sel.choose;
+        } else if (sel.type === SelectionType.EldritchInvocation) {
+          eiBudget += sel.choose;
         }
       }
     }
@@ -360,6 +373,7 @@ export default function CharacterBuilder() {
       mmBudget,
       mmOptions: [...mm].map(([optionId, name]) => ({ optionId, name })),
       exBudget,
+      eiBudget,
     };
   }, [picks, classes]);
 
@@ -397,14 +411,17 @@ export default function CharacterBuilder() {
       if (!row) continue;
       const cantrips = row.cantripsKnown ?? 0;
       const levelled = sc.isPrepared ? 0 : (row.spellsKnown ?? 0);
-      if (cantrips === 0 && levelled === 0) continue; // contributes no picks
+      // Prepared casters with castable spell levels (Paladin L2+, Cleric/Druid/Wizard L1+)
+      // get an optional non-blocking pool so starting spells can be pre-selected at creation.
+      const hasPreparedPool = sc.isPrepared && row.maxSpellLevel > 0;
+      if (cantrips === 0 && levelled === 0 && !hasPreparedPool) continue;
       casterNames.push(cls.name);
       cantripsNeed += cantrips;
       spellsNeed += levelled;
       for (const s of spells) {
         if (!s.classes?.includes(cls.name)) continue;
         if (s.level === 0) cantripPool.set(s.id, { id: s.id, name: s.name, level: 0 });
-        else if (!sc.isPrepared && s.level <= row.maxSpellLevel)
+        else if (s.level <= row.maxSpellLevel)
           spellPool.set(s.id, { id: s.id, name: s.name, level: s.level });
       }
     }
@@ -469,7 +486,8 @@ export default function CharacterBuilder() {
     isEdit ||
     (fightingStyleIds.length === subFeature.fsBudget &&
       metamagicIds.length === subFeature.mmBudget &&
-      expertiseSkillIds.length === subFeature.exBudget);
+      expertiseSkillIds.length === subFeature.exBudget &&
+      eldritchInvocationIds.length === subFeature.eiBudget);
   // Known-caster cantrips/spells must match the level's totals (relaxed on edit).
   const spellsComplete =
     isEdit ||
@@ -512,7 +530,7 @@ export default function CharacterBuilder() {
       ? `${bgLanguageSelection?.choose} background language${bgLanguageSelection?.choose === 1 ? "" : "s"} (${languageIds.length}/${bgLanguageSelection?.choose})`
       : null,
     !choicesComplete
-      ? `class choices (fighting style ${fightingStyleIds.length}/${subFeature.fsBudget}, expertise ${expertiseSkillIds.length}/${subFeature.exBudget}, metamagic ${metamagicIds.length}/${subFeature.mmBudget})`
+      ? `class choices (fighting style ${fightingStyleIds.length}/${subFeature.fsBudget}, expertise ${expertiseSkillIds.length}/${subFeature.exBudget}, metamagic ${metamagicIds.length}/${subFeature.mmBudget}, invocations ${eldritchInvocationIds.length}/${subFeature.eiBudget})`
       : null,
     !spellsComplete
       ? `spells (cantrips ${cantripIds.length}/${spellPlan.cantripsNeed}, spells ${spellIds.length}/${spellPlan.spellsNeed})`
@@ -554,7 +572,7 @@ export default function CharacterBuilder() {
       ? `Choose ${skillSelection.choose} skill${skillSelection.choose === 1 ? "" : "s"} — ${skillIds.length}/${skillSelection.choose} selected.`
       : "",
     !choicesComplete
-      ? `Make your class choices — fighting style ${fightingStyleIds.length}/${subFeature.fsBudget}, expertise ${expertiseSkillIds.length}/${subFeature.exBudget}, metamagic ${metamagicIds.length}/${subFeature.mmBudget}.`
+      ? `Make your class choices — fighting style ${fightingStyleIds.length}/${subFeature.fsBudget}, expertise ${expertiseSkillIds.length}/${subFeature.exBudget}, metamagic ${metamagicIds.length}/${subFeature.mmBudget}, invocations ${eldritchInvocationIds.length}/${subFeature.eiBudget}.`
       : "",
     !spellsComplete
       ? `Choose your known spells — cantrips ${cantripIds.length}/${spellPlan.cantripsNeed}, spells ${spellIds.length}/${spellPlan.spellsNeed}.`
@@ -653,6 +671,11 @@ export default function CharacterBuilder() {
   }
   function toggleExpertise(id: string) {
     setExpertiseSkillIds((prev) => toggleCapped(prev, id, subFeature.exBudget));
+  }
+  function toggleEldritchInvocation(id: string) {
+    setEldritchInvocationIds((prev) =>
+      toggleCapped(prev, id, subFeature.eiBudget),
+    );
   }
   function toggleCantrip(id: string) {
     setCantripIds((prev) => toggleCapped(prev, id, spellPlan.cantripsNeed));
@@ -754,6 +777,9 @@ export default function CharacterBuilder() {
           : undefined,
       fightingStyleIds: fightingStyleIds.length ? fightingStyleIds : undefined,
       metamagicIds: metamagicIds.length ? metamagicIds : undefined,
+      eldritchInvocationIds: eldritchInvocationIds.length
+        ? eldritchInvocationIds
+        : undefined,
       // Above-L1 ability improvements (base/improvement split preserved server-side).
       abilityImprovements: improvementList.length ? improvementList : undefined,
       backgroundId: backgroundId ?? undefined,
@@ -848,6 +874,21 @@ export default function CharacterBuilder() {
       options: subFeature.mmOptions,
       chosen: metamagicIds,
       onToggle: toggleMetamagic,
+    });
+  if (subFeature.eiBudget > 0)
+    choiceGroups.push({
+      key: "ei",
+      title: "Eldritch Invocations",
+      hint: "Choose your Warlock Eldritch Invocations.",
+      choose: subFeature.eiBudget,
+      options: eldritchInvocations.map((e) => ({
+        optionId: e.id,
+        name: e.name,
+        description: e.description,
+      })),
+      chosen: eldritchInvocationIds,
+      onToggle: toggleEldritchInvocation,
+      emptyNote: "No invocations loaded (is the API running?).",
     });
 
   return (
@@ -950,7 +991,7 @@ export default function CharacterBuilder() {
                 : null
             }
             spells={
-              spellPlan.spellsNeed > 0
+              spellPlan.spellsNeed > 0 || spellPlan.spellPool.length > 0
                 ? {
                     choose: spellPlan.spellsNeed,
                     pool: spellPlan.spellPool,

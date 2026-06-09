@@ -160,18 +160,31 @@ actions, gold accents). Fonts (Cinzel display, Inter body) load in `index.html`.
 
 ## Status
 
-`CharacterBuilder` (`/character/new`) is **implemented**: a 6-step wizard (Race →
-Class → Abilities → Skills → Equipment → Review) that assembles a `CharacterRequest`
-and `POST`s via `characters.create()`, then navigates to the new sheet. Supports
-**multiclass** (add multiple classes with levels summing to ≤20, designate the
-starting class), ability scores via **point-buy** (27-pt budget, 8–15, live
-counter) or a **Manual** mode (1–30, for homebrew/rolled stats), starting-class
-skill picks, and equipping armor/shield/weapons (with category/AC/damage metadata
-shown; drives derived AC + attacks). Create errors surface server-side
-problem-details field messages. Decomposed into
-presentational sub-components around a single stateful orchestrator. Live-verified
-(single + multiclass + equipment). Not yet built: feats, background, subclass at
-creation, and inventory items (level-up handles subclass post-creation).
+`CharacterBuilder` (`/character/new`) is **implemented**: a 10-step wizard (Race →
+Class → Abilities → Skills → Choices → Spells → Background → Feats → Equipment →
+Review) that assembles a `CharacterRequest` and `POST`s via `characters.create()`,
+then navigates to the new sheet. Also mounts at `/character/:id/edit` (PUT path).
+
+Features implemented:
+- **Multiclass**: add multiple classes (levels summing to ≤20, starting class designation).
+- **Subclass at creation**: dropdown in the Class step once a class reaches its subclass
+  level; subclass `featureSelections` (e.g. Champion's extra Fighting Style) flow into
+  the Choices step automatically.
+- **Ability scores**: point-buy (27-pt, 8–15) or Manual (1–30); above-L1 ASI panel when
+  the build has earned ASIs.
+- **Skills**: starting-class skill picks (Selection-validated).
+- **Choices**: fighting styles, expertise, metamagic — per class + chosen subclass at level.
+- **Spells**: required cantrips/spells for known casters; optional pre-population pool for
+  prepared casters (Paladin, Cleric, Druid, Wizard) once they have castable spell levels.
+- **Background**: pick + language choice Selection.
+- **Feats**: optional multi-select from the `/api/feats` catalog.
+- **Equipment**: armor/shield/weapons (proficiency-highlighted) + general inventory items
+  + coin purse.
+- **Review**: summary of all choices before save.
+
+Create errors surface server-side problem-details field messages. Edit mode (`/edit`)
+prefills all wizard-owned fields and carries through non-wizard fields (HP/AC overrides,
+status effects, narrative) on PUT.
 
 The `CharacterRequest` minimum: `name`, `raceId`, `classes` (≥1 `{classId, level}`,
 levels summing to ≤20), and `abilityScores` (one per `IsDefault` stat — **base**
@@ -187,8 +200,9 @@ Level-up UI is **implemented** in `routes/LevelUpDialog.tsx` (opened from the sh
 header): it `POST`s `{id}/levelup/plan`, renders the forced choices (HP average/roll,
 subclass, spell pools), and `POST`s `/apply`, handing the updated character back to
 the sheet. Verified live (HP, subclass, and null-count caster spell pools). Not yet
-handled: **feat-based ASI** (ability-score improvements only — feats need a feats
-endpoint + picker), and multi-pick spell counts beyond toggling.
+handled: **feat-based ASI** (the plan returns `abilityScoreImprovementDue`; the dialog
+only shows the stat-point picker, not the feat picker — `/api/feats` exists, just needs
+a picker UI wired in), and multi-pick spell counts beyond toggling.
 
 Backend features that are **not modeled** — don't build UI for them: Half-Elf
 "choose +1 to two", subrace modifiers, weapon properties (finesse/heavy/…), and

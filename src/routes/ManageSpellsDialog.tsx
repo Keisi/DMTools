@@ -240,6 +240,7 @@ function SpellList({
   groupByLevel: boolean;
 }) {
   const [query, setQuery] = useState("");
+  const [collapsed, setCollapsed] = useState(false);
   if (pool.length === 0) return null;
   const q = query.trim().toLowerCase();
   // Keep selected entries visible regardless of the filter so a search can't hide a pick.
@@ -262,48 +263,61 @@ function SpellList({
 
   return (
     <section className="mng__block">
-      <h3 className="mng__block-title">
-        {title}{" "}
-        <span className="text-faint">
-          ({selected.length} selected
-          {target !== undefined && ` · ${target} ${targetLabel}`})
-        </span>
-      </h3>
-      {over && (
-        <p className="mng__warn">
-          ⚠ {selected.length} selected — more than the {target} {targetLabel}.
-          Allowed (DM override), but double-check it's intended.
-        </p>
+      <div className="mng__block-head">
+        <h3 className="mng__block-title">
+          {title}{" "}
+          <span className="text-faint">
+            ({selected.length} selected
+            {target !== undefined && ` · ${target} ${targetLabel}`})
+          </span>
+        </h3>
+        <button
+          type="button"
+          className="btn btn--ghost mng__collapse"
+          onClick={() => setCollapsed((c) => !c)}
+        >
+          {collapsed ? "Show" : "Hide"}
+        </button>
+      </div>
+      {!collapsed && (
+        <>
+          {over && (
+            <p className="mng__warn">
+              ⚠ {selected.length} selected — more than the {target} {targetLabel}.
+              Allowed (DM override), but double-check it's intended.
+            </p>
+          )}
+          {pool.length > 8 && (
+            <input
+              className="input mng__search"
+              placeholder={`Search ${pool.length} ${title.toLowerCase()}…`}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          )}
+          {shown.length === 0 && <span className="text-faint">No matches.</span>}
+          {groups.map((g) => (
+            <div key={g.label || "all"} className="mng__group">
+              {g.label && <h4 className="mng__group-title">{g.label}</h4>}
+              <div className="mng__options">
+                {g.items.map((s) => {
+                  const on = selected.includes(s.id);
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={"mng__option" + (on ? " mng__option--on" : "")}
+                      onClick={() => onToggle(s.id)}
+                    >
+                      {s.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </>
       )}
-      {pool.length > 8 && (
-        <input
-          className="input mng__search"
-          placeholder={`Search ${pool.length} ${title.toLowerCase()}…`}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      )}
-      {shown.length === 0 && <span className="text-faint">No matches.</span>}
-      {groups.map((g) => (
-        <div key={g.label || "all"} className="mng__group">
-          {g.label && <h4 className="mng__group-title">{g.label}</h4>}
-          <div className="mng__options">
-            {g.items.map((s) => {
-              const on = selected.includes(s.id);
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  className={"mng__option" + (on ? " mng__option--on" : "")}
-                  onClick={() => onToggle(s.id)}
-                >
-                  {s.name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
     </section>
   );
 }

@@ -325,6 +325,7 @@ export default function CharacterSheet() {
           spellsById={spellsById}
           modByName={modByName}
           prof={prof}
+          charLevel={c.level}
         />
       </div>
 
@@ -333,6 +334,7 @@ export default function CharacterSheet() {
         <SubFeaturesBlock
           fightingStyles={c.fightingStyles}
           metamagics={c.metamagics}
+          eldritchInvocations={c.eldritchInvocations}
         />
         <TraitsBlock character={c} />
       </div>
@@ -580,9 +582,9 @@ function ResourcesBlock({
   );
 }
 
-// Normalized spell combat descriptor. Tier 1 reads the catalog SpellResponse;
-// when Tier 2 ships per-character computed dice on the character's spell refs,
-// change ONLY this resolver to prefer those — the render below stays the same.
+// Normalized spell combat descriptor. Prefers Tier 2 per-character dice
+// (s.scaling) over Tier 1 catalog dice (s.damageDice/healingDice) when available.
+// charLevel is the character's total level — used for cantrip tier selection.
 type SpellCombat = {
   dice: string | null; // damage or healing dice to display
   isHealing: boolean;
@@ -591,9 +593,25 @@ type SpellCombat = {
   saveAbility: string | null;
   scaling: string | null; // free-text scaling note (tooltip)
 };
-function spellCombat(s: SpellResponse): SpellCombat {
+// Cantrip scaling milestones: 1/5/11/17 (standard 5e breakpoints).
+function cantripTier(charLevel: number): string {
+  if (charLevel >= 17) return "17";
+  if (charLevel >= 11) return "11";
+  if (charLevel >= 5) return "5";
+  return "1";
+}
+function spellCombat(s: SpellResponse, charLevel: number): SpellCombat {
+  let dice: string | null = null;
+  if (s.scaling?.diceByLevel) {
+    const key =
+      s.scaling.kind === "cantrip"
+        ? cantripTier(charLevel)
+        : s.level.toString();
+    dice = s.scaling.diceByLevel[key] ?? null;
+  }
+  if (!dice) dice = s.damageDice ?? s.healingDice ?? null;
   return {
-    dice: s.damageDice ?? s.healingDice ?? null,
+    dice,
     isHealing: !s.damageDice && !!s.healingDice,
     damageType: s.damageType?.name ?? null,
     mode: s.usesSpellAttack ? "attack" : s.saveStatId ? "save" : null,
@@ -635,12 +653,14 @@ function SpellcastingBlock({
   spellsById,
   modByName,
   prof,
+  charLevel,
 }: {
   spellcasting: SpellcastingResponse[];
   spells: SpellRef[];
   spellsById: Map<string, SpellResponse>;
   modByName: Map<string, number>;
   prof: number;
+  charLevel: number;
 }) {
   if (spellcasting.length === 0 && spells.length === 0) return null;
   // Aggregate slots per spell level across all caster classes — annotated on each
@@ -688,7 +708,7 @@ function SpellcastingBlock({
             <ul className="sheet__spells">
               {g.spells.map((s) => {
                 const cat = spellsById.get(s.id);
-                const combat = cat ? spellCombat(cat) : null;
+                const combat = cat ? spellCombat(cat, charLevel) : null;
                 const inline = combat ? spellInline(combat, s.level) : "";
                 // Combat spells get the mechanics summary on hover; utility spells
                 // (no dice/save) fall back to the spell's description.
@@ -774,16 +794,23 @@ function FeaturesBlock({ features }: { features: CharacterFeatureResponse[] }) {
   );
 }
 
-// Chosen sub-features (Fighting Styles / Metamagic) from level-up or creation.
-// Expertise is NOT here — it appears in the Skills block as a doubled bonus.
+// Chosen sub-features (Fighting Styles / Metamagic / Eldritch Invocations) from
+// level-up or creation. Expertise is NOT here — it appears in Skills as doubled bonus.
 function SubFeaturesBlock({
   fightingStyles,
   metamagics,
+  eldritchInvocations,
 }: {
   fightingStyles: NamedRef[];
   metamagics: NamedRef[];
+  eldritchInvocations: NamedRef[];
 }) {
-  if (fightingStyles.length === 0 && metamagics.length === 0) return null;
+  if (
+    fightingStyles.length === 0 &&
+    metamagics.length === 0 &&
+    eldritchInvocations.length === 0
+  )
+    return null;
   return (
     <section className="panel sheet__block">
       <h3 className="sheet__block-title">Sub-features</h3>
@@ -799,6 +826,12 @@ function SubFeaturesBlock({
           <>
             <dt>Metamagic</dt>
             <dd>{metamagics.map((m) => m.name).join(", ")}</dd>
+          </>
+        )}
+        {eldritchInvocations.length > 0 && (
+          <>
+            <dt>Eldritch Invocations</dt>
+            <dd>{eldritchInvocations.map((e) => e.name).join(", ")}</dd>
           </>
         )}
       </dl>

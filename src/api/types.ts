@@ -227,8 +227,7 @@ export interface SpellResponse {
   classes: string[];
   // Structured combat fields (backend mig. 049; all nullable/best-effort). A spell
   // is either usesSpellAttack OR has a saveStatId, or neither (utility). scalingDice
-  // is free text. Tier 2 (per-character computed dice) will layer onto these without
-  // changing the shape — consume via a resolver, not these fields directly.
+  // is free text.
   damageDice?: string | null;
   damageType?: NamedRef | null;
   healingDice?: string | null;
@@ -236,6 +235,10 @@ export interface SpellResponse {
   usesSpellAttack: boolean;
   saveStatId?: string | null;
   saveAbility?: string | null;
+  // Tier 2 per-character scaling (backend mig. 050). kind:"slot" keys are slot
+  // levels; kind:"cantrip" keys are character-level milestones 1/5/11/17. Values
+  // are fully-resolved dice strings. null for unscaled spells.
+  scaling?: { kind: "slot" | "cantrip"; diceByLevel: Record<string, string> } | null;
 }
 
 export interface ItemResponse {
