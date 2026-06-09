@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>DMTool</title>
+    <script>
+      // GitHub Pages SPA redirect: encode the current path/search/hash into
+      // sessionStorage, then bounce to the app root so index.html loads.
+      var base = "/DMTools";
+      var path =
+        window.location.pathname.slice(base.length) +
+        window.location.search +
+        window.location.hash;
+      sessionStorage.setItem("spa-redirect", path || "/");
+      window.location.replace(base + "/");
+    </script>
+  </head>
+  <body></body>
+</html>

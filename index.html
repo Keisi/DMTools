@@ -16,6 +16,16 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Restore path encoded by public/404.html after a GitHub Pages deep-link redirect.
+      (function () {
+        var redirect = sessionStorage.getItem("spa-redirect");
+        if (redirect) {
+          sessionStorage.removeItem("spa-redirect");
+          history.replaceState(null, "", redirect);
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

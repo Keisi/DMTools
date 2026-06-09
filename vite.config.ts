@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  base: process.env.GITHUB_ACTIONS ? "/DMTools/" : "/",
   server: {
     port: 5173,
     // Dev proxy: forward /api to the DMTool backend so the browser makes
