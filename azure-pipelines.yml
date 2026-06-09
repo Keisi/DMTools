@@ -20,8 +20,7 @@ steps:
 
   - task: AzureStaticWebApp@0
     inputs:
-      app_location: '/'
-      output_location: 'dist'
+      app_location: 'dist'
       skip_app_build: true   # already built above
     env:
       azure_static_web_apps_api_token: $(AZURE_STATIC_WEB_APPS_API_TOKEN)
