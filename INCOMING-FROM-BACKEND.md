@@ -761,3 +761,105 @@ Your doc flagged Tier 2 as optional ("adopt later without a frontend rewrite"). 
 - `dotnet build DMTool.slnx` → **0 errors**; `dotnet test` → **91/91** (+1); codescan **A** (only the 2 Azure-scaffolding flags); 0 cross-module dupes. Migrations **048** (multiclass grants) + **049** (spell combat fields) idempotent. DB `DMTools_local` **through 049**. HP-override endpoint had no migration.
 - Covers three frontend requests: `hp-override` (INCOMING #10), the multiclass choice-grants (#10), and `spell-damage-fields` Tier 1 (#11).
 - These callbacks were **appended by the backend session**; committing in *this* repo is the frontend session's responsibility (the backend committed only its own repo).
+
+---
+
+# INCOMING #12 — `FRONTEND-REQUEST-spell-scaling-tier2.md` DONE (structured diceByLevel)
+
+**DB `DMTools_local` through migration 050. Build 0 errors, codescan A. Migration 050 idempotent. Live round-trips green. Additive / non-breaking — the existing `scalingDice` free-text field is unchanged.**
+
+Resolves the Tier 2 request you flagged as optional in #11. The `spellCombat()` resolver path you described now has machine-readable data to work with.
+
+## New field on every spell: `scaling`
+
+`GET /api/spells` and `POST /api/spells` (homebrew) now include a `scaling` field alongside the existing `scalingDice` free-text. Non-scaling spells get `scaling: null`.
+
+```jsonc
+{
+  // ...all existing Tier-1 fields unchanged (damageDice, scalingDice, etc.)...
+
+  // NEW — null when the spell doesn't scale its dice
+  "scaling": {
+    "kind": "slot",      // "slot" | "cantrip" | null (null means scaling is null)
+    "diceByLevel": {
+      "3": "8d6",
+      "4": "9d6",
+      "5": "10d6",
+      "6": "11d6",
+      "7": "12d6",
+      "8": "13d6",
+      "9": "14d6"
+    }
+  }
+}
+```
+
+## `kind: "slot"` — levelled spells
+
+Keys are **slot levels** (integers as strings). Covers every castable level from the spell's base level through 9. Values are fully-resolved dice — no parsing needed.
+
+```jsonc
+// Fireball: "+1d6 per slot above 3rd" resolved
+"diceByLevel": { "3":"8d6", "4":"9d6", "5":"10d6", "6":"11d6", "7":"12d6", "8":"13d6", "9":"14d6" }
+
+// Magic Missile: absolute table
+"diceByLevel": { "1":"3d4 + 3", "2":"4d4 + 4", "3":"5d4 + 5", ..., "9":"11d4 + 11" }
+
+// Aid: flat HP amounts (not dice, but same map)
+"diceByLevel": { "2":"5", "3":"10", "4":"15", ..., "9":"40" }
+
+// Ice Storm: mixed expression
+"diceByLevel": { "4":"2d8 + 4d6", "5":"3d8 + 4d6", ..., "9":"7d8 + 4d6" }
+```
+
+## `kind: "cantrip"` — cantrips
+
+Keys are **character levels**: always `"1"`, `"5"`, `"11"`, `"17"`. The `"1"` value matches the spell's `damageDice` field.
+
+```jsonc
+// Fire Bolt
+"diceByLevel": { "1":"1d10", "5":"2d10", "11":"3d10", "17":"4d10" }
+```
+
+## Coverage
+
+All 9 SRD damage cantrips + 36 levelled spells populated. The remaining 274 spells return `scaling: null`.
+
+**Cantrips:** Acid Splash, Chill Touch, Fire Bolt, Poison Spray, Produce Flame, Ray of Frost, Sacred Flame, Shocking Grasp, Vicious Mockery.
+
+**L1:** Burning Hands, Cure Wounds, False Life, Guiding Bolt, Healing Word, Hellish Rebuke, Inflict Wounds, Magic Missile, Thunderwave.
+
+**L2:** Acid Arrow, Aid, Branding Smite, Flame Blade, Flaming Sphere, Heat Metal, Moonbeam, Prayer of Healing, Shatter, Spiritual Weapon.
+
+**L3:** Call Lightning, Fireball, Lightning Bolt, Mass Healing Word, Vampiric Touch.
+
+**L4:** Blight, Ice Storm. **L5:** Cloudkill, Cone of Cold, Flame Strike, Insect Plague, Mass Cure Wounds.
+
+**L6:** Circle of Death, Heal, Wall of Ice, Wall of Thorns. **L7:** Delayed Blast Fireball.
+
+## Homebrew POST
+
+`POST /api/spells` accepts an optional `scaling` field:
+
+```jsonc
+{
+  "name": "My Scaling Spell",
+  "level": 2,
+  "scaling": {
+    "kind": "slot",
+    "diceByLevel": { "2": "2d8", "3": "3d8", "4": "4d8" }
+  }
+}
+```
+
+`kind` must be `"slot"` or `"cantrip"` → otherwise **400**. `diceByLevel` must be non-empty when `scaling` is provided.
+
+## Gotchas
+
+- Keys are **string-encoded integers** (`"3"`, `"11"`, etc.) — `parseInt(key)` when comparing to slot/character level.
+- `Heal` and `Aid` have flat HP strings (`"70"`, `"80"`) not dice expressions. If your renderer tries to parse dice notation on these, guard for non-dice values.
+- The `scalingDice` free-text field is **unchanged** — keep using it for the `↑ upcasts` / `↑ scales` tooltip. `scaling` is the new computed-view companion.
+
+## Build / status
+
+- Migration 050 applied; DB through **050**. `dotnet build` 0 errors. Appended by the backend session — commit in this repo is yours.
