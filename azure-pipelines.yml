@@ -1,0 +1,40 @@
+# Azure DevOps -> Azure Static Web Apps deploy.
+# Deployment source in the SWA resource is set to "Other" (the built-in
+# "Azure DevOps" source fails on PAT creation); this pipeline wires it up
+# manually using the deployment token from "Manage deployment token".
+#
+# Pipeline variables (set in Azure DevOps, NOT in this file):
+#   AZURE_STATIC_WEB_APPS_API_TOKEN  - secret; SWA deployment token
+#   VITE_API_BASE                    - backend URL, NO trailing slash
+#                                      (paths in src/api already start with /api/)
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '20.x'
+    displayName: 'Install Node.js'
+
+  - script: npm ci
+    displayName: 'Install dependencies'
+
+  - script: npm run build
+    displayName: 'Build Vite app'
+    env:
+      VITE_API_BASE: $(VITE_API_BASE)
+
+  # skip_app_build: Oryx is skipped; we upload the already-built dist/ as-is.
+  # staticwebapp.config.json lives in public/ so Vite copies it into dist/.
+  - task: AzureStaticWebApp@0
+    inputs:
+      app_location: 'dist'
+      skip_app_build: true
+    env:
+      azure_static_web_apps_api_token: $(AZURE_STATIC_WEB_APPS_API_TOKEN)
+    displayName: 'Deploy to Azure Static Web Apps'

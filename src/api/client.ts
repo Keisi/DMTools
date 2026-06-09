@@ -4,9 +4,12 @@
    Base URL comes from VITE_API_BASE (see .env), defaulting to the IIS dev host.
    ========================================================================== */
 
-const BASE: string =
-  (import.meta.env.VITE_API_BASE as string | undefined) ??
-  "http://localhost:3501";
+// Trailing slash is stripped: endpoint paths already start with "/api/...",
+// so a base of "https://host/" would produce "https://host//api/..." (a 404
+// that surfaces as a misleading CORS error). Normalize defensively.
+const BASE: string = (
+  (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://localhost:3501"
+).replace(/\/+$/, "");
 
 const TOKEN_KEY = "dmtool.jwt";
 
