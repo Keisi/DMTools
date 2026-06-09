@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { characters, reference } from "../api/endpoints";
 import {
@@ -13,6 +13,8 @@ import {
   type CharacterStatusEffectResponse,
   type ClassResponse,
   type EncumbranceResponse,
+  type SavingThrowResponse,
+  type SkillBonusResponse,
   type ItemResponse,
   type NamedRef,
   type SpellRef,
@@ -58,6 +60,109 @@ const resistanceLabel = (k: ResistanceKind) =>
       ? "vulnerable"
       : "resistant";
 
+// ---- Block ordering (drag-to-reorder) ----------------------------------------
+
+const BLOCK_KEYS = [
+  "saves", "skills", "inventory", "equipped", "attacks",
+  "resources", "spellcasting", "features", "subfeatures",
+  "traits", "encumbrance", "status",
+] as const;
+type BlockKey = (typeof BLOCK_KEYS)[number];
+
+function useSheetOrder(charId: string) {
+  const storageKey = `dmtool.sheet.order.${charId}`;
+  const [order, setOrder] = useState<BlockKey[]>(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const saved = JSON.parse(raw) as string[];
+        const known = new Set<string>(BLOCK_KEYS);
+        const filtered = saved.filter((k): k is BlockKey => known.has(k));
+        const added = BLOCK_KEYS.filter((k) => !filtered.includes(k));
+        return [...filtered, ...added];
+      }
+    } catch {}
+    return [...BLOCK_KEYS];
+  });
+  const dragIdx = useRef<number | null>(null);
+  function onDragStart(idx: number) {
+    dragIdx.current = idx;
+  }
+  function onDrop(toIdx: number) {
+    const from = dragIdx.current;
+    dragIdx.current = null;
+    if (from === null || from === toIdx) return;
+    setOrder((prev) => {
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(toIdx, 0, item);
+      try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
+  return { order, onDragStart, onDrop };
+}
+
+function DraggableBlock({
+  idx,
+  onDragStart,
+  onDrop,
+  children,
+}: {
+  idx: number;
+  onDragStart: (idx: number) => void;
+  onDrop: (toIdx: number) => void;
+  children: ReactNode;
+}) {
+  const [over, setOver] = useState(false);
+  return (
+    <div
+      className={"sheet__draggable" + (over ? " sheet__draggable--over" : "")}
+      draggable
+      onDragStart={(e) => {
+        onDragStart(idx);
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        setOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        onDrop(idx);
+      }}
+      onDragEnd={() => setOver(false)}
+    >
+      <span className="sheet__drag-handle" aria-hidden="true">⠿</span>
+      {children}
+    </div>
+  );
+}
+
+function isBlockVisible(key: BlockKey, c: CharacterResponse): boolean {
+  switch (key) {
+    case "attacks": return c.weaponAttacks.length > 0;
+    case "resources": return c.resources.length > 0;
+    case "spellcasting": return c.spellcasting.length > 0 || c.spells.length > 0;
+    case "features": return c.features.length > 0;
+    case "subfeatures":
+      return (
+        c.fightingStyles.length > 0 ||
+        c.metamagics.length > 0 ||
+        c.eldritchInvocations.length > 0
+      );
+    case "status": return c.statusEffects.length > 0;
+    default: return true;
+  }
+}
+
+// ---- End block ordering -------------------------------------------------------
+
 export default function CharacterSheet() {
   const { id } = useParams<{ id: string }>();
   const [c, setC] = useState<CharacterResponse | null>(null);
@@ -101,6 +206,8 @@ export default function CharacterSheet() {
     () => new Map(spellCatalog.map((s) => [s.id, s])),
     [spellCatalog],
   );
+  // Must be before early returns — id is stable and equals c.id once loaded.
+  const { order, onDragStart, onDrop } = useSheetOrder(id ?? "");
 
   if (error)
     return (
@@ -172,24 +279,63 @@ export default function CharacterSheet() {
   const modByName = new Map(
     c.abilityScores.map((a) => [a.name, abilityMod(a.effective)]),
   );
-  const saveTip = (statId: string, isProficient: boolean, total: number) => {
-    const m = modByStatId.get(statId) ?? 0;
-    return isProficient
-      ? `ability mod ${fmtMod(m)} + proficiency ${fmtMod(prof)} = ${fmtMod(total)}`
-      : `ability mod ${fmtMod(m)} (not proficient) = ${fmtMod(total)}`;
-  };
-  const skillTip = (
-    ability: string,
-    isProficient: boolean,
-    expertise: boolean,
-    total: number,
-  ) => {
-    const m = modByName.get(ability) ?? 0;
-    const parts = [`${ability} mod ${fmtMod(m)}`];
-    if (isProficient)
-      parts.push(`proficiency ${fmtMod(prof)}${expertise ? " ×2 (expertise)" : ""}`);
-    else if (c.hasJackOfAllTrades) parts.push("½ proficiency (Jack of All Trades)");
-    return `${parts.join(" + ")} = ${fmtMod(total)}`;
+  const renderBlock = (key: BlockKey) => {
+    switch (key) {
+      case "saves":
+        return (
+          <SavesBlock
+            savingThrows={c.savingThrows}
+            modByStatId={modByStatId}
+            prof={prof}
+          />
+        );
+      case "skills":
+        return (
+          <SkillsBlock
+            skills={c.skills}
+            modByName={modByName}
+            prof={prof}
+            hasJackOfAllTrades={c.hasJackOfAllTrades}
+          />
+        );
+      case "inventory":
+        return <InventoryBlock character={c} items={items} onMutated={setC} />;
+      case "equipped":
+        return <EquippedBlock character={c} />;
+      case "attacks":
+        return (
+          <AttacksBlock attacks={c.weaponAttacks} modByName={modByName} prof={prof} />
+        );
+      case "resources":
+        return <ResourcesBlock resources={c.resources} />;
+      case "spellcasting":
+        return (
+          <SpellcastingBlock
+            spellcasting={c.spellcasting}
+            spells={c.spells}
+            spellsById={spellsById}
+            modByName={modByName}
+            prof={prof}
+            charLevel={c.level}
+          />
+        );
+      case "features":
+        return <FeaturesBlock features={c.features} />;
+      case "subfeatures":
+        return (
+          <SubFeaturesBlock
+            fightingStyles={c.fightingStyles}
+            metamagics={c.metamagics}
+            eldritchInvocations={c.eldritchInvocations}
+          />
+        );
+      case "traits":
+        return <TraitsBlock character={c} />;
+      case "encumbrance":
+        return <EncumbranceBlock encumbrance={c.encumbrance} />;
+      case "status":
+        return <StatusEffectsBlock effects={c.statusEffects} />;
+    }
   };
 
   return (
@@ -266,82 +412,20 @@ export default function CharacterSheet() {
         ))}
       </section>
 
+      {/* ---- Reorderable blocks — drag the ⠿ handle to rearrange ---- */}
       <div className="sheet__cols">
-        {/* ---- Saving throws ---- */}
-        <section className="panel sheet__block">
-          <h3 className="sheet__block-title">Saving Throws</h3>
-          <hr className="rule" />
-          <ul className="prof-list">
-            {c.savingThrows.map((s) => (
-              <li
-                key={s.statId}
-                className="prof-list__row tip"
-                data-tooltip={saveTip(s.statId, s.isProficient, s.modifier)}
-              >
-                <span className={"dot" + (s.isProficient ? " dot--on" : "")} />
-                <span className="prof-list__name">{s.name}</span>
-                <span className="prof-list__val">{fmtMod(s.modifier)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        {/* ---- Skills ---- */}
-        <section className="panel sheet__block">
-          <h3 className="sheet__block-title">Skills</h3>
-          <hr className="rule" />
-          <ul className="prof-list">
-            {c.skills.map((s) => (
-              <li
-                key={s.skillId}
-                className="prof-list__row tip"
-                data-tooltip={skillTip(
-                  s.ability,
-                  s.isProficient,
-                  s.level === SkillProficiencyLevel.Expertise,
-                  s.bonus,
-                )}
-              >
-                <span className={"dot" + (s.isProficient ? " dot--on" : "")} />
-                <span className="prof-list__name">{s.name}</span>
-                <span className="prof-list__val">{fmtMod(s.bonus)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        {/* ---- Inventory ---- */}
-        <InventoryBlock character={c} items={items} onMutated={setC} />
-      </div>
-
-      {/* ---- Combat / class detail ---- */}
-      <div className="sheet__cols">
-        <EquippedBlock character={c} />
-        <AttacksBlock attacks={c.weaponAttacks} modByName={modByName} prof={prof} />
-        <ResourcesBlock resources={c.resources} />
-        <SpellcastingBlock
-          spellcasting={c.spellcasting}
-          spells={c.spells}
-          spellsById={spellsById}
-          modByName={modByName}
-          prof={prof}
-          charLevel={c.level}
-        />
-      </div>
-
-      <div className="sheet__cols">
-        <FeaturesBlock features={c.features} />
-        <SubFeaturesBlock
-          fightingStyles={c.fightingStyles}
-          metamagics={c.metamagics}
-          eldritchInvocations={c.eldritchInvocations}
-        />
-        <TraitsBlock character={c} />
-      </div>
-
-      <div className="sheet__cols">
-        <EncumbranceBlock encumbrance={c.encumbrance} />
-        <StatusEffectsBlock effects={c.statusEffects} />
+        {order.map((key, idx) =>
+          isBlockVisible(key, c) ? (
+            <DraggableBlock
+              key={key}
+              idx={idx}
+              onDragStart={onDragStart}
+              onDrop={onDrop}
+            >
+              {renderBlock(key)}
+            </DraggableBlock>
+          ) : null,
+        )}
       </div>
 
       {levelingUp && (
@@ -1109,6 +1193,76 @@ function StatusEffectsBlock({
             </span>
           </li>
         ))}
+      </ul>
+    </section>
+  );
+}
+
+function SavesBlock({
+  savingThrows,
+  modByStatId,
+  prof,
+}: {
+  savingThrows: SavingThrowResponse[];
+  modByStatId: Map<string, number>;
+  prof: number;
+}) {
+  return (
+    <section className="panel sheet__block">
+      <h3 className="sheet__block-title">Saving Throws</h3>
+      <hr className="rule" />
+      <ul className="prof-list">
+        {savingThrows.map((s) => {
+          const m = modByStatId.get(s.statId) ?? 0;
+          const tip = s.isProficient
+            ? `ability mod ${fmtMod(m)} + proficiency ${fmtMod(prof)} = ${fmtMod(s.modifier)}`
+            : `ability mod ${fmtMod(m)} (not proficient) = ${fmtMod(s.modifier)}`;
+          return (
+            <li key={s.statId} className="prof-list__row tip" data-tooltip={tip}>
+              <span className={"dot" + (s.isProficient ? " dot--on" : "")} />
+              <span className="prof-list__name">{s.name}</span>
+              <span className="prof-list__val">{fmtMod(s.modifier)}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+function SkillsBlock({
+  skills,
+  modByName,
+  prof,
+  hasJackOfAllTrades,
+}: {
+  skills: SkillBonusResponse[];
+  modByName: Map<string, number>;
+  prof: number;
+  hasJackOfAllTrades: boolean;
+}) {
+  return (
+    <section className="panel sheet__block">
+      <h3 className="sheet__block-title">Skills</h3>
+      <hr className="rule" />
+      <ul className="prof-list">
+        {skills.map((s) => {
+          const m = modByName.get(s.ability) ?? 0;
+          const expertise = s.level === SkillProficiencyLevel.Expertise;
+          const parts = [`${s.ability} mod ${fmtMod(m)}`];
+          if (s.isProficient)
+            parts.push(`proficiency ${fmtMod(prof)}${expertise ? " ×2 (expertise)" : ""}`);
+          else if (hasJackOfAllTrades)
+            parts.push("½ proficiency (Jack of All Trades)");
+          const tip = `${parts.join(" + ")} = ${fmtMod(s.bonus)}`;
+          return (
+            <li key={s.skillId} className="prof-list__row tip" data-tooltip={tip}>
+              <span className={"dot" + (s.isProficient ? " dot--on" : "")} />
+              <span className="prof-list__name">{s.name}</span>
+              <span className="prof-list__val">{fmtMod(s.bonus)}</span>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

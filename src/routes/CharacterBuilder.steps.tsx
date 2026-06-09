@@ -709,7 +709,7 @@ export function BackgroundStep({
         </div>
       )}
 
-      {languageSelection && (
+      {languageSelection ? (
         <div className="builder__bg-langs">
           <h4 className="builder__equip-title">
             Languages — choose {languageSelection.choose} (
@@ -731,7 +731,11 @@ export function BackgroundStep({
             ))}
           </div>
         </div>
-      )}
+      ) : !selectedId ? (
+        <p className="text-faint builder__hint">
+          Some backgrounds grant a language pick — select one above to unlock it.
+        </p>
+      ) : null}
     </>
   );
 }
@@ -855,7 +859,7 @@ export function ImprovementsPanel({
                   the untouched stats across the grid (instead of wrapping inside
                   the value and spreading the buttons). */}
               {inc > 0 && (
-                <span className="builder__ability-delta text-faint">
+                <span className="builder__ability-delta">
                   +{inc} = {b + inc}
                 </span>
               )}

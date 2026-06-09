@@ -318,6 +318,37 @@
   cursor: help;
 }
 
+/* ---- Drag-to-reorder blocks ---- */
+.sheet__draggable {
+  position: relative;
+}
+.sheet__drag-handle {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  z-index: 1;
+  font-size: var(--fs-base);
+  line-height: 1;
+  color: var(--text-faint);
+  opacity: 0;
+  user-select: none;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.sheet__draggable:hover .sheet__drag-handle {
+  opacity: 0.6;
+}
+.sheet__draggable:hover {
+  cursor: grab;
+}
+.sheet__draggable:active {
+  cursor: grabbing;
+}
+.sheet__draggable--over > .panel {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* Equipped rows: 3-column grid so the "not proficient" warning aligns into its
    own column (name | warning | slot) instead of sitting ragged after each name. */
 .prof-list__row--equip {

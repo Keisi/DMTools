@@ -318,7 +318,9 @@
    with points allocated don't push their +/- buttons out of line with the rest. */
 .builder__ability-delta {
   font-family: var(--font-mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
+  color: var(--accent);
   white-space: nowrap;
 }
 .builder__equip-note {
