@@ -5,18 +5,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 SPA frontend for **DMTool**, a D&D 5e Dungeon Master toolkit. It is a pure JWT
-client of the headless DMTool JSON Web API (ASP.NET Core 10, Dapper/SQL Server)
-that lives at `C:\Users\keisi\source\repos\DMTool` (solution: `DMTool.slnx`).
+client of the headless DMTool JSON Web API (ASP.NET Core 10, Dapper/SQL Server).
+The backend repo path is machine-dependent — see the workspace root `CLAUDE.md`
+for the `$env:COMPUTERNAME` → path table. Solution file: `DMTool.slnx`.
 
 **The backend repo is the source of truth for the API contract.** Read, in order
 of relevance to frontend work:
-- `DMTool\DMTool\Models\Characters\CharacterContracts.cs` — the authoritative
+- `<backend>\DMTool\Models\Characters\CharacterContracts.cs` — the authoritative
   `CharacterRequest` / `CharacterResponse` / level-up DTOs. **Read this before
   touching `src/api/types.ts` or building character UI** (see the divergence note
   under "Architecture").
-- `DMTool\DMTool\Models\{Auth,Reference}\` — the other DTOs.
-- `DMTool\CLAUDE.md`, `DMTool\docs\ROADMAP.md`, `DMTool\docs\LEVELUP-ENGINE.md` —
+- `<backend>\DMTool\Models\{Auth,Reference}\` — the other DTOs.
+- `<backend>\CLAUDE.md`, `<backend>\docs\ROADMAP.md`, `<backend>\docs\LEVELUP-ENGINE.md` —
   domain rules and the level-up engine design.
+- (`<backend>` = machine-dependent path; see workspace root `CLAUDE.md`)
 
 `FRONTEND-CONTEXT.md` is the fuller frontend handover (route map, screen status,
 gotchas). Keep it in sync when architecture changes.
