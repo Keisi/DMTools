@@ -93,6 +93,47 @@
   padding-bottom: var(--sp-3);
 }
 
+/* ---- Ally / Enemy sub-sections ---- */
+.enc__subsection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.enc__subsection + .enc__subsection {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--border);
+}
+.enc__subsection-head {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.enc__subsection--ally .enc__subsection-head {
+  color: var(--accent);
+}
+.enc__subsection--enemy .enc__subsection-head {
+  color: var(--c-crimson-400);
+}
+.enc__subsection-empty {
+  font-size: var(--fs-sm);
+}
+.enc__add-submit {
+  align-self: flex-end;
+  margin-top: var(--sp-1);
+}
+.enc__add-submit--enemy {
+  border-color: var(--c-crimson-500);
+  color: var(--c-crimson-400);
+}
+.enc__add-submit--enemy:hover:not(:disabled) {
+  background: var(--action);
+  color: #fff;
+  border-color: var(--action);
+}
+
 /* ---- Combatant list ---- */
 .enc__list {
   list-style: none;
@@ -140,7 +181,8 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 80px;
+  width: 140px;
+  flex-shrink: 0;
 }
 .enc__comb-name {
   font-family: var(--font-display);
