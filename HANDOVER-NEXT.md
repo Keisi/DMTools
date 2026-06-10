@@ -1,6 +1,13 @@
 # Handover — DMTool-FrontEnd (for the next session)
 
-> **▶ NEXT ACTION ON RESUME:** check the backend's reply to **`FRONTEND-REQUEST-unarmed-attacks.md`**
+> **▶ SCOPE B IS NEXT (2026-06-10):** backend merged the `scope-b` vertical to `master`
+> (campaigns, encounters, SignalR, DM transfer, character copy, retire flag). Frontend has
+> **no Scope B UI yet** (the local `scope-b` branch is just two config tweaks). The build
+> plan — tiers, model strategy, endpoints, enums, the SignalR risk note — is in
+> **`SCOPE-B-PLAN.md`**. Build Tiers 0–3 on **Sonnet**, flip to **Opus** for Tier 4 (SignalR).
+> Backend contract: `DMTool/docs/SCOPE-B-FRONTEND-HANDOVER.md`.
+
+> **▶ EARLIER NEXT ACTION:** check the backend's reply to **`FRONTEND-REQUEST-unarmed-attacks.md`**
 > (sent this session). When the backend returns an **Unarmed Strike** in `weaponAttacks` (Monk Martial
 > Arts die etc.), it renders in the Attacks block automatically — then **drop the interim "Unarmed"
 > placeholder row** in `EquippedBlock` (`CharacterSheet.tsx`). Other still-open optional items (all
