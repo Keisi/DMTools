@@ -40,7 +40,15 @@ backend lives at `C:\Users\keisi\source\repos\DMTool` — read its `CLAUDE.md`,
   **migration 049** as of INCOMING #11.
 
 ### Backend requests outstanding (filed in the backend repo)
-All but one are **delivered + consumed**. Still pending the backend session:
+- **`FRONTEND-REQUEST-scope-b-invitation-discovery.md`** (2026-06-10, NEW) — **invited
+  players can't discover their invitations.** `GET /api/campaigns` excludes Invited
+  (status 1) members (returns `[]`) and `GET /{id}` 404s for them, so the only path is
+  a hand-shared URL → `POST /join` auto-accept. Asked for either a
+  `GET /api/campaigns/invitations` list endpoint OR including invited campaigns in the
+  list + a `myStatus` field + read-only `GET /{id}` for invitees. The DM side is fixed
+  (invited members now show in an "awaiting response" list with Cancel). Also a
+  non-blocking note: the hub negotiates SSE-only (no WS upgrade from IIS) — optional
+  backend `UseWebSockets()` enhancement.
 - **`FRONTEND-REQUEST-spell-scaling-tier2.md`** — structured per-slot/per-level
   scaling dice (`scaling.diceByLevel`) so we can render a **computed** upcast
   table. Tier 1 (free-text `scalingDice`) is shipped and only *displayed*; the
