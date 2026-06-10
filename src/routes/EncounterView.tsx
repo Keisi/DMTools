@@ -414,98 +414,107 @@ export default function EncounterView() {
                   {isDm && !isEnded && (
                     <div className="enc__comb-controls">
                       <div className="enc__ctrl-grp">
-                        <span className="enc__ctrl-label">Init</span>
-                        <input
-                          type="number"
-                          className="input enc__init-inp"
-                          value={initInputs[c.id] ?? ""}
-                          onChange={(e) =>
-                            setInitInputs((prev) => ({
-                              ...prev,
-                              [c.id]: e.target.value,
-                            }))
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter")
-                              handleSetInitiative(c);
-                          }}
-                          disabled={isBusy}
-                          placeholder="—"
-                        />
-                        <button
-                          className="btn enc__set-btn"
-                          disabled={isBusy}
-                          onClick={() => handleSetInitiative(c)}
-                        >
-                          Set
-                        </button>
+                        <span className="enc__ctrl-label">Initiative</span>
+                        <div className="enc__ctrl-row">
+                          <input
+                            type="number"
+                            className="input enc__init-inp"
+                            value={initInputs[c.id] ?? ""}
+                            onChange={(e) =>
+                              setInitInputs((prev) => ({
+                                ...prev,
+                                [c.id]: e.target.value,
+                              }))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter")
+                                handleSetInitiative(c);
+                            }}
+                            disabled={isBusy}
+                            placeholder="—"
+                          />
+                          <button
+                            className="btn enc__set-btn"
+                            disabled={isBusy}
+                            onClick={() => handleSetInitiative(c)}
+                          >
+                            Set
+                          </button>
+                        </div>
                       </div>
 
                       <div className="enc__ctrl-grp">
-                        <input
-                          type="number"
-                          className="input enc__delta-inp"
-                          value={deltaInputs[c.id] ?? ""}
-                          onChange={(e) =>
-                            setDeltaInputs((prev) => ({
-                              ...prev,
-                              [c.id]: e.target.value,
-                            }))
-                          }
-                          disabled={isBusy}
-                          placeholder="N"
-                          min="0"
-                        />
-                        <button
-                          className="btn enc__dmg-btn"
-                          disabled={isBusy}
-                          onClick={() => handleApplyDelta(c, false)}
-                          title="Apply damage"
-                        >
-                          Dmg
-                        </button>
-                        <button
-                          className="btn enc__heal-btn"
-                          disabled={isBusy}
-                          onClick={() => handleApplyDelta(c, true)}
-                          title="Apply healing"
-                        >
-                          Heal
-                        </button>
+                        <span className="enc__ctrl-label">Damage / Heal</span>
+                        <div className="enc__ctrl-row">
+                          <input
+                            type="number"
+                            className="input enc__delta-inp"
+                            value={deltaInputs[c.id] ?? ""}
+                            onChange={(e) =>
+                              setDeltaInputs((prev) => ({
+                                ...prev,
+                                [c.id]: e.target.value,
+                              }))
+                            }
+                            disabled={isBusy}
+                            placeholder="Amt"
+                            min="0"
+                          />
+                          <button
+                            className="btn enc__dmg-btn"
+                            disabled={isBusy}
+                            onClick={() => handleApplyDelta(c, false)}
+                          >
+                            Dmg
+                          </button>
+                          <button
+                            className="btn enc__heal-btn"
+                            disabled={isBusy}
+                            onClick={() => handleApplyDelta(c, true)}
+                          >
+                            Heal
+                          </button>
+                        </div>
                       </div>
 
                       <div className="enc__ctrl-grp">
-                        <input
-                          type="number"
-                          className="input enc__sethp-inp"
-                          value={setHpInputs[c.id] ?? ""}
-                          onChange={(e) =>
-                            setSetHpInputs((prev) => ({
-                              ...prev,
-                              [c.id]: e.target.value,
-                            }))
-                          }
-                          disabled={isBusy}
-                          placeholder="Set HP"
-                        />
-                        <button
-                          className="btn enc__set-btn"
-                          disabled={isBusy}
-                          onClick={() => handleSetHp(c)}
-                          title="Set HP directly"
-                        >
-                          =
-                        </button>
+                        <span className="enc__ctrl-label">Set HP</span>
+                        <div className="enc__ctrl-row">
+                          <input
+                            type="number"
+                            className="input enc__sethp-inp"
+                            value={setHpInputs[c.id] ?? ""}
+                            onChange={(e) =>
+                              setSetHpInputs((prev) => ({
+                                ...prev,
+                                [c.id]: e.target.value,
+                              }))
+                            }
+                            disabled={isBusy}
+                            placeholder="Value"
+                          />
+                          <button
+                            className="btn enc__set-btn"
+                            disabled={isBusy}
+                            onClick={() => handleSetHp(c)}
+                          >
+                            Set
+                          </button>
+                        </div>
                       </div>
 
-                      <button
-                        className="btn enc__remove-btn"
-                        disabled={isBusy}
-                        onClick={() => handleRemove(c.id)}
-                        title="Remove from encounter"
-                      >
-                        ✕
-                      </button>
+                      <div className="enc__ctrl-grp">
+                        <span className="enc__ctrl-label">Remove</span>
+                        <div className="enc__ctrl-row">
+                          <button
+                            className="btn enc__remove-btn"
+                            disabled={isBusy}
+                            onClick={() => handleRemove(c.id)}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
 

@@ -181,11 +181,16 @@
 /* Controls column */
 .enc__comb-controls {
   display: flex;
-  align-items: center;
-  gap: var(--sp-3);
+  align-items: flex-end;
+  gap: var(--sp-4);
   flex-wrap: wrap;
 }
 .enc__ctrl-grp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.enc__ctrl-row {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
@@ -195,6 +200,7 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   white-space: nowrap;
+  opacity: 0.7;
 }
 .enc__init-inp {
   width: 52px;
