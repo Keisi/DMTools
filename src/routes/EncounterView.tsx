@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { campaigns } from "../api/endpoints";
+import { campaigns, characters as charApi } from "../api/endpoints";
 import type {
   EncounterResponse,
   CampaignCharacterResponse,
@@ -252,10 +252,18 @@ export default function EncounterView() {
 
   function handleCharSelect(charId: string) {
     setAddCharId(charId);
-    if (charId && !addName) {
-      const ch = campChars.find((c) => c.characterId === charId);
-      if (ch) setAddName(ch.characterName);
-    }
+    if (!charId) return;
+    const ch = campChars.find((c) => c.characterId === charId);
+    if (ch && !addName) setAddName(ch.characterName);
+    charApi
+      .get(charId)
+      .then((sheet) => {
+        setAddMaxHp(String(sheet.maxHitPoints));
+        setAddAc(String(sheet.armorClass));
+      })
+      .catch(() => {
+        // non-owner; leave fields blank for manual entry
+      });
   }
 
   if (loading) {
