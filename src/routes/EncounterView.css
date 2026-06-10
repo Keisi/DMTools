@@ -261,18 +261,30 @@
 /* ---- Add combatant form ---- */
 .enc__add-form {
   display: flex;
-  gap: var(--sp-3);
+  gap: var(--sp-4);
   flex-wrap: wrap;
   align-items: flex-end;
 }
-.enc__add-name {
+.enc__add-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.enc__add-field--name {
   flex: 2;
   min-width: 140px;
 }
-.enc__add-num {
-  flex: 0 0 96px;
-}
-.enc__add-char {
+.enc__add-field--char {
   flex: 2;
   min-width: 180px;
+}
+.enc__add-label {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--c-text-muted, var(--text));
+  opacity: 0.7;
+}
+.enc__add-num {
+  width: 80px;
 }

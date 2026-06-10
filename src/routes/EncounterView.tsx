@@ -529,44 +529,53 @@ export default function EncounterView() {
         <section className="enc__section panel">
           <h2 className="enc__section-title">Add Combatant</h2>
           <form className="enc__add-form" onSubmit={handleAddCombatant}>
-            <input
-              className="input enc__add-name"
-              placeholder="Name"
-              value={addName}
-              onChange={(e) => setAddName(e.target.value)}
-              required
-            />
-            <input
-              type="number"
-              className="input enc__add-num"
-              placeholder="Max HP"
-              value={addMaxHp}
-              onChange={(e) => setAddMaxHp(e.target.value)}
-              required
-              min="1"
-            />
-            <input
-              type="number"
-              className="input enc__add-num"
-              placeholder="AC"
-              value={addAc}
-              onChange={(e) => setAddAc(e.target.value)}
-              required
-              min="0"
-            />
+            <div className="enc__add-field enc__add-field--name">
+              <label className="enc__add-label">Name</label>
+              <input
+                className="input"
+                value={addName}
+                onChange={(e) => setAddName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="enc__add-field">
+              <label className="enc__add-label">Max HP</label>
+              <input
+                type="number"
+                className="input enc__add-num"
+                value={addMaxHp}
+                onChange={(e) => setAddMaxHp(e.target.value)}
+                required
+                min="1"
+              />
+            </div>
+            <div className="enc__add-field">
+              <label className="enc__add-label">AC</label>
+              <input
+                type="number"
+                className="input enc__add-num"
+                value={addAc}
+                onChange={(e) => setAddAc(e.target.value)}
+                required
+                min="0"
+              />
+            </div>
             {campChars.length > 0 && (
-              <select
-                className="input enc__add-char"
-                value={addCharId}
-                onChange={(e) => handleCharSelect(e.target.value)}
-              >
-                <option value="">— link to campaign character (optional) —</option>
-                {campChars.map((cc) => (
-                  <option key={cc.characterId} value={cc.characterId}>
-                    {cc.characterName} ({cc.ownerUsername})
-                  </option>
-                ))}
-              </select>
+              <div className="enc__add-field enc__add-field--char">
+                <label className="enc__add-label">Link character</label>
+                <select
+                  className="input"
+                  value={addCharId}
+                  onChange={(e) => handleCharSelect(e.target.value)}
+                >
+                  <option value="">— optional —</option>
+                  {campChars.map((cc) => (
+                    <option key={cc.characterId} value={cc.characterId}>
+                      {cc.characterName} ({cc.ownerUsername})
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
             <button
               className="btn btn--primary"
