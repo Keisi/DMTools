@@ -30,6 +30,7 @@ import {
   ChoicesStep,
   ClassStep,
   describeError,
+  DetailsStep,
   EquipmentStep,
   FeatsStep,
   ImprovementsPanel,
@@ -50,6 +51,7 @@ import {
   type AbilityMode,
   type ChoiceGroup,
   type Coins,
+  type DetailsFields,
   type SpellPick,
 } from "./CharacterBuilder.steps";
 import "./CharacterBuilder.css";
@@ -118,6 +120,21 @@ export default function CharacterBuilder() {
   const [weaponIds, setWeaponIds] = useState<string[]>([]);
   const [inventory, setInventory] = useState<InventoryItemRequest[]>([]);
   const [coins, setCoins] = useState<Coins>(ZERO_COINS);
+  // Background skill swaps: bg-skill-id → replacement class-skill-option id.
+  const [bgSkillSwaps, setBgSkillSwapsState] = useState<Record<string, string>>({});
+  // Character details (backstory + appearance) — wizard step 7.
+  const [details, setDetails] = useState<DetailsFields>({
+    personalityTraits: "",
+    ideals: "",
+    bonds: "",
+    flaws: "",
+    backstory: "",
+    height: "",
+    weight: "",
+    eyes: "",
+    skin: "",
+    hair: "",
+  });
 
   // Edit mode: the loaded character (carries fields the wizard doesn't edit).
   const [original, setOriginal] = useState<CharacterResponse | null>(null);
@@ -248,6 +265,18 @@ export default function CharacterBuilder() {
           ep: ch.electrumPieces,
           gp: ch.goldPieces,
           pp: ch.platinumPieces,
+        });
+        setDetails({
+          personalityTraits: ch.personalityTraits ?? "",
+          ideals: ch.ideals ?? "",
+          bonds: ch.bonds ?? "",
+          flaws: ch.flaws ?? "",
+          backstory: ch.backstory ?? "",
+          height: ch.height ?? "",
+          weight: ch.weight ?? "",
+          eyes: ch.eyes ?? "",
+          skin: ch.skin ?? "",
+          hair: ch.hair ?? "",
         });
         // Recover which of the character's languages were the background-Selection picks.
         const sel = bgs
@@ -504,6 +533,7 @@ export default function CharacterBuilder() {
     choicesComplete, // Choices (fighting style / expertise / metamagic)
     spellsComplete, // Spells (known casters)
     languagesComplete, // Background (only the language pick can block)
+    true, // Details (optional)
     true, // Feats (optional)
     true, // Equipment (optional)
     false, // Review (uses Save)
@@ -550,8 +580,9 @@ export default function CharacterBuilder() {
     choicesComplete,
     spellsComplete,
     languagesComplete,
-    true,
-    true,
+    true, // Details
+    true, // Feats
+    true, // Equipment
     canCreate,
   ];
 
@@ -582,9 +613,10 @@ export default function CharacterBuilder() {
     !languagesComplete && bgLanguageSelection
       ? `Choose ${bgLanguageSelection.choose} background language${bgLanguageSelection.choose === 1 ? "" : "s"} — ${languageIds.length}/${bgLanguageSelection.choose} selected.`
       : "",
-    "",
-    "",
-    "",
+    "", // Details
+    "", // Feats
+    "", // Equipment
+    "", // Review
   ][step];
 
   // ---- Class list handlers (multiclass) ----
@@ -651,6 +683,22 @@ export default function CharacterBuilder() {
       }
       return next;
     });
+  }
+
+  function pickBackground(id: string | null) {
+    setBackgroundId(id);
+    setBgSkillSwapsState({});
+  }
+  function setBgSkillSwap(bgSkillId: string, replacementId: string | null) {
+    setBgSkillSwapsState((prev) => {
+      const next = { ...prev };
+      if (replacementId) next[bgSkillId] = replacementId;
+      else delete next[bgSkillId];
+      return next;
+    });
+  }
+  function setDetailField(f: keyof DetailsFields, v: string) {
+    setDetails((prev) => ({ ...prev, [f]: v }));
   }
 
   function toggleSkill(id: string) {
@@ -740,6 +788,11 @@ export default function CharacterBuilder() {
         }
         return legs;
       });
+    // Class skills + expertise, plus any background-skill swap replacements.
+    const swapIds = Object.values(bgSkillSwaps).filter((v): v is string => !!v);
+    const allSkillIds = [
+      ...new Set([...skillIds, ...expertiseSkillIds, ...swapIds]),
+    ];
     const payload: CharacterRequest = {
       name: name.trim(),
       description: description.trim() || undefined,
@@ -765,9 +818,8 @@ export default function CharacterBuilder() {
       // Class skills, with any picked for Expertise upgraded to level 2. Union in
       // expertiseSkillIds so an Expertise applied to a background-granted skill
       // (which isn't in skillIds) still round-trips with its level-2 upgrade.
-      skillProficiencies: Array.from(
-        new Set([...skillIds, ...expertiseSkillIds]),
-      ).map((id) => ({
+      // bgSkillSwaps replacement IDs are appended at Proficient level.
+      skillProficiencies: allSkillIds.map((id) => ({
         skillId: id,
         level: expertiseSkillIds.includes(id)
           ? SkillProficiencyLevel.Expertise
@@ -798,6 +850,18 @@ export default function CharacterBuilder() {
       goldPieces: coins.gp,
       platinumPieces: coins.pp,
     };
+    // Character detail fields (wizard step 7) — always include if non-empty.
+    if (details.personalityTraits.trim()) payload.personalityTraits = details.personalityTraits.trim();
+    if (details.ideals.trim()) payload.ideals = details.ideals.trim();
+    if (details.bonds.trim()) payload.bonds = details.bonds.trim();
+    if (details.flaws.trim()) payload.flaws = details.flaws.trim();
+    if (details.backstory.trim()) payload.backstory = details.backstory.trim();
+    if (details.height.trim()) payload.height = details.height.trim();
+    if (details.weight.trim()) payload.weight = details.weight.trim();
+    if (details.eyes.trim()) payload.eyes = details.eyes.trim();
+    if (details.skin.trim()) payload.skin = details.skin.trim();
+    if (details.hair.trim()) payload.hair = details.hair.trim();
+
     if (isEdit && original) {
       // Carry through everything the wizard doesn't expose so the PUT doesn't wipe it.
       payload.hitPointsOverride = original.hitPointsOverride ?? undefined;
@@ -808,16 +872,6 @@ export default function CharacterBuilder() {
             source: s.source ?? undefined,
           }))
         : undefined;
-      payload.personalityTraits = original.personalityTraits ?? undefined;
-      payload.ideals = original.ideals ?? undefined;
-      payload.bonds = original.bonds ?? undefined;
-      payload.flaws = original.flaws ?? undefined;
-      payload.backstory = original.backstory ?? undefined;
-      payload.height = original.height ?? undefined;
-      payload.weight = original.weight ?? undefined;
-      payload.eyes = original.eyes ?? undefined;
-      payload.skin = original.skin ?? undefined;
-      payload.hair = original.hair ?? undefined;
       // Re-submitting class-granted skills/languages would bust the Selection budgets;
       // the homebrew flag relaxes the subset/count checks (level gates still apply).
       payload.allowHomebrewSelections = true;
@@ -1029,19 +1083,26 @@ export default function CharacterBuilder() {
           <BackgroundStep
             backgrounds={backgrounds}
             selectedId={backgroundId}
-            onPick={setBackgroundId}
+            onPick={pickBackground}
             languageSelection={bgLanguageSelection}
             chosenLanguages={languageIds}
             onToggleLanguage={toggleLanguage}
             classSkillIds={skillIds}
+            classSkillPool={skillSelection?.options ?? []}
+            bgSkillSwaps={bgSkillSwaps}
+            onSwap={setBgSkillSwap}
           />
         )}
 
         {step === 7 && (
-          <FeatsStep feats={feats} chosen={featIds} onToggle={toggleFeat} />
+          <DetailsStep fields={details} onChange={setDetailField} />
         )}
 
         {step === 8 && (
+          <FeatsStep feats={feats} chosen={featIds} onToggle={toggleFeat} />
+        )}
+
+        {step === 9 && (
           <EquipmentStep
             armors={armors}
             weapons={weapons}
@@ -1065,7 +1126,7 @@ export default function CharacterBuilder() {
           />
         )}
 
-        {step === 9 && (
+        {step === 10 && (
           <Review
             name={name}
             raceName={races.find((r) => r.id === raceId)?.name}

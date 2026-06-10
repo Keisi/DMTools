@@ -434,6 +434,7 @@ export default function CharacterSheet() {
           classes={c.classes}
           abilityScores={c.abilityScores}
           skills={c.skills}
+          currentSpells={c.spells}
           onClose={() => setLevelingUp(false)}
           onApplied={(updated) => {
             setC(updated);

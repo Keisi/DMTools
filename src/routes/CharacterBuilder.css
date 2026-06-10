@@ -95,6 +95,17 @@
   overflow: hidden;
 }
 
+/* ---- Subrace picker (Race step) ---- */
+.builder__subrace {
+  margin-top: var(--sp-6);
+}
+.builder__section-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin-bottom: var(--sp-2);
+}
+
 .builder__nav {
   display: flex;
   justify-content: space-between;
@@ -428,6 +439,63 @@
   color: var(--c-crimson-400);
   line-height: 1.5;
   margin-bottom: var(--sp-2);
+}
+
+/* Background skill swap pickers (duplicate bg skill → class skill replacement). */
+.builder__bg-swaps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+.builder__bg-swap {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.builder__bg-swap-label {
+  font-size: var(--fs-sm);
+  color: var(--c-crimson-400);
+  min-width: 8rem;
+}
+.builder__bg-swap-sel {
+  flex: 1;
+  min-width: 12rem;
+}
+
+/* ---- Details step (backstory + appearance) ---- */
+.builder__details-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+.builder__details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+}
+@media (max-width: 560px) {
+  .builder__details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.builder__details-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.builder__details-field label {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.builder__details-field--full {
+  grid-column: 1 / -1;
+}
+.builder__details-appearance {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--sp-3);
 }
 
 /* ---- Feats step ---- */

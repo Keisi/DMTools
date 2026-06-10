@@ -17,6 +17,7 @@ import {
   type LevelUpSpellPoolEntryResponse,
   type MulticlassPrerequisiteResponse,
   type SkillBonusResponse,
+  type SpellRef,
 } from "../api/types";
 import { MAX_TOTAL_LEVEL } from "./CharacterBuilder.steps";
 import "./LevelUpDialog.css";
@@ -50,6 +51,7 @@ export default function LevelUpDialog({
   skills,
   mode = "levelup",
   addableClasses = [],
+  currentSpells = [],
   onClose,
   onApplied,
 }: {
@@ -59,6 +61,7 @@ export default function LevelUpDialog({
   skills: SkillBonusResponse[];
   mode?: "levelup" | "multiclass";
   addableClasses?: ClassResponse[];
+  currentSpells?: SpellRef[];
   onClose: () => void;
   onApplied: (updated: CharacterResponse) => void;
 }) {
@@ -100,6 +103,10 @@ export default function LevelUpDialog({
   // DM override for an unmet multiclass ability-score prerequisite — sends
   // allowHomebrewSelections so the backend (mig. 045) lets the multiclass through.
   const [dmOverride, setDmOverride] = useState(false);
+  // Optional spell swap (known casters only): remove one existing spell, add a replacement.
+  const [wantsSwap, setWantsSwap] = useState(false);
+  const [swapOutSpellId, setSwapOutSpellId] = useState<string | null>(null);
+  const [swapInSpellId, setSwapInSpellId] = useState<string | null>(null);
   // RAW reduced multiclass choice-grants (Bard skill+instrument, Ranger/Rogue
   // skill), keyed by selectionId. Optional — the backend allows empty picks.
   const [multiclassChoices, setMulticlassChoices] = useState<
@@ -137,6 +144,9 @@ export default function LevelUpDialog({
         setFeatureChoices({});
         setMulticlassChoices({});
         setDmOverride(false);
+        setWantsSwap(false);
+        setSwapOutSpellId(null);
+        setSwapInSpellId(null);
       })
       .catch((err) => {
         if (!active) return;
@@ -195,6 +205,9 @@ export default function LevelUpDialog({
   // RAW 13+ gate. Unmet blocks Apply unless the DM ticks the override.
   const prereq = plan?.multiclassPrerequisite ?? null;
   const prereqOk = !prereq || prereq.isMet || dmOverride;
+  // Spell swap is optional (wantsSwap toggled by the user), but if enabled both
+  // the spell to remove and the replacement must be chosen before applying.
+  const swapOk = !wantsSwap || (!!swapOutSpellId && !!swapInSpellId);
   const canApply =
     !!plan &&
     hpOk &&
@@ -204,6 +217,7 @@ export default function LevelUpDialog({
     spellsOk &&
     featuresOk &&
     prereqOk &&
+    swapOk &&
     !busy;
 
   // What's still required before Apply works — surfaced next to the button so a
@@ -236,6 +250,8 @@ export default function LevelUpDialog({
               } chosen)`,
           ),
         !prereqOk ? "the multiclass ability prerequisite (or DM override)" : null,
+        wantsSwap && !swapOutSpellId ? "a spell to swap out" : null,
+        wantsSwap && !swapInSpellId ? "a replacement spell" : null,
       ].filter(Boolean)
     : [];
 
@@ -304,7 +320,19 @@ export default function LevelUpDialog({
       allowHomebrewSelections: dmOverride || undefined,
     };
     try {
-      const updated = await characters.levelUpApply(characterId, req);
+      let updated = await characters.levelUpApply(characterId, req);
+      if (wantsSwap && swapOutSpellId && swapInSpellId) {
+        // Apply the spell swap: remove swapOut, add swapIn, keep everything else.
+        const cantripIds = updated.spells.filter((s) => s.level === 0).map((s) => s.id);
+        const newSpellIds = updated.spells
+          .filter((s) => s.level > 0 && s.id !== swapOutSpellId)
+          .map((s) => s.id)
+          .concat(swapInSpellId);
+        updated = await characters.updateSpells(characterId, {
+          cantripIds,
+          spellIds: newSpellIds,
+        });
+      }
       onApplied(updated);
     } catch (err) {
       setError(
@@ -428,6 +456,35 @@ export default function LevelUpDialog({
                 onToggle={(id) => toggle(setSpellIds, id, plan.spellChoices!.newSpells)}
               />
             )}
+
+            {/* Spell swap: known casters can replace one existing spell at level-up.
+                Hidden for multiclass (no spells yet), prepared casters, and when the
+                character has no leveled spells to swap out. */}
+            {mode === "levelup" &&
+              plan.spellChoices &&
+              !isUnset(plan.spellChoices.newSpells) &&
+              currentSpells.some((s) => s.level > 0) && (
+                <SpellSwapSection
+                  currentSpells={currentSpells.filter((s) => s.level > 0)}
+                  swapPool={plan.spellChoices.spellPool.filter(
+                    (s) =>
+                      !currentSpells.some((c) => c.id === s.id) &&
+                      !spellIds.includes(s.id),
+                  )}
+                  wantsSwap={wantsSwap}
+                  onWantsSwap={(v) => {
+                    setWantsSwap(v);
+                    if (!v) {
+                      setSwapOutSpellId(null);
+                      setSwapInSpellId(null);
+                    }
+                  }}
+                  swapOutSpellId={swapOutSpellId}
+                  onSwapOut={setSwapOutSpellId}
+                  swapInSpellId={swapInSpellId}
+                  onSwapIn={setSwapInSpellId}
+                />
+              )}
 
             {plan.featureChoices.map((fc) => (
               <FeatureChoice
@@ -908,6 +965,98 @@ function SpellChoice({
         })}
         {shown.length === 0 && <span className="text-faint">No matches.</span>}
       </div>
+    </section>
+  );
+}
+
+function SpellSwapSection({
+  currentSpells,
+  swapPool,
+  wantsSwap,
+  onWantsSwap,
+  swapOutSpellId,
+  onSwapOut,
+  swapInSpellId,
+  onSwapIn,
+}: {
+  currentSpells: SpellRef[];
+  swapPool: LevelUpSpellPoolEntryResponse[];
+  wantsSwap: boolean;
+  onWantsSwap: (v: boolean) => void;
+  swapOutSpellId: string | null;
+  onSwapOut: (id: string | null) => void;
+  swapInSpellId: string | null;
+  onSwapIn: (id: string | null) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const shown = q
+    ? swapPool.filter(
+        (s) => s.id === swapInSpellId || s.name.toLowerCase().startsWith(q),
+      )
+    : swapPool;
+  return (
+    <section className="lvl__block">
+      <h3 className="lvl__block-title">Replace a Known Spell (optional)</h3>
+      <label className="lvl__hint" style={{ display: "flex", gap: "var(--sp-2)", alignItems: "center", cursor: "pointer" }}>
+        <input
+          type="checkbox"
+          checked={wantsSwap}
+          onChange={(e) => onWantsSwap(e.target.checked)}
+        />
+        <span className="text-faint">Swap one known spell for a different one.</span>
+      </label>
+      {wantsSwap && (
+        <>
+          <select
+            className="input"
+            style={{ marginTop: "var(--sp-3)" }}
+            value={swapOutSpellId ?? ""}
+            onChange={(e) => onSwapOut(e.target.value || null)}
+          >
+            <option value="">— choose spell to remove —</option>
+            {currentSpells.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} (L{s.level})
+              </option>
+            ))}
+          </select>
+          {swapPool.length === 0 ? (
+            <p className="text-faint lvl__hint" style={{ marginTop: "var(--sp-2)" }}>
+              No replacement spells available at this level.
+            </p>
+          ) : (
+            <>
+              {swapPool.length > 8 && (
+                <input
+                  className="input lvl__spell-search"
+                  style={{ marginTop: "var(--sp-2)" }}
+                  placeholder={`Search ${swapPool.length} spells…`}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              )}
+              <div className="lvl__options" style={{ marginTop: "var(--sp-2)" }}>
+                {shown.map((s) => (
+                  <button
+                    key={s.id}
+                    className={
+                      "lvl__option" + (s.id === swapInSpellId ? " lvl__option--on" : "")
+                    }
+                    onClick={() => onSwapIn(s.id === swapInSpellId ? null : s.id)}
+                  >
+                    {s.name}
+                    {s.level > 0 && <span className="text-faint"> · L{s.level}</span>}
+                  </button>
+                ))}
+                {shown.length === 0 && (
+                  <span className="text-faint">No matches.</span>
+                )}
+              </div>
+            </>
+          )}
+        </>
+      )}
     </section>
   );
 }

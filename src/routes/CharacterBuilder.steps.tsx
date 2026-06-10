@@ -30,6 +30,7 @@ export const STEPS = [
   "Choices",
   "Spells",
   "Background",
+  "Details",
   "Feats",
   "Equipment",
   "Review",
@@ -596,6 +597,9 @@ export function BackgroundStep({
   chosenLanguages,
   onToggleLanguage,
   classSkillIds,
+  classSkillPool,
+  bgSkillSwaps,
+  onSwap,
 }: {
   backgrounds: BackgroundResponse[];
   selectedId: string | null;
@@ -603,9 +607,11 @@ export function BackgroundStep({
   languageSelection: SelectionResponse | null;
   chosenLanguages: string[];
   onToggleLanguage: (id: string) => void;
-  // Skill ids already picked in the Skills step (class skills). A background skill
-  // that duplicates one is flagged: 5e lets you swap a duplicate for another skill.
   classSkillIds: string[];
+  // Class skill pool options for swap replacements (skills not yet chosen).
+  classSkillPool: { optionId: string; name: string }[];
+  bgSkillSwaps: Record<string, string>;
+  onSwap: (bgSkillId: string, replacementId: string | null) => void;
 }) {
   if (backgrounds.length === 0)
     return (
@@ -668,7 +674,7 @@ export function BackgroundStep({
                     }
                     data-tooltip={
                       dup
-                        ? "Already chosen as a class skill — in 5e a duplicate background skill lets you take a different one instead."
+                        ? "Already chosen as a class skill — use the swap picker below to replace it."
                         : undefined
                     }
                   >
@@ -690,13 +696,38 @@ export function BackgroundStep({
             </div>
           )}
           {dupSkills.length > 0 && (
-            <p className="builder__bg-dupnote">
-              {dupSkills.map((s) => s.name).join(", ")}{" "}
-              {dupSkills.length === 1 ? "duplicates" : "duplicate"} a class skill
-              pick. 5e lets you swap a duplicate background skill for another of
-              your choice — adjust your class skill picks or note the swap with
-              your DM.
-            </p>
+            <div className="builder__bg-swaps">
+              {dupSkills.map((s) => {
+                const usedSwaps = new Set(
+                  Object.entries(bgSkillSwaps)
+                    .filter(([k]) => k !== s.id)
+                    .map(([, v]) => v)
+                    .filter(Boolean),
+                );
+                const available = classSkillPool.filter(
+                  (o) =>
+                    !classSkillIds.includes(o.optionId) &&
+                    !usedSwaps.has(o.optionId),
+                );
+                return (
+                  <div key={s.id} className="builder__bg-swap">
+                    <span className="builder__bg-swap-label">⚠ {s.name}</span>
+                    <select
+                      className="input builder__bg-swap-sel"
+                      value={bgSkillSwaps[s.id] ?? ""}
+                      onChange={(e) => onSwap(s.id, e.target.value || null)}
+                    >
+                      <option value="">— keep duplicate —</option>
+                      {available.map((o) => (
+                        <option key={o.optionId} value={o.optionId}>
+                          Swap → {o.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
           )}
           {bg.featureName && (
             <p className="text-muted">
@@ -1359,6 +1390,88 @@ function weaponMeta(w: WeaponResponse): string {
 }
 function weaponTip(w: WeaponResponse): string {
   return `${w.weaponCategory ?? "Weapon"}: if your class isn't proficient with it, your attacks don't add your proficiency bonus.`;
+}
+
+// ---- Details step (backstory + appearance) ----
+
+export type DetailsFields = {
+  personalityTraits: string;
+  ideals: string;
+  bonds: string;
+  flaws: string;
+  backstory: string;
+  height: string;
+  weight: string;
+  eyes: string;
+  skin: string;
+  hair: string;
+};
+
+export function DetailsStep({
+  fields,
+  onChange,
+}: {
+  fields: DetailsFields;
+  onChange: (f: keyof DetailsFields, v: string) => void;
+}) {
+  const textarea = (
+    f: keyof DetailsFields,
+    label: string,
+    full?: boolean,
+  ) => (
+    <div
+      className={
+        "builder__details-field" +
+        (full ? " builder__details-field--full" : "")
+      }
+    >
+      <label htmlFor={`detail-${f}`}>{label}</label>
+      <textarea
+        id={`detail-${f}`}
+        className="input"
+        rows={3}
+        value={fields[f]}
+        onChange={(e) => onChange(f, e.target.value)}
+      />
+    </div>
+  );
+  const textinput = (f: keyof DetailsFields, label: string) => (
+    <div className="builder__details-field">
+      <label htmlFor={`detail-${f}`}>{label}</label>
+      <input
+        id={`detail-${f}`}
+        className="input"
+        type="text"
+        value={fields[f]}
+        onChange={(e) => onChange(f, e.target.value)}
+      />
+    </div>
+  );
+  return (
+    <div className="builder__details-form">
+      <p className="text-faint builder__hint">
+        Optional — fill in backstory and appearance details. Everything here can
+        be edited on the sheet later.
+      </p>
+      <div className="builder__details-grid">
+        {textarea("personalityTraits", "Personality Traits")}
+        {textarea("ideals", "Ideals")}
+        {textarea("bonds", "Bonds")}
+        {textarea("flaws", "Flaws")}
+        {textarea("backstory", "Backstory", true)}
+      </div>
+      <div>
+        <h4 className="builder__equip-title">Appearance</h4>
+        <div className="builder__details-appearance">
+          {textinput("height", "Height")}
+          {textinput("weight", "Weight")}
+          {textinput("eyes", "Eyes")}
+          {textinput("skin", "Skin")}
+          {textinput("hair", "Hair")}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function SingleChoice({
