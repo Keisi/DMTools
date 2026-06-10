@@ -1179,3 +1179,9 @@ export interface UpdateCombatantHpRequest {
   setCurrentHp?: number | null;
   setTempHp?: number | null;
 }
+
+export interface UpdateCombatantRequest {
+  name?: string;
+  maxHp?: number;
+  armorClass?: number;
+}

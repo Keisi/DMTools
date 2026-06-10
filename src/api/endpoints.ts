@@ -44,6 +44,7 @@ import type {
   StatResponse,
   TransferDmRequest,
   UpdateCombatantHpRequest,
+  UpdateCombatantRequest,
   UpdateHpRequest,
   UpdateSpellsRequest,
   WeaponResponse,
@@ -246,6 +247,16 @@ export const campaigns = {
   ) =>
     api.put<EncounterResponse>(
       `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}/hp`,
+      body,
+    ),
+  updateCombatant: (
+    campaignId: string,
+    encounterId: string,
+    combatantId: string,
+    body: UpdateCombatantRequest,
+  ) =>
+    api.put<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}`,
       body,
     ),
 };

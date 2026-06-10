@@ -6,6 +6,7 @@ import type {
   CampaignCharacterResponse,
   CampaignMemberResponse,
   CombatantResponse,
+  UpdateCombatantRequest,
 } from "../api/types";
 import { CampaignMemberStatus, EncounterStatus } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
@@ -54,6 +55,10 @@ export default function EncounterView() {
   const [deltaInputs, setDeltaInputs] = useState<Record<string, string>>({});
   // Per-combatant direct set HP
   const [setHpInputs, setSetHpInputs] = useState<Record<string, string>>({});
+  // Per-combatant stat edits (unlinked combatants only)
+  const [nameInputs, setNameInputs] = useState<Record<string, string>>({});
+  const [maxHpInputs, setMaxHpInputs] = useState<Record<string, string>>({});
+  const [acInputs, setAcInputs] = useState<Record<string, string>>({});
 
   // Ally add form
   const [allyName, setAllyName] = useState("");
@@ -70,6 +75,9 @@ export default function EncounterView() {
 
   const [actionBusy, setActionBusy] = useState(false);
   const [busyCombatant, setBusyCombatant] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [endConfirm, setEndConfirm] = useState(false);
+  const [initiativeWarning, setInitiativeWarning] = useState<string[] | null>(null);
 
   // Set when a live EncounterArchived push arrives for a viewer who didn't
   // trigger the delete (the DM who archives navigates away in handleDelete).
@@ -105,6 +113,11 @@ export default function EncounterView() {
   function applyUpdate(enc: EncounterResponse) {
     setEncounter(enc);
     syncInitInputs(enc);
+    // Clear per-combatant edit buffers so inputs reflect the authoritative server value.
+    const ids = new Set(enc.combatants.map((c) => c.id));
+    setNameInputs((p) => Object.fromEntries(Object.entries(p).filter(([k]) => !ids.has(k))));
+    setMaxHpInputs((p) => Object.fromEntries(Object.entries(p).filter(([k]) => !ids.has(k))));
+    setAcInputs((p) => Object.fromEntries(Object.entries(p).filter(([k]) => !ids.has(k))));
     setError(null);
   }
 
@@ -176,6 +189,13 @@ export default function EncounterView() {
   }, [campaignId, encounterId]);
 
   async function handleStart() {
+    const missing = (encounter?.combatants ?? [])
+      .filter((c) => c.initiative === null || c.initiative === undefined)
+      .map((c) => c.name);
+    if (missing.length > 0) {
+      setInitiativeWarning(missing);
+      return;
+    }
     setActionBusy(true);
     try {
       const enc = await campaigns.startEncounter(campaignId, encounterId);
@@ -228,6 +248,35 @@ export default function EncounterView() {
       );
       setActionBusy(false);
     }
+  }
+
+  async function handleRandomizeInitiatives() {
+    const combatants = encounter?.combatants ?? [];
+    if (combatants.length === 0) return;
+    setActionBusy(true);
+    try {
+      let enc: EncounterResponse | null = null;
+      for (const c of combatants) {
+        const roll = Math.floor(Math.random() * 20) + 1;
+        enc = await campaigns.setInitiative(campaignId, encounterId, c.id, {
+          initiative: roll,
+        });
+      }
+      if (enc) {
+        applyUpdate(enc);
+        // syncInitInputs preserves existing inputs; force-overwrite after a roll
+        // so the fields reflect the server's authoritative values immediately.
+        const rolled: Record<string, string> = {};
+        enc.combatants.forEach((c) => {
+          rolled[c.id] = c.initiative !== null ? String(c.initiative) : "";
+        });
+        setInitInputs(rolled);
+      }
+      setInitiativeWarning(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to set initiatives.");
+    }
+    setActionBusy(false);
   }
 
   async function handleSetInitiative(c: CombatantResponse) {
@@ -370,10 +419,43 @@ export default function EncounterView() {
       .catch(() => {});
   }
 
+  async function handleClone(c: CombatantResponse) {
+    const prev = encounter?.combatants ?? [];
+    setBusyCombatant(c.id);
+    try {
+      const enc = await campaigns.addCombatant(campaignId, encounterId, {
+        name: c.name,
+        maxHp: c.maxHp,
+        armorClass: c.armorClass,
+        characterId: null,
+      });
+      assignNewCombatantSide(prev, enc, "enemy");
+      applyUpdate(enc);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Clone failed.");
+    } finally {
+      setBusyCombatant(null);
+    }
+  }
+
+  async function handleUpdateCombatant(c: CombatantResponse, patch: UpdateCombatantRequest) {
+    setBusyCombatant(c.id);
+    try {
+      const enc = await campaigns.updateCombatant(campaignId, encounterId, c.id, patch);
+      applyUpdate(enc);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Update failed.");
+    } finally {
+      setBusyCombatant(null);
+    }
+  }
+
   // Shared combatant row renderer
   function renderCombatant(c: CombatantResponse) {
     const isTurn = c.id === encounter!.activeCombatantId;
     const isBusy = busyCombatant === c.id;
+    const isEnemy = sideOf(c) === "enemy";
+    const isUnlinked = c.characterId === null;
     const hpPct =
       c.maxHp > 0
         ? Math.max(0, Math.round((c.currentHp / c.maxHp) * 100))
@@ -435,65 +517,161 @@ export default function EncounterView() {
               </div>
             </div>
 
-            <div className="enc__ctrl-grp">
-              <span className="enc__ctrl-label">Damage / Heal</span>
-              <div className="enc__ctrl-row">
-                <input
-                  type="number"
-                  className="input enc__delta-inp"
-                  value={deltaInputs[c.id] ?? ""}
-                  onChange={(e) =>
-                    setDeltaInputs((prev) => ({
-                      ...prev,
-                      [c.id]: e.target.value,
-                    }))
-                  }
-                  disabled={isBusy}
-                  placeholder="Amt"
-                  min="0"
-                />
-                <button
-                  className="btn enc__dmg-btn"
-                  disabled={isBusy}
-                  onClick={() => handleApplyDelta(c, false)}
-                >
-                  Dmg
-                </button>
-                <button
-                  className="btn enc__heal-btn"
-                  disabled={isBusy}
-                  onClick={() => handleApplyDelta(c, true)}
-                >
-                  Heal
-                </button>
+            {isActive && (
+              <div className="enc__ctrl-grp">
+                <span className="enc__ctrl-label">Damage / Heal</span>
+                <div className="enc__ctrl-row">
+                  <input
+                    type="number"
+                    className="input enc__delta-inp"
+                    value={deltaInputs[c.id] ?? ""}
+                    onChange={(e) =>
+                      setDeltaInputs((prev) => ({
+                        ...prev,
+                        [c.id]: e.target.value,
+                      }))
+                    }
+                    disabled={isBusy}
+                    placeholder="Amt"
+                    min="0"
+                  />
+                  <button
+                    className="btn enc__dmg-btn"
+                    disabled={isBusy}
+                    onClick={() => handleApplyDelta(c, false)}
+                  >
+                    Dmg
+                  </button>
+                  <button
+                    className="btn enc__heal-btn"
+                    disabled={isBusy}
+                    onClick={() => handleApplyDelta(c, true)}
+                  >
+                    Heal
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className="enc__ctrl-grp">
-              <span className="enc__ctrl-label">Set HP</span>
-              <div className="enc__ctrl-row">
-                <input
-                  type="number"
-                  className="input enc__sethp-inp"
-                  value={setHpInputs[c.id] ?? ""}
-                  onChange={(e) =>
-                    setSetHpInputs((prev) => ({
-                      ...prev,
-                      [c.id]: e.target.value,
-                    }))
-                  }
-                  disabled={isBusy}
-                  placeholder="Value"
-                />
-                <button
-                  className="btn enc__set-btn"
-                  disabled={isBusy}
-                  onClick={() => handleSetHp(c)}
-                >
-                  Set
-                </button>
+            {isActive && (
+              <div className="enc__ctrl-grp">
+                <span className="enc__ctrl-label">Set HP</span>
+                <div className="enc__ctrl-row">
+                  <input
+                    type="number"
+                    className="input enc__sethp-inp"
+                    value={setHpInputs[c.id] ?? ""}
+                    onChange={(e) =>
+                      setSetHpInputs((prev) => ({
+                        ...prev,
+                        [c.id]: e.target.value,
+                      }))
+                    }
+                    disabled={isBusy}
+                    placeholder="Value"
+                  />
+                  <button
+                    className="btn enc__set-btn"
+                    disabled={isBusy}
+                    onClick={() => handleSetHp(c)}
+                  >
+                    Set
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
+
+            {isUnlinked && (isPending || editMode) && (
+              <div className="enc__ctrl-grp">
+                <span className="enc__ctrl-label">Name</span>
+                <div className="enc__ctrl-row">
+                  <input
+                    className="input enc__edit-name-inp"
+                    value={nameInputs[c.id] ?? c.name}
+                    onChange={(e) => setNameInputs((p) => ({ ...p, [c.id]: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const name = (nameInputs[c.id] ?? c.name).trim();
+                        if (name && name !== c.name) handleUpdateCombatant(c, { name });
+                      }
+                    }}
+                    onBlur={() => {
+                      const name = (nameInputs[c.id] ?? c.name).trim();
+                      if (name && name !== c.name) handleUpdateCombatant(c, { name });
+                    }}
+                    disabled={isBusy}
+                  />
+                </div>
+              </div>
+            )}
+
+            {isUnlinked && (isPending || editMode) && (
+              <div className="enc__ctrl-grp">
+                <span className="enc__ctrl-label">Max HP</span>
+                <div className="enc__ctrl-row">
+                  <input
+                    type="number"
+                    className="input enc__add-num"
+                    value={maxHpInputs[c.id] ?? String(c.maxHp)}
+                    onChange={(e) => setMaxHpInputs((p) => ({ ...p, [c.id]: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const v = parseInt(maxHpInputs[c.id] ?? "", 10);
+                        if (!isNaN(v) && v >= 1 && v !== c.maxHp) handleUpdateCombatant(c, { maxHp: v });
+                      }
+                    }}
+                    onBlur={() => {
+                      const v = parseInt(maxHpInputs[c.id] ?? "", 10);
+                      if (!isNaN(v) && v >= 1 && v !== c.maxHp) handleUpdateCombatant(c, { maxHp: v });
+                    }}
+                    disabled={isBusy}
+                    min="1"
+                  />
+                </div>
+              </div>
+            )}
+
+            {isUnlinked && (isPending || editMode) && (
+              <div className="enc__ctrl-grp">
+                <span className="enc__ctrl-label">AC</span>
+                <div className="enc__ctrl-row">
+                  <input
+                    type="number"
+                    className="input enc__add-num"
+                    value={acInputs[c.id] ?? String(c.armorClass)}
+                    onChange={(e) => setAcInputs((p) => ({ ...p, [c.id]: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const v = parseInt(acInputs[c.id] ?? "", 10);
+                        if (!isNaN(v) && v >= 0 && v !== c.armorClass) handleUpdateCombatant(c, { armorClass: v });
+                      }
+                    }}
+                    onBlur={() => {
+                      const v = parseInt(acInputs[c.id] ?? "", 10);
+                      if (!isNaN(v) && v >= 0 && v !== c.armorClass) handleUpdateCombatant(c, { armorClass: v });
+                    }}
+                    disabled={isBusy}
+                    min="0"
+                  />
+                </div>
+              </div>
+            )}
+
+            {isEnemy && (
+              <div className="enc__ctrl-grp">
+                <span className="enc__ctrl-label">Clone</span>
+                <div className="enc__ctrl-row">
+                  <button
+                    className="btn enc__clone-btn"
+                    disabled={isBusy}
+                    onClick={() => handleClone(c)}
+                    title={`Add another ${c.name} (${c.maxHp} HP, AC ${c.armorClass})`}
+                  >
+                    ⧉
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="enc__ctrl-grp">
               <span className="enc__ctrl-label">Remove</span>
@@ -575,6 +753,13 @@ export default function EncounterView() {
   const allies = ordered.filter((c) => sideOf(c) === "ally");
   const enemies = ordered.filter((c) => sideOf(c) === "enemy");
 
+  const linkedCharIds = new Set(
+    encounter.combatants.flatMap((c) => (c.characterId ? [c.characterId] : [])),
+  );
+  const unlinkableCampChars = activeCampChars.filter(
+    (cc) => !linkedCharIds.has(cc.characterId),
+  );
+
   const hubLabel =
     hubStatus === HubStatus.Connected
       ? "Live"
@@ -610,13 +795,23 @@ export default function EncounterView() {
         {isDm && (
           <div className="enc__head-right">
             {isPending && (
-              <button
-                className="btn btn--primary"
-                disabled={actionBusy || encounter.combatants.length === 0}
-                onClick={handleStart}
-              >
-                {actionBusy ? "Starting…" : "Start Combat"}
-              </button>
+              <>
+                <button
+                  className="btn"
+                  disabled={actionBusy || encounter.combatants.length === 0}
+                  onClick={handleRandomizeInitiatives}
+                  title="Roll d20 for every combatant"
+                >
+                  {actionBusy ? "Rolling…" : "Roll Initiatives"}
+                </button>
+                <button
+                  className="btn btn--primary"
+                  disabled={actionBusy || encounter.combatants.length === 0}
+                  onClick={handleStart}
+                >
+                  {actionBusy ? "Starting…" : "Start Combat"}
+                </button>
+              </>
             )}
             {isActive && (
               <>
@@ -628,12 +823,37 @@ export default function EncounterView() {
                   {actionBusy ? "…" : "Next Turn"}
                 </button>
                 <button
-                  className="btn"
-                  disabled={actionBusy}
-                  onClick={handleEnd}
+                  className={`btn${editMode ? " enc__edit-mode-btn--active" : ""}`}
+                  onClick={() => { setEditMode((v) => !v); setEndConfirm(false); }}
                 >
-                  End Combat
+                  {editMode ? "Exit Edit" : "Edit"}
                 </button>
+                {endConfirm ? (
+                  <div className="enc__end-confirm">
+                    <span className="enc__end-confirm-label">End combat?</span>
+                    <button
+                      className="btn enc__end-confirm-yes"
+                      disabled={actionBusy}
+                      onClick={() => { setEndConfirm(false); handleEnd(); }}
+                    >
+                      End
+                    </button>
+                    <button
+                      className="btn"
+                      onClick={() => setEndConfirm(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    className="btn"
+                    disabled={actionBusy}
+                    onClick={() => setEndConfirm(true)}
+                  >
+                    End Combat
+                  </button>
+                )}
               </>
             )}
             {isEnded && (
@@ -654,6 +874,22 @@ export default function EncounterView() {
       {/* Combatants — split into ally and enemy sub-sections */}
       <section className="enc__section panel">
         <h2 className="enc__section-title">Combatants</h2>
+
+        {isActive && encounter.activeCombatantId && (() => {
+          const acting = encounter.combatants.find((c) => c.id === encounter.activeCombatantId);
+          const side = acting ? sideOf(acting) : null;
+          return acting ? (
+            <div className={`enc__now-acting enc__now-acting--${side}`}>
+              <span className="enc__now-acting-label">Now acting</span>
+              <span className="enc__now-acting-name">{acting.name}</span>
+              <span className="enc__now-acting-meta">
+                {acting.initiative !== null ? `Initiative ${acting.initiative}` : "No initiative"}
+                {" · "}
+                {acting.currentHp}&thinsp;/&thinsp;{acting.maxHp}&thinsp;HP
+              </span>
+            </div>
+          ) : null;
+        })()}
 
         {/* Players & Allies */}
         <div className="enc__subsection enc__subsection--ally">
@@ -696,7 +932,7 @@ export default function EncounterView() {
                   min="0"
                 />
               </div>
-              {activeCampChars.length > 0 && (
+              {unlinkableCampChars.length > 0 && (
                 <div className="enc__add-field enc__add-field--char">
                   <label className="enc__add-label">Link character</label>
                   <select
@@ -705,7 +941,7 @@ export default function EncounterView() {
                     onChange={(e) => handleAllyCharSelect(e.target.value)}
                   >
                     <option value="">— optional —</option>
-                    {activeCampChars.map((cc) => (
+                    {unlinkableCampChars.map((cc) => (
                       <option key={cc.characterId} value={cc.characterId}>
                         {cc.characterName} ({cc.ownerUsername})
                       </option>
@@ -780,6 +1016,37 @@ export default function EncounterView() {
           )}
         </div>
       </section>
+
+      {initiativeWarning && (
+        <div className="enc__modal-backdrop" onClick={() => setInitiativeWarning(null)}>
+          <div className="enc__modal panel" onClick={(e) => e.stopPropagation()}>
+            <p className="enc__modal-heading">Set initiatives before starting</p>
+            <p className="enc__modal-body">
+              These combatants still need an initiative value:
+            </p>
+            <ul className="enc__modal-list">
+              {initiativeWarning.map((name) => (
+                <li key={name} className="enc__modal-list-item">{name}</li>
+              ))}
+            </ul>
+            <div className="enc__modal-footer">
+              <button
+                className="btn"
+                disabled={actionBusy}
+                onClick={handleRandomizeInitiatives}
+              >
+                Roll all (d20)
+              </button>
+              <button
+                className="btn btn--primary"
+                onClick={() => setInitiativeWarning(null)}
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
