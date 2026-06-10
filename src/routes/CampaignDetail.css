@@ -259,6 +259,54 @@
   color: var(--c-crimson-400);
 }
 
+/* ---- Encounters ---- */
+.camp__enc-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.camp__enc-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.camp__enc-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--bg-raised);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+.camp__enc-row:hover {
+  background: var(--bg-hover, color-mix(in srgb, var(--bg-raised), var(--accent) 6%));
+  border-color: var(--accent);
+}
+.camp__enc-name {
+  flex: 1;
+  font-family: var(--font-display);
+}
+.camp__enc-round {
+  font-size: var(--fs-sm);
+}
+.camp__enc-status--0 { background: var(--bg-raised); color: var(--c-text-muted, var(--text)); }
+.camp__enc-status--1 { background: var(--action); color: #fff; border-color: var(--action); }
+.camp__enc-status--2 { background: transparent; color: var(--c-text-muted, var(--text)); }
+.camp__enc-form {
+  display: flex;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.camp__enc-session-sel {
+  flex: 1;
+  min-width: 160px;
+}
+
 /* ---- Join CTA ---- */
 .camp-join {
   display: flex;

@@ -7,8 +7,9 @@ import type {
   CampaignCharacterResponse,
   SessionResponse,
   CharacterResponse,
+  EncounterSummaryResponse,
 } from "../api/types";
-import { CampaignMemberStatus } from "../api/types";
+import { CampaignMemberStatus, EncounterStatus } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
 import "./CampaignDetail.css";
@@ -23,6 +24,7 @@ export default function CampaignDetail() {
   const [campChars, setCampChars] = useState<CampaignCharacterResponse[]>([]);
   const [sessions, setSessions] = useState<SessionResponse[]>([]);
   const [myChars, setMyChars] = useState<CharacterResponse[]>([]);
+  const [encounters, setEncounters] = useState<EncounterSummaryResponse[]>([]);
   const [notFound, setNotFound] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +43,9 @@ export default function CampaignDetail() {
   const [creatingSession, setCreatingSession] = useState(false);
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
   const [joiningId, setJoiningId] = useState<string | null>(null);
+  const [encName, setEncName] = useState("");
+  const [encSession, setEncSession] = useState("");
+  const [creatingEnc, setCreatingEnc] = useState(false);
 
   const isDm = !!campaign && campaign.dmUserId === userId;
   const ownMembership = members.find((m) => m.userId === userId);
@@ -60,8 +65,9 @@ export default function CampaignDetail() {
       campaigns.characters(id),
       campaigns.sessions(id),
       charApi.list(),
+      campaigns.encounters(id),
     ])
-      .then(([camp, mems, chars, sess, mine]) => {
+      .then(([camp, mems, chars, sess, mine, encs]) => {
         if (!active) return;
         setError(null);
         setCampaign(camp);
@@ -69,6 +75,7 @@ export default function CampaignDetail() {
         setCampChars(chars);
         setSessions(sess);
         setMyChars(mine);
+        setEncounters(encs);
       })
       .catch((err) => {
         if (!active) return;
@@ -203,6 +210,25 @@ export default function CampaignDetail() {
   async function handleRosterRemove(sessionId: string, charId: string) {
     await campaigns.removeFromRoster(id, sessionId, charId);
     setSessions(await campaigns.sessions(id));
+  }
+
+  async function handleCreateEncounter(e: React.FormEvent) {
+    e.preventDefault();
+    if (!encName.trim()) return;
+    setCreatingEnc(true);
+    try {
+      const enc = await campaigns.createEncounter(id, {
+        name: encName.trim(),
+        sessionId: encSession || null,
+      });
+      setEncounters((prev) => [enc, ...prev]);
+      setEncName("");
+      setEncSession("");
+      navigate(`/campaigns/${id}/encounters/${enc.id}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Create encounter failed.");
+      setCreatingEnc(false);
+    }
   }
 
   async function handleDeleteCampaign() {
@@ -490,6 +516,60 @@ export default function CampaignDetail() {
             />
             <button className="btn btn--primary" type="submit" disabled={creatingSession || !sessionName.trim()}>
               {creatingSession ? "Creating…" : "+ Session"}
+            </button>
+          </form>
+        )}
+      </section>
+
+      {/* ---- Encounters ---- */}
+      <section className="camp__section panel">
+        <h2 className="camp__section-title">Encounters</h2>
+
+        {encounters.length === 0 ? (
+          <p className="text-muted">No encounters yet.</p>
+        ) : (
+          <ul className="camp__enc-list">
+            {encounters.map((enc) => (
+              <li key={enc.id} className="camp__enc-item">
+                <Link to={`/campaigns/${id}/encounters/${enc.id}`} className="camp__enc-row">
+                  <span className="camp__enc-name">{enc.name}</span>
+                  <span className={`badge camp__enc-status camp__enc-status--${enc.status}`}>
+                    {enc.status === EncounterStatus.Pending
+                      ? "Pending"
+                      : enc.status === EncounterStatus.Active
+                        ? "Active"
+                        : "Ended"}
+                  </span>
+                  {enc.roundNumber > 0 && (
+                    <span className="text-muted camp__enc-round">Round {enc.roundNumber}</span>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {isDm && (
+          <form className="camp__enc-form" onSubmit={handleCreateEncounter}>
+            <input
+              className="input"
+              placeholder="Encounter name"
+              value={encName}
+              onChange={(e) => setEncName(e.target.value)}
+              required
+            />
+            <select
+              className="input camp__enc-session-sel"
+              value={encSession}
+              onChange={(e) => setEncSession(e.target.value)}
+            >
+              <option value="">— no session —</option>
+              {sessions.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            <button className="btn btn--primary" type="submit" disabled={creatingEnc || !encName.trim()}>
+              {creatingEnc ? "Creating…" : "+ Encounter"}
             </button>
           </form>
         )}

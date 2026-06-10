@@ -8,6 +8,7 @@ import CharacterBuilder from "./routes/CharacterBuilder";
 import Compendium from "./routes/Compendium";
 import CampaignList from "./routes/CampaignList";
 import CampaignDetail from "./routes/CampaignDetail";
+import EncounterView from "./routes/EncounterView";
 
 export default function App() {
   return (
@@ -68,6 +69,14 @@ export default function App() {
           element={
             <RequireAuth>
               <CampaignDetail />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/campaigns/:id/encounters/:encounterId"
+          element={
+            <RequireAuth>
+              <EncounterView />
             </RequireAuth>
           }
         />
