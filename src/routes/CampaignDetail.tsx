@@ -27,6 +27,7 @@ export default function CampaignDetail() {
   const [memberChars, setMemberChars] = useState<CampaignCharacterResponse[]>([]);
   const [encounters, setEncounters] = useState<EncounterSummaryResponse[]>([]);
   const [notFound, setNotFound] = useState(false);
+  const [invited404, setInvited404] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -100,8 +101,14 @@ export default function CampaignDetail() {
       })
       .catch((err) => {
         if (!active) return;
-        if (err instanceof ApiError && err.status === 404) setNotFound(true);
-        else setError(err instanceof ApiError ? err.message : "Failed to load campaign.");
+        if (err instanceof ApiError && err.status === 404) {
+          setNotFound(true);
+          campaigns.invitations().then((invs) => {
+            if (active && invs.some((c) => c.id === id)) setInvited404(true);
+          }).catch(() => {/* ignore */});
+        } else {
+          setError(err instanceof ApiError ? err.message : "Failed to load campaign.");
+        }
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -123,13 +130,30 @@ export default function CampaignDetail() {
   }
 
   async function handleAcceptOwn() {
-    await campaigns.acceptMember(id, userId ?? "");
-    reload();
+    // Invited users cannot access the campaign GET endpoint, so acceptMember
+    // (PUT .../members/{id}/accept) also 404s — same access guard. Use join
+    // instead, which is designed to work without active membership.
+    setJoiningId(id);
+    try {
+      await campaigns.join(id);
+      setNotFound(false);
+      reload();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to accept invitation.");
+    } finally {
+      setJoiningId(null);
+    }
   }
 
   async function handleRejectOwn() {
-    await campaigns.rejectMember(id, userId ?? "");
-    navigate("/campaigns");
+    // rejectMember also 404s for the same reason. DELETE /members/{userId}
+    // works on Invited rows per the backend (INCOMING #15).
+    try {
+      await campaigns.removeMember(id, userId ?? "");
+      navigate("/campaigns");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to decline invitation.");
+    }
   }
 
   async function handleAccept(uid: string) {
@@ -290,14 +314,37 @@ export default function CampaignDetail() {
   }
 
   if (notFound) {
+    if (invited404) {
+      return (
+        <div className="container camp-join">
+          <div className="panel camp-join__panel">
+            <h2>You've been invited</h2>
+            <p className="text-muted">
+              You have a pending invitation to this campaign.
+            </p>
+            <div style={{ display: "flex", gap: "var(--sp-3)" }}>
+              <button
+                className="btn btn--primary"
+                disabled={joiningId === id}
+                onClick={handleAcceptOwn}
+              >
+                {joiningId === id ? "Accepting…" : "Accept"}
+              </button>
+              <button className="btn" disabled title="Ask the DM to cancel the invite for now — decline coming soon">
+                Decline
+              </button>
+            </div>
+            {error && <p className="camp__error">{error}</p>}
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="container camp-join">
         <div className="panel camp-join__panel">
           <h2>Campaign not found or access restricted</h2>
           <p className="text-muted">
-            {isInvited
-              ? "You have a pending invitation to this campaign."
-              : "You don't have access yet. If you have an invite, click below to join."}
+            You don't have access yet. If you have an invite, click below to join.
           </p>
           <button
             className="btn btn--primary"

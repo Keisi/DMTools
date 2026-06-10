@@ -255,7 +255,7 @@ export const campaigns = {
     combatantId: string,
     body: UpdateCombatantRequest,
   ) =>
-    api.put<EncounterResponse>(
+    api.patch<EncounterResponse>(
       `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}`,
       body,
     ),
