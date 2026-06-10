@@ -170,6 +170,33 @@
   min-width: 160px;
 }
 
+/* ---- Character copy ---- */
+.camp__char-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.camp__char-item .camp__char-row {
+  border: none;
+  border-radius: 0;
+}
+.camp__char-copy {
+  font-size: var(--fs-xs);
+  padding: var(--sp-1) var(--sp-2);
+}
+.camp__copy-form {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--bg-base);
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.camp__copy-input {
+  flex: 1;
+  min-width: 160px;
+}
+
 /* ---- Sessions ---- */
 .camp__session-list {
   list-style: none;

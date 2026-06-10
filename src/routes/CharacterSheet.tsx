@@ -171,6 +171,10 @@ export default function CharacterSheet() {
   const [addingClass, setAddingClass] = useState(false);
   const [managingSpells, setManagingSpells] = useState(false);
   const [editingHp, setEditingHp] = useState(false);
+  const [showCopyForm, setShowCopyForm] = useState(false);
+  const [copyTarget, setCopyTarget] = useState("");
+  const [copying, setCopying] = useState(false);
+  const [copyMsg, setCopyMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [items, setItems] = useState<ItemResponse[]>([]);
   const [allClasses, setAllClasses] = useState<ClassResponse[]>([]);
   const [spellCatalog, setSpellCatalog] = useState<SpellResponse[]>([]);
@@ -208,6 +212,25 @@ export default function CharacterSheet() {
   );
   // Must be before early returns — id is stable and equals c.id once loaded.
   const { order, onDragStart, onDrop } = useSheetOrder(id ?? "");
+
+  async function handleCopy(e: React.FormEvent) {
+    e.preventDefault();
+    if (!id || !copyTarget.trim()) return;
+    setCopying(true);
+    setCopyMsg(null);
+    try {
+      const copy = await characters.copy(id, { targetUsername: copyTarget.trim() });
+      setCopyMsg({ ok: true, text: `Copied to ${copyTarget.trim()} as "${copy.name}".` });
+      setCopyTarget("");
+      setShowCopyForm(false);
+    } catch (err) {
+      setCopyMsg({
+        ok: false,
+        text: err instanceof ApiError ? err.message : "Copy failed.",
+      });
+    }
+    setCopying(false);
+  }
 
   if (error)
     return (
@@ -383,7 +406,37 @@ export default function CharacterSheet() {
             <button className="btn" onClick={() => setEditingHp(true)}>
               Edit HP
             </button>
+            <button
+              className="btn"
+              onClick={() => { setShowCopyForm((v) => !v); setCopyMsg(null); }}
+            >
+              Copy to User
+            </button>
           </div>
+          {showCopyForm && (
+            <form className="sheet__copy-form" onSubmit={handleCopy}>
+              <input
+                className="input sheet__copy-input"
+                placeholder="Target username"
+                value={copyTarget}
+                onChange={(e) => setCopyTarget(e.target.value)}
+                autoFocus
+                required
+              />
+              <button
+                className="btn btn--primary"
+                type="submit"
+                disabled={copying || !copyTarget.trim()}
+              >
+                {copying ? "Copying…" : "Send Copy"}
+              </button>
+            </form>
+          )}
+          {copyMsg && (
+            <p className={`sheet__copy-msg${copyMsg.ok ? " sheet__copy-msg--ok" : ""}`}>
+              {copyMsg.text}
+            </p>
+          )}
         </div>
         <div className="sheet__vitals">
           <Vital label="HP" value={c.maxHitPoints} tooltip={hpTip} />

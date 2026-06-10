@@ -43,6 +43,9 @@ export default function CampaignDetail() {
   const [creatingSession, setCreatingSession] = useState(false);
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
   const [joiningId, setJoiningId] = useState<string | null>(null);
+  const [copyCharId, setCopyCharId] = useState<string | null>(null);
+  const [copyTarget, setCopyTarget] = useState("");
+  const [copying, setCopying] = useState(false);
   const [encName, setEncName] = useState("");
   const [encSession, setEncSession] = useState("");
   const [creatingEnc, setCreatingEnc] = useState(false);
@@ -175,6 +178,20 @@ export default function CampaignDetail() {
   async function handleUnregister(characterId: string) {
     await campaigns.unregisterCharacter(id, characterId);
     setCampChars(await campaigns.characters(id));
+  }
+
+  async function handleCopyChar(e: React.FormEvent, characterId: string) {
+    e.preventDefault();
+    if (!copyTarget.trim()) return;
+    setCopying(true);
+    try {
+      await charApi.copy(characterId, { targetUsername: copyTarget.trim() });
+      setCopyCharId(null);
+      setCopyTarget("");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Copy failed.");
+    }
+    setCopying(false);
   }
 
   async function handleCreateSession(e: React.FormEvent) {
@@ -390,18 +407,53 @@ export default function CampaignDetail() {
         ) : (
           <ul className="camp__char-list">
             {campChars.map((cc) => (
-              <li key={cc.characterId} className="camp__char-row">
-                <Link to={`/character/${cc.characterId}`} className="camp__char-name">
-                  {cc.characterName}
-                </Link>
-                <span className="text-muted camp__char-owner">{cc.ownerUsername}</span>
-                {(isDm || cc.ownerId === userId) && (
-                  <button
-                    className="btn camp__char-remove"
-                    onClick={() => handleUnregister(cc.characterId)}
+              <li key={cc.characterId} className="camp__char-item">
+                <div className="camp__char-row">
+                  <Link to={`/character/${cc.characterId}`} className="camp__char-name">
+                    {cc.characterName}
+                  </Link>
+                  <span className="text-muted camp__char-owner">{cc.ownerUsername}</span>
+                  {isDm && (
+                    <button
+                      className="btn camp__char-copy"
+                      onClick={() => {
+                        setCopyCharId(copyCharId === cc.characterId ? null : cc.characterId);
+                        setCopyTarget("");
+                      }}
+                    >
+                      Copy
+                    </button>
+                  )}
+                  {(isDm || cc.ownerId === userId) && (
+                    <button
+                      className="btn camp__char-remove"
+                      onClick={() => handleUnregister(cc.characterId)}
+                    >
+                      Unregister
+                    </button>
+                  )}
+                </div>
+                {isDm && copyCharId === cc.characterId && (
+                  <form
+                    className="camp__copy-form"
+                    onSubmit={(e) => handleCopyChar(e, cc.characterId)}
                   >
-                    Unregister
-                  </button>
+                    <input
+                      className="input camp__copy-input"
+                      placeholder="Target username"
+                      value={copyTarget}
+                      onChange={(e) => setCopyTarget(e.target.value)}
+                      autoFocus
+                      required
+                    />
+                    <button
+                      className="btn btn--primary"
+                      type="submit"
+                      disabled={copying || !copyTarget.trim()}
+                    >
+                      {copying ? "Copying…" : "Send Copy"}
+                    </button>
+                  </form>
                 )}
               </li>
             ))}

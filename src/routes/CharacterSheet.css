@@ -187,6 +187,26 @@
   flex-wrap: wrap;
 }
 
+/* ---- Copy to user ---- */
+.sheet__copy-form {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: center;
+  margin-top: var(--sp-3);
+  flex-wrap: wrap;
+}
+.sheet__copy-input {
+  min-width: 180px;
+}
+.sheet__copy-msg {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--c-crimson-400);
+}
+.sheet__copy-msg--ok {
+  color: var(--accent);
+}
+
 /* ---- Inventory management ---- */
 .sheet__op-error {
   color: var(--c-crimson-400);
