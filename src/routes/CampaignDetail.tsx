@@ -56,6 +56,9 @@ export default function CampaignDetail() {
   const isInvited = ownMembership?.status === CampaignMemberStatus.Invited;
   const activeMembers = members.filter((m) => m.status === CampaignMemberStatus.Active);
   const pendingMembers = members.filter((m) => m.status === CampaignMemberStatus.Requested);
+  // DM-initiated invites awaiting the player's accept (status Invited). Without
+  // their own list these rows render nowhere, so an invite looks like a no-op.
+  const invitedMembers = members.filter((m) => m.status === CampaignMemberStatus.Invited);
   const unregisteredMyChars = myChars.filter(
     (c) => !c.isRetired && !campChars.some((cc) => cc.characterId === c.id),
   );
@@ -354,6 +357,26 @@ export default function CampaignDetail() {
                   <span className="camp__member-name">{m.username}</span>
                   <button className="btn btn--primary" onClick={() => handleAccept(m.userId)}>Accept</button>
                   <button className="btn" onClick={() => handleReject(m.userId)}>Reject</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {isDm && invitedMembers.length > 0 && (
+          <div className="camp__pending">
+            <p className="camp__pending-label text-muted">Invited — awaiting response</p>
+            <ul className="camp__member-list">
+              {invitedMembers.map((m) => (
+                <li key={m.userId} className="camp__member-row">
+                  <span className="camp__member-name">{m.username}</span>
+                  <span className="badge">Invited</span>
+                  <button
+                    className="btn camp__member-remove"
+                    onClick={() => handleRemoveMember(m.userId)}
+                  >
+                    Cancel
+                  </button>
                 </li>
               ))}
             </ul>

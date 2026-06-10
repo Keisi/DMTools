@@ -5,7 +5,22 @@ Scaffold created 2026-06-06. This is the **separate frontend** for the headless
 backend lives at `C:\Users\keisi\source\repos\DMTool` — read its `CLAUDE.md`,
 `docs/ROADMAP.md`, and `docs/HANDOVER.md` for domain rules.
 
-## SESSION STATE (2026-06-09) — resume here
+## SESSION STATE (2026-06-10) — resume here
+- **Scope B COMPLETE** (multi-user campaigns + live combat). All six planned tiers
+  shipped — see `SCOPE-B-PLAN.md` for the tier breakdown and `<backend>/docs/
+  SCOPE-B-FRONTEND-HANDOVER.md` for the API contract. Summary:
+  - **Tier 0** — character `isRetired` flag + Vault "show retired" filter.
+  - **Tier 1** — contract layer: campaign/encounter/copy/retire DTOs in `types.ts`,
+    routes in `endpoints.ts` (`campaigns` group).
+  - **Tier 2** — campaign UI: list, create, detail (membership invite/join/accept/
+    reject/remove, DM transfer, register characters, sessions + rosters).
+  - **Tier 3** — encounter REST combat tracker: create/start/next-turn/end, combatant
+    add/remove, initiative, HP (delta / setCurrent / setTemp), ally/enemy split.
+  - **Tier 4** — SignalR live sync: `src/hooks/useEncounterHub.ts`, live status
+    indicator, archived-takeover screen. New dep `@microsoft/signalr`. Backend IIS
+    has no WS upgrade, so it negotiates down to **Server-Sent Events** (still
+    server→client push); `/hubs` proxied in `vite.config.ts` (`ws:true`).
+  - **Tier 5** — character copy UI (owner path on sheet; DM path on campaign detail).
 - **Builds GREEN** (`npm run build`: tsc + vite, 0 errors; `npm run lint` clean).
   `oby verify` build step is a false negative (can't spawn npm, `os error 193`) —
   trust `npm run build`/`lint`, not oby's build step. The signal that matters is
@@ -78,11 +93,14 @@ text, D&D crimson actions, gold accents.
 ## Screens (modeled on Fight Club 5e)
 - `/login` — `routes/Login.tsx` — login/register → JWT (wired, working).
 - `/vault` — `routes/Vault.tsx` — character list grid (wired to `GET /api/character`).
+  Scope B: per-card **retire** toggle (`PUT /api/character/{id}/retire`); retired
+  cards hidden behind a "Show retired (N)" header toggle.
 - `/character/:id` — `routes/CharacterSheet.tsx` — the full sheet. Header actions:
   **Level Up** / **Multiclass** (both → `routes/LevelUpDialog.tsx`; disabled at the
   level cap, `MAX_TOTAL_LEVEL`), **Edit** (→ builder), **Manage Spells**
   (caster-only → `routes/ManageSpellsDialog.tsx`), **Edit HP**
-  (→ `routes/EditHpDialog.tsx`).
+  (→ `routes/EditHpDialog.tsx`), **Copy to User** (inline username form →
+  `POST /api/character/{id}/copy`; Scope B).
   - **Spellcasting block**: per-caster line (ability · save DC · spell atk), then
     known spells **grouped by spell level** (Cantrips / Level N · slot count), each
     showing `dmg/heal <dice> <type> · spell attack|<ABIL> save · ↑ upcasts/scales`
@@ -106,16 +124,51 @@ text, D&D crimson actions, gold accents.
   items still not built.
 - `/compendium` — `routes/Compendium.tsx` — reference-data browser
   (spells/items/races/classes), open routes, no auth.
+- `/campaigns` — `routes/CampaignList.tsx` (Scope B) — campaign grid with DM/Member
+  badge (DM = `campaign.dmUserId === userId`); inline create form. New "Campaigns"
+  entry in `AppShell` nav.
+- `/campaigns/:id` — `routes/CampaignDetail.tsx` (Scope B) — single component, DM-vs-
+  member controls conditional. Sections: **Members** (active roster, pending requests
+  with DM accept/reject, own invite notice, invite-by-username + DM-transfer forms),
+  **Characters** (registered list, register own char, unregister, DM "Copy" to another
+  user), **Sessions** (list + date + roster count, DM create/delete + roster expando),
+  **Encounters** (list with status badge + round, DM create form). Non-Active users get
+  a 404 from `GET /{id}` → a **Join Campaign** CTA (`POST /join`, auto-accepts an
+  invite). Re-fetch uses a `refreshKey` counter (avoids synchronous setState in effects,
+  which the `react-hooks/set-state-in-effect` rule forbids).
+- `/campaigns/:id/encounters/:encounterId` — `routes/EncounterView.tsx` (Scope B) — the
+  live combat tracker. Status-driven (Pending → Active → Ended); header actions Start /
+  Next-Turn / End / Archive (DM-only). Combatants split into **Players & Allies** /
+  **Enemies & Monsters** (side stored per-encounter in localStorage, `dmtool-enc-sides-*`;
+  defaults by `characterId` presence). Per-row controls: initiative set, Dmg/Heal delta,
+  direct Set-HP, remove. Add-combatant form per side (ally form can link a campaign
+  character → auto-fills Max HP/AC from the sheet if the DM owns it). Every mutation
+  returns the full `EncounterResponse` → single `applyUpdate` state-replace path.
+  **Live**: `useEncounterHub` pushes flow through the *same* `applyUpdate`; a header
+  indicator shows Live/Reconnecting/Offline; an `EncounterArchived` push swaps in an
+  "encounter ended" takeover for observers.
 
 ## Code map
 - `src/api/client.ts` — fetch wrapper: base URL (`VITE_API_BASE`, empty=proxy),
   JWT bearer injection from `localStorage` (`dmtool.jwt`), `ApiError`.
 - `src/api/endpoints.ts` — one function per route, grouped `auth` / `characters`
-  / `reference` / `health`.
+  / `reference` / `health` / `campaigns` (Scope B: campaign CRUD, membership,
+  characters, sessions/rosters, encounters + combatant ops — every encounter
+  mutation typed to return the full `EncounterResponse`).
 - `src/api/types.ts` — TS types mirroring backend DTOs, reconciled to the live
-  contract (see the source-of-truth header in the file). Homebrew `*CreateRequest`
-  DTOs not modeled yet.
-- `src/auth/AuthContext.tsx` — `useAuth()`; token in localStorage.
+  contract (see the source-of-truth header in the file). Scope B added campaign/
+  encounter response+request DTOs, the `CampaignMemberStatus`/`EncounterStatus`
+  numeric-union enums, `isRetired` on `CharacterResponse`, and retire/copy requests.
+  Homebrew `*CreateRequest` DTOs not modeled yet.
+- `src/hooks/useEncounterHub.ts` (Scope B) — SignalR client. Connects to
+  `/hubs/encounter` (URL resolved against `API_BASE`; JWT via `?access_token=` since
+  WS can't carry an auth header), `withAutomaticReconnect()` + `onreconnected`
+  re-`JoinEncounter`, `EncounterUpdated`/`EncounterArchived` handlers, `LeaveEncounter`+
+  `stop()` on unmount. Callbacks kept in refs (synced in an effect, not during render,
+  per `react-hooks/refs`) so re-renders don't rebuild the connection.
+- `src/auth/AuthContext.tsx` — `useAuth()`; token in localStorage. Scope B: also
+  exposes `userId` (decoded from the JWT `sub` claim) + `username` (stored at login)
+  so screens can compute DM/owner identity client-side.
 - `src/components/` — `AppShell` (nav + outlet), `RequireAuth` (route guard).
 
 ## Backend API surface (from DMTool/CLAUDE.md)
@@ -125,6 +178,22 @@ text, D&D crimson actions, gold accents.
   - `PUT {id}/spells` (full spell-list replace), `PUT {id}/hp` (hitPointsOverride)
   - `POST {id}/inventory/add`, `POST {id}/inventory/consume`,
     `PUT {id}/inventory/{itemId}/attunement`
+  - **Scope B**: `PUT {id}/retire` (`{isRetired}`), `POST {id}/copy`
+    (`{targetUsername}` → new char owned by target; caller must own it OR be DM of a
+    campaign containing it — first use of the DM-as-secondary-owner access path).
+- **Campaigns** (Scope B, `/api/campaigns`, all `[Authorize]`): GET list / POST create /
+  `GET/DELETE {id}` · `PUT {id}/dm` (transfer) · `{id}/members` (GET, `invite`, `join`,
+  `members/{uid}/accept|reject`, `DELETE members/{uid}`) · `{id}/characters`
+  (GET/POST/`DELETE {cid}`) · `{id}/sessions` (GET/POST/`DELETE {sid}`,
+  `sessions/{sid}/roster/{cid}` POST+DELETE).
+- **Encounters** (Scope B, `/api/campaigns/{cid}/encounters`): GET list (summary) /
+  `GET {eid}` (full) / POST create / `DELETE {eid}` · `PUT {eid}/start|next-turn|end` ·
+  `{eid}/combatants` (POST, `DELETE {combId}`, `PUT {combId}/initiative`,
+  `PUT {combId}/hp` with independent `delta`/`setCurrentHp`/`setTempHp`). Every
+  mutation returns the full `EncounterResponse`.
+- **Hub** (Scope B): `/hubs/encounter` (JWT via `?access_token=`); client
+  `JoinEncounter`/`LeaveEncounter(encounterId)`; server→client `EncounterUpdated
+  (EncounterResponse)` + `EncounterArchived(id)`.
 - Reference (GET list + POST homebrew): `/api/races` `/api/classes` `/api/stats`
   `/api/weaponcategories` `/api/weapons` `/api/armorcategories` `/api/armors`
   `/api/languages` `/api/skills` `/api/spells` `/api/items` `/api/feats`
@@ -159,9 +228,11 @@ text, D&D crimson actions, gold accents.
 5. Level-up: feat-based ASI picker; inline spell *swap* (currently swaps route
    through `PUT /spells` — backend confirmed apply stays add-only).
 
-Done (recent): full `CharacterSheet` with quick-actions (Manage Spells, Edit HP),
-spellcasting grouped-by-level with dice/save/upcast display via the Tier-2-ready
-`spellCombat()` resolver; multiclass choice-grants + ability-prereq gate;
-edition-driven multiclass threshold; prepared-caster cantrip selection; unarmed
-strike + unarmored defense rendered from the API. `types.ts` tracks the live
-contract through INCOMING #11. Backend IDOR/BOLA fixed (non-owner → 404).
+Done (recent): **Scope B — multi-user campaigns + live combat** (all six tiers; see
+SESSION STATE above and `SCOPE-B-PLAN.md`). Earlier: full `CharacterSheet` with
+quick-actions (Manage Spells, Edit HP), spellcasting grouped-by-level with
+dice/save/upcast display via the Tier-2-ready `spellCombat()` resolver; multiclass
+choice-grants + ability-prereq gate; edition-driven multiclass threshold;
+prepared-caster cantrip selection; unarmed strike + unarmored defense rendered from
+the API. `types.ts` tracks the live contract through INCOMING #11 + Scope B. Backend
+IDOR/BOLA fixed (non-owner → 404).
