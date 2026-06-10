@@ -332,6 +332,18 @@ export default function CharacterBuilder() {
     return cls?.selections.find((s) => s.type === SelectionType.Skill) ?? null;
   }, [classes, startingClassId, picks]);
 
+  // IDs that are actually in the current class's skill pool. Stale IDs (from a
+  // class switch or edit-mode recovery of non-class skills) are invisible in the
+  // chips but still inflate the count — filter them out for display and validation.
+  const skillPoolIds = useMemo(
+    () => new Set((skillSelection?.options ?? []).map((o) => o.optionId)),
+    [skillSelection],
+  );
+  const validSkillIds = useMemo(
+    () => skillIds.filter((id) => skillPoolIds.has(id)),
+    [skillIds, skillPoolIds],
+  );
+
   const selectedBackground = useMemo(
     () => backgrounds.find((b) => b.id === backgroundId) ?? null,
     [backgrounds, backgroundId],
@@ -412,11 +424,11 @@ export default function CharacterBuilder() {
   // expertise in a skill you're already proficient in).
   const expertiseOptions = useMemo(
     () =>
-      skillIds.map((id) => ({
+      validSkillIds.map((id) => ({
         optionId: id,
         name: skills.find((s) => s.id === id)?.name ?? "Skill",
       })),
-    [skillIds, skills],
+    [validSkillIds, skills],
   );
 
   // Cantrips/spells chosen at creation per caster class at its chosen level, plus
@@ -504,8 +516,9 @@ export default function CharacterBuilder() {
     (picks.length === 1 || !!startingClassId);
   // The class's skill choice must be fully made (exactly `choose`), if it has one.
   // Edit re-submits already-granted skills with the homebrew flag, so don't gate it there.
+  // Use validSkillIds (pool-filtered) so stale IDs from a class switch don't inflate the count.
   const skillsComplete =
-    isEdit || !skillSelection || skillIds.length === skillSelection.choose;
+    isEdit || !skillSelection || validSkillIds.length === skillSelection.choose;
   // A chosen background's language Selection must be satisfied (relaxed on edit).
   const languagesComplete =
     isEdit ||
@@ -556,7 +569,7 @@ export default function CharacterBuilder() {
         : "all ability scores"
       : null,
     !skillsComplete
-      ? `${skillSelection?.choose} skill${skillSelection?.choose === 1 ? "" : "s"} (${skillIds.length}/${skillSelection?.choose})`
+      ? `${skillSelection?.choose} skill${skillSelection?.choose === 1 ? "" : "s"} (${validSkillIds.length}/${skillSelection?.choose})`
       : null,
     !languagesComplete
       ? `${bgLanguageSelection?.choose} background language${bgLanguageSelection?.choose === 1 ? "" : "s"} (${languageIds.length}/${bgLanguageSelection?.choose})`
@@ -602,7 +615,7 @@ export default function CharacterBuilder() {
         : "Set every ability score."
       : "",
     !skillsComplete && skillSelection
-      ? `Choose ${skillSelection.choose} skill${skillSelection.choose === 1 ? "" : "s"} — ${skillIds.length}/${skillSelection.choose} selected.`
+      ? `Choose ${skillSelection.choose} skill${skillSelection.choose === 1 ? "" : "s"} — ${validSkillIds.length}/${skillSelection.choose} selected.`
       : "",
     !choicesComplete
       ? `Make your class choices — fighting style ${fightingStyleIds.length}/${subFeature.fsBudget}, expertise ${expertiseSkillIds.length}/${subFeature.exBudget}, metamagic ${metamagicIds.length}/${subFeature.mmBudget}, invocations ${eldritchInvocationIds.length}/${subFeature.eiBudget}.`
@@ -702,7 +715,9 @@ export default function CharacterBuilder() {
   }
 
   function toggleSkill(id: string) {
-    setSkillIds((prev) => toggleCapped(prev, id, skillSelection?.choose));
+    setSkillIds((prev) =>
+      toggleCapped(prev.filter((i) => skillPoolIds.has(i)), id, skillSelection?.choose),
+    );
   }
   function toggleLanguage(id: string) {
     setLanguageIds((prev) => toggleCapped(prev, id, bgLanguageSelection?.choose));
@@ -789,9 +804,11 @@ export default function CharacterBuilder() {
         return legs;
       });
     // Class skills + expertise, plus any background-skill swap replacements.
+    // In edit mode, keep all recovered skills (allowHomebrewSelections covers them);
+    // in create mode, restrict to the current pool to avoid server-side validation errors.
     const swapIds = Object.values(bgSkillSwaps).filter((v): v is string => !!v);
     const allSkillIds = [
-      ...new Set([...skillIds, ...expertiseSkillIds, ...swapIds]),
+      ...new Set([...(isEdit ? skillIds : validSkillIds), ...expertiseSkillIds, ...swapIds]),
     ];
     const payload: CharacterRequest = {
       name: name.trim(),
@@ -1044,7 +1061,7 @@ export default function CharacterBuilder() {
         {step === 3 && (
           <SkillsStep
             selection={skillSelection}
-            chosen={skillIds}
+            chosen={validSkillIds}
             hasClass={picks.length > 0}
             onToggle={toggleSkill}
             abilityFor={skillAbility}
@@ -1087,7 +1104,7 @@ export default function CharacterBuilder() {
             languageSelection={bgLanguageSelection}
             chosenLanguages={languageIds}
             onToggleLanguage={toggleLanguage}
-            classSkillIds={skillIds}
+            classSkillIds={validSkillIds}
             classSkillPool={skillSelection?.options ?? []}
             bgSkillSwaps={bgSkillSwaps}
             onSwap={setBgSkillSwap}

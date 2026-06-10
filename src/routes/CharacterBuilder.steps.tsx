@@ -880,7 +880,7 @@ export function ImprovementsPanel({
                 <button
                   type="button"
                   className="btn"
-                  disabled={b + inc >= 20}
+                  disabled={b + inc >= 20 || total >= budget}
                   onClick={() => onChange(s.id, inc + 1)}
                 >
                   +
