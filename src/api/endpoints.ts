@@ -145,6 +145,8 @@ export const campaigns = {
   // Membership
   members: (id: string) =>
     api.get<CampaignMemberResponse[]>(`/api/campaigns/${id}/members`),
+  invitations: () =>
+    api.get<CampaignResponse[]>("/api/campaigns/invitations"),
   invite: (id: string, body: InviteMemberRequest) =>
     api.post<void>(`/api/campaigns/${id}/invite`, body),
   join: (id: string) => api.post<void>(`/api/campaigns/${id}/join`, {}),
@@ -158,6 +160,8 @@ export const campaigns = {
   // Campaign characters
   characters: (id: string) =>
     api.get<CampaignCharacterResponse[]>(`/api/campaigns/${id}/characters`),
+  memberCharacters: (id: string) =>
+    api.get<CampaignCharacterResponse[]>(`/api/campaigns/${id}/member-characters`),
   registerCharacter: (id: string, body: RegisterCampaignCharacterRequest) =>
     api.post<void>(`/api/campaigns/${id}/characters`, body),
   unregisterCharacter: (id: string, characterId: string) =>

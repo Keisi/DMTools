@@ -4,9 +4,10 @@ import { campaigns, characters as charApi } from "../api/endpoints";
 import type {
   EncounterResponse,
   CampaignCharacterResponse,
+  CampaignMemberResponse,
   CombatantResponse,
 } from "../api/types";
-import { EncounterStatus } from "../api/types";
+import { CampaignMemberStatus, EncounterStatus } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
 import { useEncounterHub, HubStatus } from "../hooks/useEncounterHub";
@@ -39,6 +40,7 @@ export default function EncounterView() {
 
   const [encounter, setEncounter] = useState<EncounterResponse | null>(null);
   const [campChars, setCampChars] = useState<CampaignCharacterResponse[]>([]);
+  const [members, setMembers] = useState<CampaignMemberResponse[]>([]);
   const [dmUserId, setDmUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +76,12 @@ export default function EncounterView() {
   const [archived, setArchived] = useState(false);
 
   const isDm = dmUserId === userId;
+  const activeMemberIds = new Set(
+    members.filter((m) => m.status === CampaignMemberStatus.Active).map((m) => m.userId),
+  );
+  const activeCampChars = campChars.filter(
+    (cc) => cc.ownerId === dmUserId || activeMemberIds.has(cc.ownerId),
+  );
   const status = encounter?.status ?? EncounterStatus.Pending;
   const isPending = status === EncounterStatus.Pending;
   const isActive = status === EncounterStatus.Active;
@@ -135,14 +143,16 @@ export default function EncounterView() {
       campaigns.getEncounter(campaignId, encounterId),
       campaigns.get(campaignId),
       campaigns.characters(campaignId),
+      campaigns.members(campaignId),
     ])
-      .then(([enc, camp, chars]) => {
+      .then(([enc, camp, chars, mems]) => {
         if (!active) return;
         setError(null);
         setEncounter(enc);
         syncInitInputs(enc);
         setDmUserId(camp.dmUserId);
         setCampChars(chars);
+        setMembers(mems);
 
         const stored = loadSides(encounterId);
         const defaulted: Record<string, Side> = {};
@@ -686,7 +696,7 @@ export default function EncounterView() {
                   min="0"
                 />
               </div>
-              {campChars.length > 0 && (
+              {activeCampChars.length > 0 && (
                 <div className="enc__add-field enc__add-field--char">
                   <label className="enc__add-label">Link character</label>
                   <select
@@ -695,7 +705,7 @@ export default function EncounterView() {
                     onChange={(e) => handleAllyCharSelect(e.target.value)}
                   >
                     <option value="">— optional —</option>
-                    {campChars.map((cc) => (
+                    {activeCampChars.map((cc) => (
                       <option key={cc.characterId} value={cc.characterId}>
                         {cc.characterName} ({cc.ownerUsername})
                       </option>

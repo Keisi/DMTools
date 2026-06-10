@@ -180,6 +180,15 @@
   border: none;
   border-radius: 0;
 }
+.camp__char-item--inactive {
+  opacity: 0.6;
+}
+.camp__char-removed {
+  font-size: var(--fs-xs);
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
 .camp__char-copy {
   font-size: var(--fs-xs);
   padding: var(--sp-1) var(--sp-2);

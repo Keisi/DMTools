@@ -11,6 +11,7 @@ export default function CampaignList() {
   const navigate = useNavigate();
 
   const [list, setList] = useState<CampaignResponse[] | null>(null);
+  const [invitations, setInvitations] = useState<CampaignResponse[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
@@ -18,9 +19,11 @@ export default function CampaignList() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    campaigns
-      .list()
-      .then(setList)
+    Promise.all([campaigns.list(), campaigns.invitations()])
+      .then(([camp, inv]) => {
+        setList(camp);
+        setInvitations(inv);
+      })
       .catch((err) => {
         setList([]);
         setError(
@@ -80,6 +83,27 @@ export default function CampaignList() {
       )}
 
       {error && <p className="campaigns__notice text-faint">{error}</p>}
+
+      {invitations.length > 0 && (
+        <div className="campaigns__invitations">
+          <h2 className="campaigns__invitations-title">Pending invitations</h2>
+          <div className="campaigns__grid">
+            {invitations.map((c) => (
+              <Link key={c.id} to={`/campaigns/${c.id}`} className="campaigns__card panel">
+                <div className="campaigns__card-body">
+                  <h3 className="campaigns__card-name">{c.name}</h3>
+                  {c.description && (
+                    <p className="text-muted campaigns__card-desc">{c.description}</p>
+                  )}
+                  <p className="text-muted campaigns__card-dm">DM: {c.dmUsername}</p>
+                </div>
+                <span className="badge campaigns__card-role">Invited</span>
+              </Link>
+            ))}
+          </div>
+          <hr className="rule" />
+        </div>
+      )}
 
       {list === null ? (
         <div className="campaigns__grid">

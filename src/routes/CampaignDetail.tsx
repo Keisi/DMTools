@@ -24,6 +24,7 @@ export default function CampaignDetail() {
   const [campChars, setCampChars] = useState<CampaignCharacterResponse[]>([]);
   const [sessions, setSessions] = useState<SessionResponse[]>([]);
   const [myChars, setMyChars] = useState<CharacterResponse[]>([]);
+  const [memberChars, setMemberChars] = useState<CampaignCharacterResponse[]>([]);
   const [encounters, setEncounters] = useState<EncounterSummaryResponse[]>([]);
   const [notFound, setNotFound] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -59,8 +60,20 @@ export default function CampaignDetail() {
   // DM-initiated invites awaiting the player's accept (status Invited). Without
   // their own list these rows render nowhere, so an invite looks like a no-op.
   const invitedMembers = members.filter((m) => m.status === CampaignMemberStatus.Invited);
+
+  // Characters whose owner still has an active membership (or is the DM). Used in
+  // pickers for NEW additions (session roster, encounter link). Full campChars is
+  // preserved for history — chars from removed members stay visible in past sessions.
+  const activeMemberIds = new Set(activeMembers.map((m) => m.userId));
+  const activeCampChars = campChars.filter(
+    (cc) => cc.ownerId === campaign?.dmUserId || activeMemberIds.has(cc.ownerId),
+  );
+
   const unregisteredMyChars = myChars.filter(
     (c) => !c.isRetired && !campChars.some((cc) => cc.characterId === c.id),
+  );
+  const unregisteredMemberChars = memberChars.filter(
+    (mc) => !campChars.some((cc) => cc.characterId === mc.characterId),
   );
 
   useEffect(() => {
@@ -72,8 +85,9 @@ export default function CampaignDetail() {
       campaigns.sessions(id),
       charApi.list(),
       campaigns.encounters(id),
+      campaigns.memberCharacters(id).catch(() => [] as CampaignCharacterResponse[]),
     ])
-      .then(([camp, mems, chars, sess, mine, encs]) => {
+      .then(([camp, mems, chars, sess, mine, encs, memChars]) => {
         if (!active) return;
         setError(null);
         setCampaign(camp);
@@ -82,6 +96,7 @@ export default function CampaignDetail() {
         setSessions(sess);
         setMyChars(mine);
         setEncounters(encs);
+        setMemberChars(memChars);
       })
       .catch((err) => {
         if (!active) return;
@@ -136,12 +151,19 @@ export default function CampaignDetail() {
     e.preventDefault();
     if (!inviteUsername.trim()) return;
     setInviting(true);
+    setError(null);
     try {
       await campaigns.invite(id, { username: inviteUsername.trim() });
       setInviteUsername("");
       setMembers(await campaigns.members(id));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Invite failed.");
+      if (err instanceof ApiError) {
+        const body = err.body as { errors?: Record<string, string[]> } | undefined;
+        const fieldErrors = body?.errors ? Object.values(body.errors).flat().join(" ") : null;
+        setError(fieldErrors ?? err.message);
+      } else {
+        setError("Invite failed.");
+      }
     } finally {
       setInviting(false);
     }
@@ -429,13 +451,18 @@ export default function CampaignDetail() {
           <p className="text-muted">No characters registered yet.</p>
         ) : (
           <ul className="camp__char-list">
-            {campChars.map((cc) => (
-              <li key={cc.characterId} className="camp__char-item">
+            {campChars.map((cc) => {
+              const ownerActive = cc.ownerId === campaign.dmUserId || activeMemberIds.has(cc.ownerId);
+              return (
+              <li key={cc.characterId} className={`camp__char-item${ownerActive ? "" : " camp__char-item--inactive"}`}>
                 <div className="camp__char-row">
                   <Link to={`/character/${cc.characterId}`} className="camp__char-name">
                     {cc.characterName}
                   </Link>
                   <span className="text-muted camp__char-owner">{cc.ownerUsername}</span>
+                  {!ownerActive && (
+                    <span className="badge camp__char-removed">Member left</span>
+                  )}
                   {isDm && (
                     <button
                       className="btn camp__char-copy"
@@ -479,11 +506,12 @@ export default function CampaignDetail() {
                   </form>
                 )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
 
-        {(isDm || isActive) && unregisteredMyChars.length > 0 && (
+        {(isDm || isActive) && (unregisteredMyChars.length > 0 || (isDm && unregisteredMemberChars.length > 0)) && (
           <form className="camp__register-form" onSubmit={handleRegisterChar}>
             <select
               className="input camp__register-sel"
@@ -491,9 +519,22 @@ export default function CampaignDetail() {
               onChange={(e) => setRegisterCharId(e.target.value)}
             >
               <option value="">— register a character —</option>
-              {unregisteredMyChars.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
+              {unregisteredMyChars.length > 0 && (
+                <optgroup label="My characters">
+                  {unregisteredMyChars.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </optgroup>
+              )}
+              {isDm && unregisteredMemberChars.length > 0 && (
+                <optgroup label="Member characters">
+                  {unregisteredMemberChars.map((c) => (
+                    <option key={c.characterId} value={c.characterId}>
+                      {c.characterName} ({c.ownerUsername})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
             <button className="btn btn--primary" type="submit" disabled={registering || !registerCharId}>
               {registering ? "Registering…" : "Register"}
@@ -545,24 +586,30 @@ export default function CampaignDetail() {
                   <div className="camp__roster">
                     <p className="camp__roster-label text-muted">Session roster</p>
                     <div className="camp__roster-chars">
-                      {campChars.map((cc) => {
-                        const inRoster = s.characterIds.includes(cc.characterId);
-                        return (
-                          <div key={cc.characterId} className="camp__roster-chip">
-                            <span>{cc.characterName}</span>
-                            <button
-                              className={`btn ${inRoster ? "camp__roster-remove" : "btn--primary"}`}
-                              onClick={() =>
-                                inRoster
-                                  ? handleRosterRemove(s.id, cc.characterId)
-                                  : handleRosterAdd(s.id, cc.characterId)
-                              }
-                            >
-                              {inRoster ? "Remove" : "Add"}
-                            </button>
-                          </div>
-                        );
-                      })}
+                      {/* Already in roster: show regardless of owner's current status (history) */}
+                      {campChars.filter((cc) => s.characterIds.includes(cc.characterId)).map((cc) => (
+                        <div key={cc.characterId} className="camp__roster-chip">
+                          <span>{cc.characterName}</span>
+                          <button
+                            className="btn camp__roster-remove"
+                            onClick={() => handleRosterRemove(s.id, cc.characterId)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                      {/* Can add: only active members' characters */}
+                      {activeCampChars.filter((cc) => !s.characterIds.includes(cc.characterId)).map((cc) => (
+                        <div key={cc.characterId} className="camp__roster-chip">
+                          <span>{cc.characterName}</span>
+                          <button
+                            className="btn btn--primary"
+                            onClick={() => handleRosterAdd(s.id, cc.characterId)}
+                          >
+                            Add
+                          </button>
+                        </div>
+                      ))}
                       {campChars.length === 0 && (
                         <p className="text-muted">No characters registered to campaign yet.</p>
                       )}
