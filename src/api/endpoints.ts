@@ -4,19 +4,30 @@
    ========================================================================== */
 import { api } from "./client";
 import type {
+  AddCombatantRequest,
   ArmorResponse,
   AuthRequest,
   AuthResponse,
   BackgroundResponse,
+  CampaignCharacterResponse,
+  CampaignMemberResponse,
+  CampaignResponse,
   CharacterRequest,
   CharacterResponse,
   ClassResponse,
+  CopyCharacterRequest,
+  CreateCampaignRequest,
+  CreateEncounterRequest,
+  CreateSessionRequest,
   EldritchInvocationResponse,
+  EncounterResponse,
+  EncounterSummaryResponse,
   FeatResponse,
   FightingStyleResponse,
   InventoryAddRequest,
   InventoryAttunementRequest,
   InventoryConsumeRequest,
+  InviteMemberRequest,
   ItemResponse,
   LanguageResponse,
   LevelUpApplyRequest,
@@ -24,9 +35,15 @@ import type {
   LevelUpPlanResponse,
   MetamagicResponse,
   RaceResponse,
+  RegisterCampaignCharacterRequest,
+  RetireCharacterRequest,
+  SessionResponse,
+  SetInitiativeRequest,
   SkillResponse,
   SpellResponse,
   StatResponse,
+  TransferDmRequest,
+  UpdateCombatantHpRequest,
   UpdateHpRequest,
   UpdateSpellsRequest,
   WeaponResponse,
@@ -77,6 +94,15 @@ export const characters = {
       `/api/character/${id}/inventory/${itemId}/attunement`,
       body,
     ),
+
+  // Toggle the retired organizer flag (migration 055). Returns updated character.
+  retire: (id: string, body: RetireCharacterRequest) =>
+    api.put<CharacterResponse>(`/api/character/${id}/retire`, body),
+
+  // Deep-copy a character to another user. Caller must own it or be the campaign
+  // DM. Returns the new CharacterResponse owned by the target.
+  copy: (id: string, body: CopyCharacterRequest) =>
+    api.post<CharacterResponse>(`/api/character/${id}/copy`, body),
 };
 
 // NOTE: every reference controller is [Authorize] on the backend (only
@@ -103,3 +129,119 @@ export const reference = {
 
 export const health = () =>
   api.get<{ status: string }>("/api/health", false);
+
+// ---- Scope B: Campaigns, sessions, encounters ----
+
+export const campaigns = {
+  // Campaign CRUD
+  list: () => api.get<CampaignResponse[]>("/api/campaigns"),
+  get: (id: string) => api.get<CampaignResponse>(`/api/campaigns/${id}`),
+  create: (body: CreateCampaignRequest) =>
+    api.post<CampaignResponse>("/api/campaigns", body),
+  remove: (id: string) => api.del<void>(`/api/campaigns/${id}`),
+  transferDm: (id: string, body: TransferDmRequest) =>
+    api.put<CampaignResponse>(`/api/campaigns/${id}/dm`, body),
+
+  // Membership
+  members: (id: string) =>
+    api.get<CampaignMemberResponse[]>(`/api/campaigns/${id}/members`),
+  invite: (id: string, body: InviteMemberRequest) =>
+    api.post<void>(`/api/campaigns/${id}/invite`, body),
+  join: (id: string) => api.post<void>(`/api/campaigns/${id}/join`, {}),
+  acceptMember: (id: string, userId: string) =>
+    api.put<void>(`/api/campaigns/${id}/members/${userId}/accept`, {}),
+  rejectMember: (id: string, userId: string) =>
+    api.put<void>(`/api/campaigns/${id}/members/${userId}/reject`, {}),
+  removeMember: (id: string, userId: string) =>
+    api.del<void>(`/api/campaigns/${id}/members/${userId}`),
+
+  // Campaign characters
+  characters: (id: string) =>
+    api.get<CampaignCharacterResponse[]>(`/api/campaigns/${id}/characters`),
+  registerCharacter: (id: string, body: RegisterCampaignCharacterRequest) =>
+    api.post<void>(`/api/campaigns/${id}/characters`, body),
+  unregisterCharacter: (id: string, characterId: string) =>
+    api.del<void>(`/api/campaigns/${id}/characters/${characterId}`),
+
+  // Sessions
+  sessions: (id: string) =>
+    api.get<SessionResponse[]>(`/api/campaigns/${id}/sessions`),
+  createSession: (id: string, body: CreateSessionRequest) =>
+    api.post<SessionResponse>(`/api/campaigns/${id}/sessions`, body),
+  deleteSession: (id: string, sessionId: string) =>
+    api.del<void>(`/api/campaigns/${id}/sessions/${sessionId}`),
+  addToRoster: (id: string, sessionId: string, characterId: string) =>
+    api.post<void>(
+      `/api/campaigns/${id}/sessions/${sessionId}/roster/${characterId}`,
+      {},
+    ),
+  removeFromRoster: (id: string, sessionId: string, characterId: string) =>
+    api.del<void>(
+      `/api/campaigns/${id}/sessions/${sessionId}/roster/${characterId}`,
+    ),
+
+  // Encounters — all mutations return the full EncounterResponse so no follow-up
+  // GET is ever needed. setEncounter(response) is the single state-update path.
+  encounters: (campaignId: string) =>
+    api.get<EncounterSummaryResponse[]>(`/api/campaigns/${campaignId}/encounters`),
+  getEncounter: (campaignId: string, encounterId: string) =>
+    api.get<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}`,
+    ),
+  createEncounter: (campaignId: string, body: CreateEncounterRequest) =>
+    api.post<EncounterResponse>(`/api/campaigns/${campaignId}/encounters`, body),
+  deleteEncounter: (campaignId: string, encounterId: string) =>
+    api.del<void>(`/api/campaigns/${campaignId}/encounters/${encounterId}`),
+  startEncounter: (campaignId: string, encounterId: string) =>
+    api.put<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/start`,
+      {},
+    ),
+  nextTurn: (campaignId: string, encounterId: string) =>
+    api.put<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/next-turn`,
+      {},
+    ),
+  endEncounter: (campaignId: string, encounterId: string) =>
+    api.put<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/end`,
+      {},
+    ),
+  addCombatant: (
+    campaignId: string,
+    encounterId: string,
+    body: AddCombatantRequest,
+  ) =>
+    api.post<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants`,
+      body,
+    ),
+  removeCombatant: (
+    campaignId: string,
+    encounterId: string,
+    combatantId: string,
+  ) =>
+    api.del<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}`,
+    ),
+  setInitiative: (
+    campaignId: string,
+    encounterId: string,
+    combatantId: string,
+    body: SetInitiativeRequest,
+  ) =>
+    api.put<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}/initiative`,
+      body,
+    ),
+  updateCombatantHp: (
+    campaignId: string,
+    encounterId: string,
+    combatantId: string,
+    body: UpdateCombatantHpRequest,
+  ) =>
+    api.put<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}/hp`,
+      body,
+    ),
+};

@@ -881,6 +881,9 @@ export interface CharacterResponse extends CharacterDetails {
   statusEffects: CharacterStatusEffectResponse[];
   created: string; // ISO-8601
   modified: string; // ISO-8601
+  // Organizer flag — retired characters are hidden in the Vault by default but
+  // never deleted; toggle via PUT /api/character/{id}/retire.
+  isRetired: boolean;
 }
 
 // ---- Level-up engine (CharacterContracts.cs) ----
@@ -1001,4 +1004,178 @@ export interface LevelUpApplyRequest {
   // featureChoices). Empty picks are allowed (DM may fill later).
   multiclassChoices?: FeatureChoiceApply[] | null;
   allowHomebrewSelections?: boolean;
+}
+
+// ---- Character organizer requests (Scope B additions) ----
+
+export interface RetireCharacterRequest {
+  isRetired: boolean;
+}
+
+/** Deep-copy a character to another user. Caller must own the character or be
+ *  the DM of a campaign that contains it. Returns the new CharacterResponse. */
+export interface CopyCharacterRequest {
+  targetUsername: string;
+}
+
+// ---- Scope B: Campaign management (backend scope-b, merged master 82e65b2) ----
+// Enums are integers over the wire (no JsonStringEnumConverter).
+
+export const CampaignMemberRole = {
+  DM: 1,
+  Player: 2,
+} as const;
+export type CampaignMemberRole =
+  (typeof CampaignMemberRole)[keyof typeof CampaignMemberRole];
+
+export const CampaignMemberStatus = {
+  Invited: 1,
+  Requested: 2,
+  Active: 3,
+  Rejected: 4,
+  Removed: 5,
+} as const;
+export type CampaignMemberStatus =
+  (typeof CampaignMemberStatus)[keyof typeof CampaignMemberStatus];
+
+export const MembershipInitiatedBy = {
+  DM: 1,
+  Player: 2,
+} as const;
+export type MembershipInitiatedBy =
+  (typeof MembershipInitiatedBy)[keyof typeof MembershipInitiatedBy];
+
+export const EncounterStatus = {
+  Pending: 0,
+  Active: 1,
+  Ended: 2,
+} as const;
+export type EncounterStatus =
+  (typeof EncounterStatus)[keyof typeof EncounterStatus];
+
+// ---- Scope B: Campaign responses ----
+
+export interface CampaignResponse {
+  id: string;
+  name: string;
+  description?: string | null;
+  dmUserId: string;
+  dmUsername: string;
+}
+
+export interface CampaignMemberResponse {
+  userId: string;
+  username: string;
+  role: CampaignMemberRole;
+  status: CampaignMemberStatus;
+  initiatedBy: MembershipInitiatedBy;
+  created: string; // ISO-8601
+}
+
+export interface CampaignCharacterResponse {
+  characterId: string;
+  characterName: string;
+  ownerId: string;
+  ownerUsername: string;
+}
+
+export interface SessionResponse {
+  id: string;
+  name: string;
+  description?: string | null;
+  campaignId: string;
+  date?: string | null; // ISO-8601; optional at creation, may be null
+  characterIds: string[];
+}
+
+// ---- Scope B: Encounter responses ----
+
+export interface CombatantResponse {
+  id: string;
+  encounterId: string;
+  characterId: string | null; // non-null when linked to a campaign character
+  name: string;
+  initiative: number | null;
+  currentHp: number;
+  maxHp: number;
+  tempHp: number;
+  armorClass: number;
+  isActive: boolean;
+  sortOrder: number; // 0 = highest initiative = goes first
+}
+
+/** Full encounter — returned by every mutation and GET /{encounterId}. */
+export interface EncounterResponse {
+  id: string;
+  campaignId: string;
+  sessionId: string | null;
+  name: string;
+  description?: string | null;
+  status: EncounterStatus;
+  roundNumber: number;
+  activeCombatantId: string | null;
+  combatants: CombatantResponse[];
+}
+
+/** List-level summary — no combatants array. */
+export interface EncounterSummaryResponse {
+  id: string;
+  campaignId: string;
+  sessionId: string | null;
+  name: string;
+  description?: string | null;
+  status: EncounterStatus;
+  roundNumber: number;
+}
+
+// ---- Scope B: Campaign + encounter requests ----
+
+export interface CreateCampaignRequest {
+  name: string;
+  description?: string | null;
+}
+
+export interface TransferDmRequest {
+  userId: string;
+}
+
+export interface InviteMemberRequest {
+  username: string;
+}
+
+export interface RegisterCampaignCharacterRequest {
+  characterId: string;
+}
+
+export interface CreateSessionRequest {
+  name: string;
+  description?: string | null;
+  date?: string | null; // ISO-8601
+}
+
+export interface CreateEncounterRequest {
+  name: string;
+  description?: string | null;
+  sessionId?: string | null;
+}
+
+export interface AddCombatantRequest {
+  name: string;
+  maxHp: number;
+  armorClass: number;
+  characterId?: string | null;
+}
+
+export interface SetInitiativeRequest {
+  initiative: number;
+}
+
+/** Three independent fields — send only what you need.
+ *  delta: positive = heal (currentHp only), negative = damage (tempHp first, overflow → currentHp).
+ *  setCurrentHp: direct set, clamped 0–maxHp. Takes priority over delta.
+ *  setTempHp: direct set, floor 0. Applied independently. */
+export interface UpdateCombatantHpRequest {
+  delta?: number | null;
+  setCurrentHp?: number | null;
+  setTempHp?: number | null;
 }

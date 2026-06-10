@@ -5,6 +5,11 @@
   gap: var(--sp-4);
   flex-wrap: wrap;
 }
+.vault__head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
 
 .vault__notice {
   margin-bottom: var(--sp-4);
@@ -67,4 +72,27 @@
   gap: var(--sp-4);
   padding: var(--sp-10) var(--sp-6);
   text-align: center;
+}
+
+/* ---- Card wrapper (retire action) ---- */
+.vault__card-wrap {
+  position: relative;
+}
+.vault__card-wrap--retired .vault__card {
+  opacity: 0.45;
+}
+.vault__card-retire {
+  position: absolute;
+  bottom: var(--sp-2);
+  right: var(--sp-2);
+  font-size: var(--fs-xs);
+  padding: var(--sp-1) var(--sp-3);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+  pointer-events: none;
+}
+.vault__card-wrap:hover .vault__card-retire,
+.vault__card-wrap--retired .vault__card-retire {
+  opacity: 1;
+  pointer-events: auto;
 }
