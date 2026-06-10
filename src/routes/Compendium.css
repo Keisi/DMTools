@@ -166,3 +166,21 @@
   line-clamp: unset;
   overflow: visible;
 }
+
+/* Section labels inside an expanded body: "Traits", "Subraces", "Class Features". */
+.compendium__body-section {
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: var(--sp-3);
+}
+
+/* Wrapper for nested detail items (traits, subraces, class features). */
+.compendium__detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin-top: var(--sp-1);
+}

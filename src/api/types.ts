@@ -212,6 +212,7 @@ export interface RaceResponse {
   abilityModifiers: RaceAbilityModifierResponse[];
   languages: LanguageResponse[];
   damageResistances: RaceDamageResistanceResponse[];
+  traits: { name: string; description?: string | null }[];
   subraces: SubraceResponse[];
 }
 
@@ -262,6 +263,8 @@ export interface ItemResponse {
   cost: number;
   isMagic: boolean;
   requiresAttunement: boolean;
+  category?: string | null;
+  rarity?: string | null;
 }
 
 // Selections: 5e's generalized "choose N from a set" (skills, subclass, languages).
@@ -309,6 +312,13 @@ export interface ClassSpellcastingResponse {
   progression: ClassSpellcastingProgressionResponse[];
 }
 
+export interface ClassFeatureResponse {
+  name: string;
+  description?: string | null;
+  kind: FeatureKind;
+  level: number;
+}
+
 /** A "class" (Job on the backend). */
 export interface ClassResponse {
   id: string;
@@ -333,6 +343,7 @@ export interface ClassResponse {
   toolProficiencies: ToolProficienciesResponse;
   // 5e primary ability/abilities; each .id is a Stat id (match StatResponse.id).
   primaryAbilities: NamedRef[];
+  features: ClassFeatureResponse[];
 }
 
 export interface EditionResponse {

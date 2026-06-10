@@ -8,6 +8,7 @@ import {
   type ItemResponse,
   type RaceResponse,
   type SpellResponse,
+  type SubraceResponse,
 } from "../api/types";
 import "./Compendium.css";
 
@@ -314,9 +315,10 @@ function ItemEntry({ it }: { it: ItemResponse }) {
         <Header
           name={it.name}
           tags={[
+            it.category ?? null,
+            it.rarity ?? null,
             `${it.cost} gp`,
             `${it.weight} lb`,
-            it.isMagic ? "Magic" : null,
             it.requiresAttunement ? "Attunement" : null,
           ]}
         />
@@ -342,6 +344,7 @@ function RaceEntry({ r }: { r: RaceResponse }) {
   const resists = r.damageResistances
     .map((d) => `${RESIST_WORD[d.kind]} ${d.damageType}`)
     .join(", ");
+  const hasBody = r.description || r.traits.length > 0 || r.subraces.length > 0;
   return (
     <EntryShell
       summary={
@@ -355,12 +358,36 @@ function RaceEntry({ r }: { r: RaceResponse }) {
           {resists && <Meta>{resists}</Meta>}
         </>
       }
-      body={r.description ? <Desc text={r.description} /> : null}
+      body={
+        hasBody ? (
+          <>
+            {r.description && <Desc text={r.description} />}
+            {r.traits.length > 0 && (
+              <>
+                <p className="compendium__body-section">Traits</p>
+                <DetailList
+                  items={r.traits.map((t) => ({
+                    label: t.name,
+                    description: t.description,
+                  }))}
+                />
+              </>
+            )}
+            {r.subraces.length > 0 && (
+              <>
+                <p className="compendium__body-section">Subraces</p>
+                <SubraceList subraces={r.subraces} />
+              </>
+            )}
+          </>
+        ) : null
+      }
     />
   );
 }
 
 function ClassEntry({ c }: { c: ClassResponse }) {
+  const hasBody = c.description || c.features.length > 0;
   return (
     <EntryShell
       summary={
@@ -379,7 +406,85 @@ function ClassEntry({ c }: { c: ClassResponse }) {
           )}
         </>
       }
-      body={c.description ? <Desc text={c.description} /> : null}
+      body={
+        hasBody ? (
+          <>
+            {c.description && <Desc text={c.description} />}
+            {c.features.length > 0 && (
+              <>
+                <p className="compendium__body-section">Class Features</p>
+                <DetailList
+                  items={c.features.map((f) => ({
+                    label: `L${f.level} — ${f.name}`,
+                    description: f.description,
+                  }))}
+                />
+              </>
+            )}
+          </>
+        ) : null
+      }
     />
+  );
+}
+
+function DetailList({
+  items,
+}: {
+  items: { label: string; description?: string | null }[];
+}) {
+  return (
+    <div className="compendium__detail-list">
+      {items.map((item, i) =>
+        item.description ? (
+          <details key={i} className="compendium__entry">
+            <summary className="compendium__entry-head">{item.label}</summary>
+            <div className="compendium__entry-body">
+              <Desc text={item.description} />
+            </div>
+          </details>
+        ) : (
+          <p key={i} className="compendium__row-meta">
+            {item.label}
+          </p>
+        ),
+      )}
+    </div>
+  );
+}
+
+function SubraceList({ subraces }: { subraces: SubraceResponse[] }) {
+  return (
+    <div className="compendium__detail-list">
+      {subraces.map((s) => {
+        const bonuses = [
+          ...s.abilityModifiers.map((m) => `${m.stat} ${fmtMod(m.modifier)}`),
+          s.walkingSpeedBonus > 0 ? `+${s.walkingSpeedBonus} ft speed` : null,
+          s.bonusHpPerLevel > 0 ? `+${s.bonusHpPerLevel} HP/level` : null,
+          s.darkvisionOverride > 0 ? `Darkvision ${s.darkvisionOverride} ft` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        return (
+          <details key={s.id} className="compendium__entry">
+            <summary className="compendium__entry-head">
+              <span>{s.name}</span>
+              {bonuses && <span className="compendium__row-meta">{bonuses}</span>}
+            </summary>
+            <div className="compendium__entry-body">
+              {s.description && <Desc text={s.description} />}
+              {s.traits.length > 0 && (
+                <DetailList
+                  items={s.traits.map((t) => ({
+                    label: t.name,
+                    description: t.description,
+                  }))}
+                />
+              )}
+            </div>
+          </details>
+        );
+      })}
+    </div>
   );
 }
