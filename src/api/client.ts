@@ -8,7 +8,7 @@
 // so a base of "https://host/" would produce "https://host//api/..." (a 404
 // that surfaces as a misleading CORS error). Normalize defensively.
 const BASE: string = (
-  (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://localhost:3501"
+  (import.meta.env.VITE_API_BASE as string | undefined) ?? ""
 ).replace(/\/+$/, "");
 
 const TOKEN_KEY = "dmtool.jwt";

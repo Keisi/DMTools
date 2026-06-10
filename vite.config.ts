@@ -7,6 +7,7 @@ export default defineConfig({
   base: process.env.GITHUB_ACTIONS ? "/DMTools/" : "/",
   server: {
     port: 5173,
+    host: true,
     // Dev proxy: forward /api to the DMTool backend so the browser makes
     // same-origin requests (no CORS setup needed). When VITE_API_BASE is
     // empty (the default in .env), the client uses relative URLs that hit
