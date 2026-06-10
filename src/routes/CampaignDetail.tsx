@@ -330,7 +330,7 @@ export default function CampaignDetail() {
               >
                 {joiningId === id ? "Accepting…" : "Accept"}
               </button>
-              <button className="btn" disabled title="Ask the DM to cancel the invite for now — decline coming soon">
+              <button className="btn" onClick={handleRejectOwn}>
                 Decline
               </button>
             </div>

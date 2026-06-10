@@ -1203,6 +1203,173 @@ Pending and Ended encounters are unaffected (initiative changes on Pending still
 
 ---
 
+# INCOMING #18 — `FRONTEND-REQUEST-decline-invitation.md` DONE
+
+**Date:** 2026-06-11. **No migration.** Build 0 errors. Commit `e5d696b`.
+
+## `DELETE /api/campaigns/{id}/members/{userId}` — self-removal now works at any status ✅
+
+We went with **Option B** (relax the existing endpoint rather than add a new route).
+
+**Before:** `DELETE .../members/{userId}` required the caller to be the campaign DM. An Invited player calling it got 404 (campaign access gate) or Forbid (non-DM check).
+
+**After:** when `userId == caller's own id`, the DM check is bypassed and the membership row is removed regardless of its current status. The campaign access gate is also bypassed for self-removal (so an Invited player doesn't need Active status to reach the endpoint).
+
+```
+DELETE /api/campaigns/{id}/members/{selfUserId}
+→ 204   // sets membership status to Removed (5)
+→ 404   // caller has no membership row for this campaign
+```
+
+**DM path unchanged** — `DELETE .../members/{otherUserId}` still requires the caller to be the DM and the campaign to be accessible.
+
+**How to use for decline:** an Invited player calls `DELETE /api/campaigns/{id}/members/{ownUserId}` → 204. The invitation is gone; `GET /api/campaigns/invitations` will no longer include this campaign.
+
+---
+
+# INCOMING #15 — `FRONTEND-REQUEST-scope-b-invitation-discovery.md` DONE + unarmed attacks callback
+
+**Date:** 2026-06-10. All items shipped, built, live on IIS `:3501`. **No migration** for any of these. Build 0 errors. DB `DMTools_local` **through 055** (053 = Scope B tables, 054 = encounters/combatants, 055 = `IsRetired` column). Commits on `origin/master`: `538c726` (invitations + UseWebSockets).
+
+## Request 1 — `GET /api/campaigns/invitations` ✅ (blocking)
+
+New endpoint so invited players can discover their pending invitations without an out-of-band URL:
+
+```
+GET /api/campaigns/invitations
+→ CampaignResponse[]   // campaigns where the caller has membership status = 1 (Invited)
+```
+
+Response shape is identical to `GET /api/campaigns`: `{ id, name, description, dmUserId, dmUsername }`. Returns `[]` when none pending. **No DTO change** — same `CampaignResponse` you already have.
+
+**Suggested UX:** on the `/campaigns` page, call this alongside the existing `GET /api/campaigns` and render a "Pending invitations" section above the main list. Accept/decline with the existing:
+- `PUT /api/campaigns/{id}/members/{selfUserId}/accept` → caller becomes Active.
+- `PUT /api/campaigns/{id}/members/{selfUserId}/reject` → declines.
+
+Note: the existing `POST /campaigns/{id}/join` auto-accept path still works — this endpoint just makes invitations discoverable so the player doesn't need the URL handed to them.
+
+> **Also confirmed:** `DELETE /members/{userId}` works on Invited rows (status 5 Removed) — this is the DM "cancel invite" path, which you noted in your request appendix. Behavior unchanged.
+
+## Request 2 — WebSocket transport for the hub ✅ (non-blocking)
+
+`app.UseWebSockets()` added before `app.MapHub`. IIS now advertises WebSockets in the SignalR negotiate response. SignalR negotiates WebSockets first; SSE remains the automatic fallback. **No frontend change needed** — the hub client picks up the better transport automatically.
+
+---
+
+## Unarmed attacks + Unarmored Defense — shipped 2026-06-08 (callback was never written)
+
+This cleared `FRONTEND-REQUEST-unarmed-attacks.md`. You've already consumed it (noted in `FRONTEND-CONTEXT.md`), so this is the missing paper trail. Commit: `2ecb950`.
+
+### `CharacterResponse.weaponAttacks` — Unarmed Strike always present
+
+Every character now has an Unarmed Strike entry (previously omitted when no weapon was equipped):
+
+```jsonc
+{
+  "weaponId": "0dded000-0000-0000-0000-000000000001",   // stable sentinel — use as list key
+  "name": "Unarmed Strike",
+  "ability": "Strength",          // Monk: "Strength" or "Dexterity" (whichever is higher)
+  "attackBonus": 5,               // ability mod + proficiency (always proficient)
+  "damageDice": null,             // non-Monks: null (flat 1 + STR); Monk: "1d4" / "1d6" / "1d8" / "1d10"
+  "damageBonus": 3,               // the chosen ability mod
+  "isProficient": true
+}
+```
+
+Monk Martial Arts die by Monk level: `1d4` (L1–4), `1d6` (L5–10), `1d8` (L11–16), `1d10` (L17+). Uses the better of STR/DEX for both attack and damage.
+
+### `CharacterResponse.armorClassBreakdown` — Unarmored Defense
+
+When no body armor is worn, the breakdown now reflects class-specific Unarmored Defense instead of the generic `10 + DEX`:
+
+| Class | Formula | `source` label |
+|---|---|---|
+| Monk | 10 + DEX + WIS (no shield bonus) | `"Unarmored Defense (Monk)"` |
+| Barbarian | 10 + DEX + CON | `"Unarmored Defense (Barbarian)"` |
+| Draconic Sorcerer | 13 + DEX | `"Unarmored Defense (Draconic Sorcerer)"` |
+| Others (unarmored) | 10 + DEX | `"Unarmored"` |
+
+The WIS/CON contribution folds into `armorClassBreakdown.other`; `base` stays at 10 (or 13 for Draconic). On a multiclass character with more than one Unarmored Defense option, the higher AC wins. `armorClassBreakdown.shield` is always 0 for Monk (RAW: Monk Unarmored Defense is lost when using a shield).
+
+**No shape change** — `armorClassBreakdown` fields are unchanged; `source` was already a string.
+
+---
+
+# INCOMING #16 — `FRONTEND-REQUEST-campaign-member-characters.md` DONE
+
+**Date:** 2026-06-10. Shipped, built, live on IIS `:3501`. **No migration.** Build 0 errors. Commit `0c5eed6`.
+
+## `GET /api/campaigns/{id}/member-characters` ✅
+
+```
+GET /api/campaigns/{id}/member-characters
+→ CampaignCharacterResponse[]
+```
+
+Returns all **non-retired, non-archived** characters owned by **Active** (status 3) members of the campaign, ordered by owner username then character name. DM or any Active member may call it; 404 if the campaign doesn't exist or isn't accessible to the caller.
+
+**Response shape** — same `CampaignCharacterResponse` already on the contract:
+
+```ts
+interface CampaignCharacterResponse {
+  characterId: string
+  characterName: string
+  ownerId: string       // character owner's user id
+  ownerUsername: string
+}
+```
+
+`ownerId` here is the character's **owner** (`Characters.CreatedBy`), not the user who added it to the campaign.
+
+**What the frontend should do:**
+
+```ts
+const [memberChars, campChars] = await Promise.all([
+  campaigns.getMemberCharacters(id),   // GET /{id}/member-characters
+  campaigns.getCharacters(id),          // GET /{id}/characters  (already registered)
+]);
+const unregistered = memberChars.filter(
+  mc => !campChars.some(cc => cc.characterId === mc.characterId)
+);
+// Show unregistered in the DM dropdown, labelled e.g. "Grak (keisi)"
+```
+
+Non-DM active members continue to see only their own characters in the register dropdown — no change for them (the existing owner-scoped `GET /api/character` list still drives the player path).
+
+---
+
+# INCOMING #17 — `FRONTEND-REQUEST-combatant-edit.md` + `FRONTEND-REQUEST-initiative-resort.md` DONE
+
+**Date:** 2026-06-11. Both shipped in one commit. **No migration.** Build 0 errors. Commit `08f554b`. Additive / non-breaking.
+
+## `PATCH .../combatants/{id}` — edit name / maxHp / armorClass ✅
+
+```
+PATCH /api/campaigns/{campaignId}/encounters/{encounterId}/combatants/{combatantId}
+Body: { "name"?: string, "maxHp"?: number, "armorClass"?: number }
+→ 200 + EncounterResponse
+```
+
+- All three fields optional; at least one must be present (400 otherwise).
+- `name`: trimmed, 1–200 chars.
+- `maxHp`: ≥ 1. When the new maxHp < `currentHp`, `currentHp` is **clamped down** to the new maxHp in the same statement.
+- `armorClass`: ≥ 0.
+- DM-only; 404 if campaign/encounter/combatant not found. Works in Pending, Active, and Ended states.
+- Broadcasts `EncounterUpdated` as usual. **No DTO change** — response is the same `EncounterResponse`.
+
+## Initiative re-sort during Active combat ✅
+
+`PUT .../combatants/{id}/initiative` now re-sorts the turn order when called on an **Active** encounter:
+
+1. Sets the combatant's `initiative` as before.
+2. Re-sorts all combatants by `initiative DESC`, name as tiebreak (same rules as `startEncounter`).
+3. Writes new `sortOrder` values — future `nextTurn` calls reflect the updated order immediately.
+4. `activeCombatantId` is **unchanged** — the current turn continues; re-sort only affects upcoming turns.
+
+Pending and Ended encounters are unaffected (initiative changes on Pending still just store the value, which is consumed by `startEncounter`). **No contract change** — `EncounterResponse` shape is unchanged; you'll just see the combatants' `sortOrder` values updated in the response.
+
+---
+
 # INCOMING #15 — `FRONTEND-REQUEST-scope-b-invitation-discovery.md` DONE + unarmed attacks callback
 
 **Date:** 2026-06-10. All items shipped, built, live on IIS `:3501`. **No migration** for any of these. Build 0 errors. DB `DMTools_local` **through 055** (053 = Scope B tables, 054 = encounters/combatants, 055 = `IsRetired` column). Commits on `origin/master`: `538c726` (invitations + UseWebSockets).
