@@ -50,6 +50,61 @@
   font-size: var(--fs-sm);
   color: var(--accent);
 }
+
+/* Live (SignalR) connection indicator */
+.enc__hub {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+.enc__hub-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.enc__hub--connected {
+  color: var(--accent);
+}
+.enc__hub--connected .enc__hub-dot {
+  animation: enc-pulse 2s var(--ease-out) infinite;
+}
+.enc__hub--connecting,
+.enc__hub--reconnecting {
+  color: var(--c-text-muted, var(--text));
+}
+.enc__hub--reconnecting .enc__hub-dot {
+  animation: enc-blink 1s steps(2, start) infinite;
+}
+.enc__hub--disconnected {
+  color: var(--c-crimson-400);
+}
+@keyframes enc-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@keyframes enc-blink {
+  0% { opacity: 1; }
+  100% { opacity: 0.2; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .enc__hub-dot { animation: none !important; }
+}
+
+/* Archived (live EncounterArchived) takeover */
+.enc__archived {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  padding: var(--sp-8) var(--sp-6);
+  max-width: 480px;
+  margin-top: var(--sp-8);
+}
 .enc__error {
   color: var(--c-crimson-400);
   font-size: var(--fs-sm);

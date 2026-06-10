@@ -9,6 +9,7 @@ import type {
 import { EncounterStatus } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
+import { useEncounterHub, HubStatus } from "../hooks/useEncounterHub";
 import "./EncounterView.css";
 
 type Side = "ally" | "enemy";
@@ -68,6 +69,10 @@ export default function EncounterView() {
   const [actionBusy, setActionBusy] = useState(false);
   const [busyCombatant, setBusyCombatant] = useState<string | null>(null);
 
+  // Set when a live EncounterArchived push arrives for a viewer who didn't
+  // trigger the delete (the DM who archives navigates away in handleDelete).
+  const [archived, setArchived] = useState(false);
+
   const isDm = dmUserId === userId;
   const status = encounter?.status ?? EncounterStatus.Pending;
   const isPending = status === EncounterStatus.Pending;
@@ -94,6 +99,17 @@ export default function EncounterView() {
     syncInitInputs(enc);
     setError(null);
   }
+
+  // Live sync: hub pushes flow through the same applyUpdate as REST responses,
+  // so the DM's own mutations and any other observer's view stay identical.
+  // Connect only after the initial REST load (enabled=!loading) to avoid a push
+  // landing before `encounter` exists.
+  const hubStatus = useEncounterHub({
+    encounterId,
+    enabled: !loading,
+    onUpdated: applyUpdate,
+    onArchived: () => setArchived(true),
+  });
 
   // After a mutation, find the newly added combatant (id not previously in encounter)
   // and assign it the given side.
@@ -515,6 +531,22 @@ export default function EncounterView() {
     );
   }
 
+  if (archived) {
+    return (
+      <div className="container enc">
+        <div className="enc__archived panel">
+          <h1 className="enc__title">Encounter ended</h1>
+          <p className="text-muted">
+            The DM archived this encounter. Combat is over.
+          </p>
+          <Link to={`/campaigns/${campaignId}`} className="btn btn--primary">
+            ← Back to campaign
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const statusLabel = isPending ? "Pending" : isActive ? "Active" : "Ended";
   const statusMod = isPending
     ? "enc__status--pending"
@@ -525,8 +557,22 @@ export default function EncounterView() {
   const ordered = isActive
     ? [...encounter.combatants].sort((a, b) => a.sortOrder - b.sortOrder)
     : encounter.combatants;
-  const allies = ordered.filter((c) => (sideMap[c.id] ?? "enemy") === "ally");
-  const enemies = ordered.filter((c) => (sideMap[c.id] ?? "enemy") === "enemy");
+  // Side defaults by link when no explicit choice is recorded: a character-linked
+  // combatant is an ally, an unlinked one an enemy. Covers hub-pushed combatants
+  // (added in another client) that have no local sideMap entry.
+  const sideOf = (c: CombatantResponse) =>
+    sideMap[c.id] ?? (c.characterId ? "ally" : "enemy");
+  const allies = ordered.filter((c) => sideOf(c) === "ally");
+  const enemies = ordered.filter((c) => sideOf(c) === "enemy");
+
+  const hubLabel =
+    hubStatus === HubStatus.Connected
+      ? "Live"
+      : hubStatus === HubStatus.Reconnecting
+        ? "Reconnecting…"
+        : hubStatus === HubStatus.Connecting
+          ? "Connecting…"
+          : "Offline";
 
   return (
     <div className="container enc">
@@ -542,6 +588,13 @@ export default function EncounterView() {
             {encounter.roundNumber > 0 && (
               <span className="enc__round">Round {encounter.roundNumber}</span>
             )}
+            <span
+              className={`enc__hub enc__hub--${hubStatus}`}
+              title={`Live updates: ${hubLabel}`}
+            >
+              <span className="enc__hub-dot" aria-hidden="true" />
+              {hubLabel}
+            </span>
           </div>
         </div>
         {isDm && (
