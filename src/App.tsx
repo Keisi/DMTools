@@ -6,6 +6,8 @@ import Vault from "./routes/Vault";
 import CharacterSheet from "./routes/CharacterSheet";
 import CharacterBuilder from "./routes/CharacterBuilder";
 import Compendium from "./routes/Compendium";
+import CampaignList from "./routes/CampaignList";
+import CampaignDetail from "./routes/CampaignDetail";
 
 export default function App() {
   return (
@@ -50,6 +52,22 @@ export default function App() {
           element={
             <RequireAuth>
               <Compendium />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/campaigns"
+          element={
+            <RequireAuth>
+              <CampaignList />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/campaigns/:id"
+          element={
+            <RequireAuth>
+              <CampaignDetail />
             </RequireAuth>
           }
         />

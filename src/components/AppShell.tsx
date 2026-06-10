@@ -5,6 +5,7 @@ import "./AppShell.css";
 
 const NAV = [
   { to: "/vault", label: "Vault" },
+  { to: "/campaigns", label: "Campaigns" },
   { to: "/compendium", label: "Compendium" },
 ];
 
