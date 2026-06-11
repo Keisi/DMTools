@@ -140,6 +140,22 @@ is intentionally public (no `RequireAuth`); everything else is guarded.
   recompute these client-side.**
 - Record-DTO validation is server-side; expect `400` with a problem-details body
   in `ApiError.body`.
+- **Rules and schedules come from backend data — never hardcode them client-side**
+  (Kevin, 2026-06-11). The API is rules/data-driven; the client renders and defers:
+  - Derive counts/budgets/schedules from response data, not literals or class-name
+    matching: ASIs from `ClassResponse.features` rows (kind
+    `AbilityScoreImprovement`, level ≤ pick level), spell counts from
+    `spellcasting.progression`, choice budgets from `Selections`/`featureSelections`,
+    multiclass minimums from `multiclassPrerequisite.minimumScore`.
+  - Client-side checks are advisory UX only; the backend's `400` is the gate.
+    Don't invent client formulas for rules the API doesn't expose — write a
+    `FRONTEND-REQUEST-*.md` asking the backend to derive/enforce it instead (see
+    `FRONTEND-REQUEST-prepared-spell-cap.md`, `FRONTEND-REQUEST-rules-enforcement-audit.md`).
+  - Keep user-facing copy **schedule-neutral**: no hardcoded class names, levels,
+    or thresholds that are really data ("at their ASI levels", "a minimum score in
+    each class's key ability" — not "Fighter 6/14", "13+", "Paladin before level 2").
+    Deliberate exception: point-buy (27 pts, 8–15) is a client-side table convention
+    by design (backend accepts 1–30; manual mode is the DM escape hatch).
 
 ## Visual system (the reason for the CSS structure)
 
