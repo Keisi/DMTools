@@ -1132,6 +1132,10 @@ export interface CombatantResponse {
   // FRONTEND-REQUEST-encounter-combat-controls.md item 4); reset to 0 on heal.
   deathSaveSuccesses?: number; // 0–3
   deathSaveFailures?: number; // 0–3
+  // Derived server-side: out of the fight, skipped in turn order. True when
+  // deathSaveFailures >= 3 (PC dead by saves) or a freeform NPC (characterId null)
+  // at 0 HP (monsters die instantly). Additive — see INCOMING #18.
+  isDead?: boolean;
   // Friend/foe shown to players. Optional until the backend ships it (see
   // FRONTEND-REQUEST-encounter-combat-controls.md item 3); when absent, derive from
   // the link (character-linked ⇒ PlayerCharacter, unlinked ⇒ Enemy).
@@ -1220,6 +1224,13 @@ export interface UpdateCombatantHpRequest {
   delta?: number | null;
   setCurrentHp?: number | null;
   setTempHp?: number | null;
+}
+
+// Player- or DM-recorded death saves on a dying linked combatant (0 HP). Send both
+// counts every time (each 0–3). Owner-scoped on the backend — see INCOMING #18.
+export interface RecordDeathSavesRequest {
+  successes: number;
+  failures: number;
 }
 
 export interface UpdateCombatantRequest {

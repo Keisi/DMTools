@@ -418,6 +418,24 @@ function CombatCard({
     setHpBusy(false);
   }
 
+  // Record this dying PC's own death saves (backend is owner-scoped + validates the
+  // dying/linked gate; 3 successes ⇒ Stable, 3 failures ⇒ Dead are derived server-side).
+  async function recordDeathSaves(successes: number, failures: number) {
+    setHpError(null);
+    try {
+      onUpdate(
+        await campaigns.recordDeathSaves(campaignId, encounterId, combatant.id, {
+          successes,
+          failures,
+        }),
+      );
+    } catch (err) {
+      setHpError(
+        err instanceof ApiError ? err.message : "Failed to record death saves.",
+      );
+    }
+  }
+
   if (error) {
     return (
       <section className="panel penc__spectate">
@@ -525,6 +543,7 @@ function CombatCard({
           <DeathSaveTrack
             successes={combatant.deathSaveSuccesses ?? 0}
             failures={combatant.deathSaveFailures ?? 0}
+            onChange={recordDeathSaves}
           />
         </div>
       )}

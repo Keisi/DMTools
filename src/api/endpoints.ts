@@ -44,6 +44,7 @@ import type {
   SpellResponse,
   StatResponse,
   TransferDmRequest,
+  RecordDeathSavesRequest,
   UpdateCombatantHpRequest,
   UpdateCombatantRequest,
   UpdateHpRequest,
@@ -276,6 +277,18 @@ export const campaigns = {
   ) =>
     api.patch<EncounterResponse>(
       `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}`,
+      body,
+    ),
+  // Owner-scoped (DM or the linked character's owner): a dying PC records its own
+  // death saves. Field scope is locked to the two counts server-side. See INCOMING #18.
+  recordDeathSaves: (
+    campaignId: string,
+    encounterId: string,
+    combatantId: string,
+    body: RecordDeathSavesRequest,
+  ) =>
+    api.put<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}/death-saves`,
       body,
     ),
 };

@@ -1546,3 +1546,76 @@ When no body armor is worn, the breakdown now reflects class-specific Unarmored 
 The WIS/CON contribution folds into `armorClassBreakdown.other`; `base` stays at 10 (or 13 for Draconic). On a multiclass character with more than one Unarmored Defense option, the higher AC wins. `armorClassBreakdown.shield` is always 0 for Monk (RAW: Monk Unarmored Defense is lost when using a shield).
 
 **No shape change** — `armorClassBreakdown` fields are unchanged; `source` was already a string.
+
+---
+
+# INCOMING #18 — `FRONTEND-REQUEST-player-death-saves.md` DONE + turn order now skips the dead
+
+**Date:** 2026-06-11
+**Re:** your `FRONTEND-REQUEST-player-death-saves.md` — **DONE + LIVE-VERIFIED.** Bundled with a
+related combat fix you'll want: dead combatants are now skipped in initiative (and a new `isDead`
+field tells you which).
+
+## 1. New endpoint — a downed player records their OWN death saves ✅ (your request)
+
+```
+PUT /api/campaigns/{campaignId}/encounters/{encounterId}/combatants/{combatantId}/death-saves
+Body: { "successes": number, "failures": number }   // each 0–3; send both every time
+→ 200 + EncounterResponse        (same shape as every other combatant mutation)
+```
+
+- **Auth:** campaign **DM** *or* the member who **owns the character linked to this combatant** —
+  identical rule to the HP endpoint you already use. Non-member → **404**; authorized-but-not-yours
+  → **400** (see the 403 note below).
+- **Validation (backend is the gate):** **400** unless the combatant is a *linked* character
+  (`characterId != null`) that is *dying* (`currentHp == 0`). A healthy PC or a freeform NPC is
+  rejected. `successes`/`failures` each clamped to **0–3**.
+- **Field scope is locked** to the two death-save counts — a player cannot reach name / HP / AC /
+  visibility / disposition through this route (those stay DM-only on `PATCH`).
+- **Live sync:** broadcasts `EncounterUpdated` (full `EncounterResponse`) to the encounter + DM
+  groups, exactly like the other mutations.
+- **Walk-back allowed:** you can lower the counts again (your anti-cheat note) — only the dying +
+  ownership gates apply.
+- **403 vs 400:** you asked for 403 on a non-owner; I reused the existing combatant-write auth, which
+  returns a **400 problem-details** (the same code the HP endpoint already returns). Your
+  `ApiError.body` handling covers it. Tell me if you specifically need 403 and I'll split it out.
+
+**Your TODO (unchanged from the request):** wire `onChange` on the player's *own* death-save track in
+`PlayerEncounterView.tsx` → call this endpoint with `{successes, failures}`, re-render the returned
+`EncounterResponse`. The compact read-only track in the turn order stays as-is.
+
+## 2. Turn order now skips the dead ✅ (related — affects `EncounterView`)
+
+Before, `next-turn` could land the active turn on a corpse. Fixed: **`start`, `next-turn`, and
+`prev-turn` skip dead combatants**, and **`activeCombatantId` will never point at a dead one.** A
+*dying* PC (0 HP, < 3 failures) still gets its turn — that's when its death save is rolled.
+
+`CombatantResponse` gained one **additive** field:
+
+```diff
+  deathSaveSuccesses: number,
+  deathSaveFailures: number,
++ isDead: boolean,        // derived server-side; true = out of the fight, skipped in turn order
+  statusEffects: [...]
+```
+
+`isDead` is true when **`deathSaveFailures >= 3`** (PC dead by saves) **or** the combatant is a
+**freeform NPC (`characterId == null`) at `currentHp == 0`** (monsters die instantly at 0 HP; they
+don't roll saves).
+
+- Add `isDead: boolean` to `CombatantResponse` in `src/api/types.ts` (additive — existing code keeps
+  working without it).
+- Suggested UI: grey / skull dead combatants. You no longer need to detect "active turn landed on a
+  dead combatant."
+- If **every** combatant is dead, `next-turn` / `prev-turn` return **400**.
+
+## Build / status
+Both changes built clean; the IIS pool (`:3501`) is rebuilt — **live now**. Live-verified against the
+running API:
+- **death-saves:** healthy PC → 400 · record 1s/1f → stored · walk back failures → allowed · 3 fails
+  → `isDead:true` · failures=4 → 400 · NPC → 400. **All pass.**
+- **dead-skip:** dead NPC skipped · dead-by-saves PC skipped · round wraps over corpses · `prev-turn`
+  skips backward · all-dead → 400. **All pass.**
+
+Files: `EncountersController.cs` (new endpoint + skip logic), `EncounterContracts.cs`
+(`RecordDeathSavesRequest` + `isDead`), `Entities/Encounters/Combatant.cs` (derived `IsDead`).
