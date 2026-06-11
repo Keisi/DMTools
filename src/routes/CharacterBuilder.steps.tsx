@@ -1540,6 +1540,10 @@ export function Review({
   backgroundFeatureName,
   languageNames,
   featNames,
+  classChoices,
+  improvements,
+  cantripNames,
+  spellNames,
   armorName,
   shieldName,
   weaponNames,
@@ -1560,6 +1564,13 @@ export function Review({
   backgroundFeatureName?: string;
   languageNames: string[];
   featNames: string[];
+  // Selected sub-feature choices (fighting styles / expertise / metamagic /
+  // invocations), already resolved to display names; empty groups are omitted.
+  classChoices: { label: string; names: string[] }[];
+  // Above-L1 ability-score improvements (stat code + total bump).
+  improvements: { name: string; amount: number }[];
+  cantripNames: string[];
+  spellNames: string[];
   armorName?: string;
   shieldName?: string;
   weaponNames: string[];
@@ -1608,6 +1619,12 @@ export function Review({
           </div>
         ))}
       </div>
+      {improvements.length > 0 && (
+        <p className="text-muted">
+          Ability improvements:{" "}
+          {improvements.map((i) => `${i.name} +${i.amount}`).join(", ")}
+        </p>
+      )}
       {backgroundFeatureName && (
         <p className="text-muted">
           Background feature: {backgroundFeatureName}
@@ -1621,6 +1638,17 @@ export function Review({
       )}
       {featNames.length > 0 && (
         <p className="text-muted">Feats: {featNames.join(", ")}</p>
+      )}
+      {classChoices.map((c) => (
+        <p key={c.label} className="text-muted">
+          {c.label}: {c.names.join(", ")}
+        </p>
+      ))}
+      {cantripNames.length > 0 && (
+        <p className="text-muted">Cantrips: {cantripNames.join(", ")}</p>
+      )}
+      {spellNames.length > 0 && (
+        <p className="text-muted">Spells: {spellNames.join(", ")}</p>
       )}
       {gear.length > 0 && (
         <p className="text-muted">Equipment: {gear.join(", ")}</p>

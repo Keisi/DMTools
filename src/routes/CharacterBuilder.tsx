@@ -1169,6 +1169,26 @@ export default function CharacterBuilder() {
             featNames={feats
               .filter((f) => featIds.includes(f.id))
               .map((f) => f.name)}
+            classChoices={choiceGroups
+              .map((g) => ({
+                label: g.title,
+                names: g.options
+                  .filter((o) => g.chosen.includes(o.optionId))
+                  .map((o) => o.name),
+              }))
+              .filter((g) => g.names.length > 0)}
+            improvements={defaultStats
+              .filter((s) => (improvements[s.id] ?? 0) > 0)
+              .map((s) => ({
+                name: s.code ?? s.name,
+                amount: improvements[s.id],
+              }))}
+            cantripNames={spellPlan.cantripPool
+              .filter((s) => cantripIds.includes(s.id))
+              .map((s) => s.name)}
+            spellNames={spellPlan.spellPool
+              .filter((s) => spellIds.includes(s.id))
+              .map((s) => s.name)}
             armorName={armors.find((a) => a.id === armorId)?.name}
             shieldName={armors.find((a) => a.id === shieldId)?.name}
             weaponNames={weapons
