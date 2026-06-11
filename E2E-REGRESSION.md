@@ -168,7 +168,7 @@ Later run: sheet **rendered live in-browser** for the Paladin 10 fixture.
 | SHEET-11 | Status effects | present (0 if none) | **PASS(API)** | none on fixture; block self-hid (see SHEET-12) |
 | SHEET-12 | Empty blocks self-hide | hidden when empty | **PASS(UI)** | no Status block on the Paladin sheet (0 effects) |
 | SHEET-13 | Edit HP dialog (Modal) | open/set/Escape/backdrop close | BLOCKED | not driven either run |
-| SHEET-14 | Manage Spells dialog (Modal) | open/toggle/save/close | **PARTIAL PASS(UI)** | later run: opens, "Spells (4 selected · 10 prepared)", the 4 creation picks pre-selected, pool capped at L3 (highest slot). Toggle/save/close not driven. NOTE: "10 prepared" is the documented stopgap (mod+level, wrong for half-casters) until backend ships `maxPreparedSpells` |
+| SHEET-14 | Manage Spells dialog (Modal) | open/toggle/save/close | **PARTIAL PASS(UI)** | re-verified after backend 28ed633: header now "Spells (4 selected · **5 prepared**)" — the backend-derived `maxPreparedSpells` (half-caster-correct; the old mod+level stopgap showed 10 and is deleted). Save-side enforcement verified via API: 6 picks vs cap 5 → 400; off-class spell → 400. Dialog toggle/save click not driven |
 | SHEET-15 | Level Up dialog opens | plan loads | BLOCKED | not driven either run |
 | SHEET-IDOR | GET another account's char id | 404 (owner-scoped) | **PASS(API)** | non-owned id → 404 |
 
@@ -211,7 +211,7 @@ Later run: sheet **rendered live in-browser** for the Paladin 10 fixture.
 | ENC-01 | Create encounter | appears (Pending) | **PASS(API)** | status=0, `Regression Fight` |
 | ENC-02 | Add combatant (manual enemy) | added | **PASS(API)** | Goblin added, combatants=1 |
 | ENC-03 | Set initiative | saved | **PASS(API)** | init=15 |
-| ENC-04 | Roll all initiatives | all get d20 | NOT RUN | |
+| ENC-04 | Roll all initiatives | all get d20 + init bonus | **PASS(API)** | NEW server-side `POST .../roll-initiatives` (backend 92eadf8) → 200, both combatants rolled (linked PC gets its initiative bonus). Client d20 loop retired in `EncounterView` |
 | ENC-05 | Start combat | status Active + active combatant | **PASS(API)** | status=1, activeCombatantId set |
 | ENC-06 | Next turn | active advances | **PASS(API)** | active set after next-turn |
 | ENC-07 | Edit mode (stats/side/visibility/disposition) | persists | BLOCKED | spectral (UI) |

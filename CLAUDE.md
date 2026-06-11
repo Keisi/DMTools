@@ -6,8 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SPA frontend for **DMTool**, a D&D 5e Dungeon Master toolkit. It is a pure JWT
 client of the headless DMTool JSON Web API (ASP.NET Core 10, Dapper/SQL Server).
-The backend repo path is machine-dependent — see the workspace root `CLAUDE.md`
-for the `$env:COMPUTERNAME` → path table. Solution file: `DMTool.slnx`.
+The backend is the **sibling repo** `..\DMTool`
+(`C:\Users\keisi\source\repos\Personal\DMTool`); solution file `DMTool.slnx`.
+(Older docs — `FRONTEND-CONTEXT.md`, `HANDOVER-NEXT.md` — cite the pre-move path
+`C:\Users\keisi\source\repos\DMTool` and an Azure DevOps frontend remote; both
+are stale. There is no workspace-root `CLAUDE.md`.)
 
 **The backend repo is the source of truth for the API contract.** Read, in order
 of relevance to frontend work:
@@ -23,10 +26,12 @@ of relevance to frontend work:
 `FRONTEND-CONTEXT.md` is the fuller frontend handover (route map, screen status,
 gotchas). Keep it in sync when architecture changes.
 
-The backend is **not a git repo** and is hosted in-process on IIS (`:3501`); its
-DLL is locked while the pool runs, so a backend rebuild is **stop pool → `dotnet
-build DMTool.slnx` → start pool** (`Stop-WebAppPool DMTool` / `Start-WebAppPool
-DMTool`). Kestrel dev (`dotnet run`) avoids the lock.
+The backend **is its own git repo** (Azure DevOps
+`coolstorypro.visualstudio.com/DMTools/_git/DMTool`, branch `master`) and is
+hosted in-process on IIS (`:3501`); its DLL is locked while the pool runs, so a
+backend rebuild is **stop pool → `dotnet build DMTool.slnx` → start pool**
+(`Stop-WebAppPool DMTool` / `Start-WebAppPool DMTool`). Kestrel dev (`dotnet
+run`) avoids the lock.
 
 ## Commands
 
@@ -54,9 +59,16 @@ This repo has `.oby/`, so the oby completion-loop applies as the code gate:
   build/lint gates** (both must be green before "done"). Run them, not oby's.
 
 **What does NOT apply** (the global standard/analyze/worktree playbooks are for
-**work** repos): this is a **personal project and not a git repo** — no
-worktrees, branches, PRs, parent-branch selection, JIRA/`tjira`/ticket triage,
-tenant/BondFrontEnd machinery, or session-naming. Ignore all of that here.
+**work** repos): this is a **personal project**. It IS a git repo — GitHub
+`Keisi/DMTools`, `origin/main`, commit directly to `main` — but none of the
+work-repo machinery applies: no worktrees, feature branches, PRs, parent-branch
+selection, JIRA/`tjira`/ticket triage, tenant/BondFrontEnd machinery, or
+session-naming. A CodeBridge PreToolUse hook gates `git push` on a
+critical-review marker for HEAD (`.claude/.critical-review-done-main-<sha7>` —
+untracked/local, never commit them). **Pushing to `main` is a production
+deploy**: `.github/workflows/deploy.yml` builds (Node 22, `npm ci` + `npm run
+build` with base path `/DMTools/` and `VITE_API_BASE` = the Azure App Service
+backend) and publishes to GitHub Pages on every push.
 
 The backend must be running for live data: IIS at `http://localhost:3501`, or
 Kestrel via `dotnet run --project DMTool --launch-profile http` (`:5157`).
@@ -110,7 +122,9 @@ launch* mechanics from it. What's relevant for this app:
   throws `ApiError` (carries `status` + parsed `body`). All requests go through
   `api.get/post/put/del`.
 - `endpoints.ts` — one function per backend route, grouped `auth` / `characters`
-  / `reference` / `health`. Add new calls here, not ad-hoc `fetch` in components.
+  / `reference` / `health` / `campaigns` (campaign CRUD, membership, characters,
+  sessions/rosters, encounters + combatant ops). Add new calls here, not ad-hoc
+  `fetch` in components.
 - `types.ts` — TS mirrors of backend DTOs, **reconciled to the live contract**
   (camelCase names, enums as numeric unions with the real C# values, full
   `CharacterResponse`/`CharacterRequest` + reference + auth + level-up DTOs). Two
@@ -126,10 +140,12 @@ client uses relative URLs that hit the Vite dev proxy (`vite.config.ts` forwards
 `/api` → `VITE_PROXY_TARGET`), so **no CORS setup is needed in dev**. Set a full
 URL to bypass the proxy (backend must then allow the origin).
 
-**Auth:** `src/auth/AuthContext.tsx` exposes `useAuth()`; token stored in
-localStorage. `components/RequireAuth.tsx` guards routes; `components/AppShell.tsx`
-is the nav + `<Outlet/>` layout. Routes are wired in `src/App.tsx` — `/compendium`
-is intentionally public (no `RequireAuth`); everything else is guarded.
+**Auth:** `src/auth/AuthContext.tsx` exposes `useAuth()` (+ `userId` decoded
+from the JWT `sub`, `username` stored at login — screens compute DM/owner
+identity from these); token stored in localStorage. `components/RequireAuth.tsx`
+guards routes; `components/AppShell.tsx` is the nav + `<Outlet/>` layout. Routes
+are wired in `src/App.tsx` — **every route except `/login` is guarded,
+including `/compendium`** (the old "compendium is public" note is stale).
 
 **Backend rules that shape the client (don't fight them):**
 - **Enums serialize as NUMBERS** over the wire (no `JsonStringEnumConverter`).
@@ -221,6 +237,60 @@ feat (the feat picker lists `/api/feats` with prerequisites/descriptions and sen
 `featId` on apply; backend rejects sending both). Not yet handled: multi-pick spell
 counts beyond toggling.
 
+**Scope B (multi-user campaigns + live combat) is implemented** — routes:
+- `/vault` (`Vault.tsx`) — character grid with per-card retire toggle
+  (`PUT /api/character/{id}/retire`) behind a "Show retired" filter.
+- `/campaigns` (`CampaignList.tsx`) — campaign grid (DM/Member badge), inline create.
+- `/campaigns/:id` (`CampaignDetail.tsx`) — one component, DM-vs-member controls
+  conditional: membership (invite/join/accept/reject/remove, DM transfer),
+  registered characters (+ DM "Copy" via `POST /api/character/{id}/copy`),
+  sessions + rosters, encounter list/create. Non-members get a 404 → Join CTA.
+- `/campaigns/:id/encounters/:encounterId` (`EncounterView.tsx`) — the live combat
+  tracker (Pending → Active → Ended; start/next-turn/end, combatant add/remove,
+  initiative, HP delta/set/temp; ally-vs-enemy split persisted per-encounter in
+  localStorage). **Every encounter mutation returns the full `EncounterResponse`**
+  and flows through a single `applyUpdate` state-replace path — SignalR pushes use
+  the same path. `PlayerEncounterView.tsx` exists but is **not routed** (WIP).
+
+**Live sync:** `src/hooks/useEncounterHub.ts` (`@microsoft/signalr`) connects to
+`/hubs/encounter` with the JWT as `?access_token=` (WS can't carry a Bearer
+header), handles `EncounterUpdated`/`EncounterArchived`, auto-reconnects and
+re-joins its group. Local IIS has no WebSocket upgrade, so the connection
+negotiates down to **SSE — that's normal, not a bug**. `/hubs` is proxied in
+`vite.config.ts` with `ws: true`; callbacks live in refs so re-renders don't
+rebuild the connection.
+
 Backend features that are **not modeled** — don't build UI for them: Half-Elf
-"choose +1 to two", subrace modifiers, weapon properties (finesse/heavy/…), and
-spell slots as anything but a single int.
+"choose +1 to two", weapon properties (finesse/heavy/…), and spell slots as
+anything but a single int. (Subraces ARE modeled — picker in the builder race
+step, modifiers in the ability tooltip.)
+
+## Backend context you can't see from this repo (synced 2026-06-11)
+
+- **The backend has a real xUnit suite now** (`DMTool.Tests`, run with
+  `dotnet test DMTool.slnx` in the backend repo) covering the domain rules in
+  `DMTool.Entities/Calculations/` (LevelUpPlanner, multiclass prereqs,
+  proficiency aggregation, selection validation, encumbrance, status effects,
+  unarmed/unarmored). When you file a `FRONTEND-REQUEST-*.md` for rule
+  enforcement, the rule + tests land there — asking is cheap; don't work around
+  missing rules client-side.
+- **DB baseline is through migration 057** (folded into the baseline 2026-06-11;
+  next migration starts at `058_*`). `FRONTEND-CONTEXT.md`'s "DB through
+  migration 049" is stale.
+- **Hub auth is enforced server-side** (backend commit 2026-06-11):
+  `JoinEncounter` verifies encounter access before the group join, and DM-only
+  pushes go to a separate `encounter-{id}-dm` group. If live updates stop for a
+  user, check their campaign membership/access before debugging the client.
+- **A production pairing exists:** the backend also runs on Azure App Service
+  (`dmtool20260607231301-…southeastasia-01.azurewebsites.net`); this repo's
+  GitHub Pages deploy builds against it (`VITE_API_BASE` in
+  `.github/workflows/deploy.yml`). When `VITE_API_BASE` is set there is no Vite
+  proxy — the backend's production CORS origins (`CorsOptions`) must allow the
+  Pages origin. The Azure DevOps `azure-pipelines.yml` is a second,
+  **manual-trigger** deploy to Azure Static Web Apps; neither pipeline runs
+  `npm run lint` — local lint is the only lint gate.
+- **Handoff protocol:** `FRONTEND-REQUEST-*.md` files go in the **backend repo
+  root** (the backend session doesn't read this repo; copies here are reference
+  only). The backend replies in `INCOMING-FROM-BACKEND.md` (here) and drops
+  `HANDOFF-TO-FRONTEND-*.md` in its own root. Trust the newest file end-to-end —
+  status snapshots go stale fast.

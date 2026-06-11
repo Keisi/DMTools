@@ -1,19 +1,25 @@
 # Handover — DMTool-FrontEnd (for the next session)
 
-> **▶ NEW (2026-06-11): two backend requests pending — hand them to the backend session.**
-> This session's theme: **depend on the backend for rules/data** (now a standing rule in
-> `CLAUDE.md` under "Backend rules that shape the client"). Outstanding asks:
-> - **`FRONTEND-REQUEST-prepared-spell-cap.md`** — backend derives + enforces the prepared-spell
->   cap (`spellcasting[].maxPreparedSpells`, gates on create/level-up/PUT-spells). The frontend
->   already consumes it: `ManageSpellsDialog` prefers the field when present; once shipped,
->   **delete the client `mod + level` fallback** there (it's wrong for half-casters by design —
->   documented inline).
-> - **`FRONTEND-REQUEST-rules-enforcement-audit.md`** — create-path ASI budget enforcement,
->   off-class/over-level spell subset gates, server-side initiative roll (the current client
->   d20 in `EncounterView.handleRandomizeInitiatives` drops the Dex mod), and
->   `abilityScores[].modifier` on the response. When `modifier` ships, drop the triplicated
->   `abilityMod` helper (`CharacterSheet.tsx:35`, `ManageSpellsDialog.tsx:8`,
->   `PlayerEncounterView.tsx:20`).
+> **✓ RESOLVED (2026-06-11, same day): both backend requests SHIPPED and CONSUMED.**
+> Backend replies: `BACKEND-RESPONSE-prepared-spell-cap.md` +
+> `BACKEND-RESPONSE-rules-enforcement-audit.md` (commits 28ed633/c03001f/92eadf8, live
+> on `:3501`). Frontend consumption done + live-verified the same day:
+> - `maxPreparedSpells` read in `ManageSpellsDialog` (shows the correct **5** for the
+>   E2E Paladin; the wrong mod+level stopgap is **deleted**); over-cap / off-class PUT
+>   → 400 surfaced via the existing ApiError path. `UpdateSpellsRequest` gained
+>   `allowHomebrewSelections?` (modeled; no UI toggle yet — only send true behind an
+>   explicit DM homebrew control).
+> - `abilityScores[].modifier` consumed everywhere; **all three `abilityMod` client
+>   copies deleted** (CharacterSheet / ManageSpellsDialog / PlayerEncounterView).
+> - `POST .../roll-initiatives` wired into `EncounterView` (client d20 loop retired);
+>   ASI-budget + spell-subset create gates are backend-side, nothing to do client-side
+>   (builder hint already counts only ASI points — feats deliberately NOT counted,
+>   backend decision).
+>
+> **▶ STILL PENDING with the backend:** `FRONTEND-REQUEST-dm-register-member-character.md`
+> (CAMP-08 — DM registering an active member's character 400s; includes the
+> AddedBy-as-ownerId response bug to fix with it). On the reply: re-run CAMP-08 +
+> verify `ownerId` mapping; the existing DM dropdown then just works.
 >
 > **✓ DONE 2026-06-11 (this session)** — commits `fab5d68` / `6b1511d` / `a35663b`:
 > a L10 Paladin (prepared caster) couldn't select any creation spells — `toggleCapped` read the
