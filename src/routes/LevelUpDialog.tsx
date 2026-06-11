@@ -351,12 +351,12 @@ export default function LevelUpDialog({
 
         {multiclass && (
           <p className="text-faint lvl__hint">
-            Add a class at level 1 (total {currentTotal}/{MAX_TOTAL_LEVEL}). 5e
-            requires a minimum in both your current and the new class's key
-            abilities; an unmet prerequisite is flagged below with a DM-override
-            option. A "choose a skill/instrument" multiclass grant
-            (Bard/Rogue/Ranger) isn't added automatically — set it via Edit.
-            Advance the class later with Level Up.
+            Add a class at level 1 (total {currentTotal}/{MAX_TOTAL_LEVEL}).
+            Multiclassing requires a minimum in both your current and the new
+            class's key abilities; an unmet prerequisite is flagged below with a
+            DM-override option. If the new class offers a skill or instrument
+            grant, its picker appears below (optional — you can fill it in
+            later). Advance the class later with Level Up.
           </p>
         )}
 

@@ -364,8 +364,9 @@ export function ClassStep({
         <p className="builder__multiclass-warn" role="alert">
           ⚠ {picks.length} classes selected. Multiclassing this widely spreads
           your levels thin — you'll unlock high-level class features much later,
-          and most builds use just 1–2 classes. 5e also requires a 13+ in each
-          class's key ability to multiclass, so double-check your scores.
+          and most builds use just 1–2 classes. Multiclassing also requires a
+          minimum score in each class's key ability (checked when you save), so
+          double-check your scores.
         </p>
       )}
       {totalLevel >= MAX_TOTAL_LEVEL ? (
@@ -852,10 +853,9 @@ export function ImprovementsPanel({
       <h4 className="builder__equip-title">Ability Score Improvements</h4>
       <p className="text-faint builder__hint">
         Your classes have earned <strong>{earned}</strong> Ability Score Improvement
-        {earned === 1 ? "" : "s"} (levels 4 / 8 / 12 / 16 / 19, plus Fighter 6 / 14 and
-        Rogue 10) — up to <strong>{budget}</strong> points (each ASI is +2 to one or +1 to
-        two). Prefer a feat instead? Take it in the Feats step. These keep your base scores
-        intact ({total}/{budget} allocated).
+        {earned === 1 ? "" : "s"} at their ASI levels — up to <strong>{budget}</strong>{" "}
+        points (each ASI is +2 to one or +1 to two). Prefer a feat instead? Take it in the
+        Feats step. These keep your base scores intact ({total}/{budget} allocated).
       </p>
       <div className="builder__abilities">
         {stats.map((s) => {
@@ -1037,7 +1037,7 @@ export function SpellsStep({
     return (
       <p className="text-faint">
         No spells at this level — either a non-caster, or a prepared caster that hasn't
-        reached their first spell slots yet (e.g. Paladin before level 2).
+        reached their first spell slots yet (some classes start casting a few levels in).
       </p>
     );
   return (

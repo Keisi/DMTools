@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { characters, reference } from "../api/endpoints";
 import {
   Alignment,
+  FeatureKind,
   SelectionType,
   SkillProficiencyLevel,
   type ArmorResponse,
@@ -309,22 +310,27 @@ export default function CharacterBuilder() {
     () => picks.reduce((sum, p) => sum + p.level, 0),
     [picks],
   );
-  // ASIs are earned per CLASS level (RAW: 4/8/12/16/19, plus Fighter 6/14 and
-  // Rogue 10), not per character level — so e.g. Paladin 1 / Cleric 1 earns none.
-  // The reference API doesn't expose the schedule, but it's standard for SRD
-  // classes, so derive it from each pick's class name + level.
-  const earnedAsiCount = useMemo(() => {
-    const asiLevelsFor = (name: string | undefined) => {
-      const levels = [4, 8, 12, 16, 19];
-      if (name === "Fighter") levels.push(6, 14);
-      if (name === "Rogue") levels.push(10);
-      return levels;
-    };
-    return picks.reduce((sum, p) => {
-      const name = classes.find((c) => c.id === p.classId)?.name;
-      return sum + asiLevelsFor(name).filter((l) => p.level >= l).length;
-    }, 0);
-  }, [picks, classes]);
+  // ASIs are earned per CLASS level, not per character level — so e.g.
+  // Paladin 1 / Cleric 1 earns none. The schedule is data-driven: each class's
+  // features[] carries kind AbilityScoreImprovement at the granting levels
+  // (4/8/12/16/19, plus Fighter 6/14 and Rogue 10 in the SRD seed) — the same
+  // rows the backend's LevelUpPlanner derives asiDue from, so homebrew classes
+  // work too. Count the rows at or below each pick's level.
+  const earnedAsiCount = useMemo(
+    () =>
+      picks.reduce((sum, p) => {
+        const cls = classes.find((c) => c.id === p.classId);
+        return (
+          sum +
+          (cls?.features ?? []).filter(
+            (f) =>
+              f.kind === FeatureKind.AbilityScoreImprovement &&
+              f.level <= p.level,
+          ).length
+        );
+      }, 0),
+    [picks, classes],
+  );
   // Skill choices come from the starting class (the 5e source of initial skills).
   const skillSelection = useMemo(() => {
     const startId = startingClassId ?? picks[0]?.classId;
@@ -471,6 +477,11 @@ export default function CharacterBuilder() {
     return {
       cantripsNeed,
       spellsNeed,
+      // Pure prepared pool: a levelled pool exists but no count is required
+      // (Paladin/Cleric/Druid/Wizard pre-pick). Selection is uncapped and never
+      // blocks advancing. A known caster in the mix sets spellsNeed > 0, which
+      // makes this false and keeps the required-count behaviour.
+      spellsOptional: spellsNeed === 0 && spellPool.size > 0,
       cantripPool: [...cantripPool.values()].sort((a, b) =>
         a.name.localeCompare(b.name),
       ),
@@ -533,10 +544,11 @@ export default function CharacterBuilder() {
       expertiseSkillIds.length === subFeature.exBudget &&
       eldritchInvocationIds.length === subFeature.eiBudget);
   // Known-caster cantrips/spells must match the level's totals (relaxed on edit).
+  // A prepared pre-pick pool (spellsOptional) is never required to advance.
   const spellsComplete =
     isEdit ||
     (cantripIds.length === spellPlan.cantripsNeed &&
-      spellIds.length === spellPlan.spellsNeed);
+      (spellPlan.spellsOptional || spellIds.length === spellPlan.spellsNeed));
 
   const canAdvance = [
     !!raceId, // Race
@@ -746,7 +758,10 @@ export default function CharacterBuilder() {
     setCantripIds((prev) => toggleCapped(prev, id, spellPlan.cantripsNeed));
   }
   function toggleSpell(id: string) {
-    setSpellIds((prev) => toggleCapped(prev, id, spellPlan.spellsNeed));
+    // Prepared pre-pick is uncapped; known casters cap at the required count.
+    setSpellIds((prev) =>
+      toggleCapped(prev, id, spellPlan.spellsOptional ? null : spellPlan.spellsNeed),
+    );
   }
   function setImprovement(statId: string, amount: number) {
     setImprovements((prev) => {
@@ -943,7 +958,7 @@ export default function CharacterBuilder() {
     choiceGroups.push({
       key: "mm",
       title: "Metamagic",
-      hint: "Choose your Sorcerer metamagic options.",
+      hint: "Choose the metamagic options your class grants.",
       choose: subFeature.mmBudget,
       options: subFeature.mmOptions,
       chosen: metamagicIds,
@@ -953,7 +968,7 @@ export default function CharacterBuilder() {
     choiceGroups.push({
       key: "ei",
       title: "Eldritch Invocations",
-      hint: "Choose your Warlock Eldritch Invocations.",
+      hint: "Choose the Eldritch Invocations your class grants.",
       choose: subFeature.eiBudget,
       options: eldritchInvocations.map((e) => ({
         optionId: e.id,
