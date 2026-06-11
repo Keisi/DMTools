@@ -1,5 +1,41 @@
 # Handover — DMTool-FrontEnd (for the next session)
 
+> **▶ NEW (2026-06-11): two backend requests pending — hand them to the backend session.**
+> This session's theme: **depend on the backend for rules/data** (now a standing rule in
+> `CLAUDE.md` under "Backend rules that shape the client"). Outstanding asks:
+> - **`FRONTEND-REQUEST-prepared-spell-cap.md`** — backend derives + enforces the prepared-spell
+>   cap (`spellcasting[].maxPreparedSpells`, gates on create/level-up/PUT-spells). The frontend
+>   already consumes it: `ManageSpellsDialog` prefers the field when present; once shipped,
+>   **delete the client `mod + level` fallback** there (it's wrong for half-casters by design —
+>   documented inline).
+> - **`FRONTEND-REQUEST-rules-enforcement-audit.md`** — create-path ASI budget enforcement,
+>   off-class/over-level spell subset gates, server-side initiative roll (the current client
+>   d20 in `EncounterView.handleRandomizeInitiatives` drops the Dex mod), and
+>   `abilityScores[].modifier` on the response. When `modifier` ships, drop the triplicated
+>   `abilityMod` helper (`CharacterSheet.tsx:35`, `ManageSpellsDialog.tsx:8`,
+>   `PlayerEncounterView.tsx:20`).
+>
+> **✓ DONE 2026-06-11 (this session)** — commits `fab5d68` / `6b1511d` / `a35663b`:
+> a L10 Paladin (prepared caster) couldn't select any creation spells — `toggleCapped` read the
+> 0 required count as a full cap and `spellsComplete` demanded exactly 0 picks; fixed with
+> `spellPlan.spellsOptional` (uncapped, never blocks Next; known-caster counts unchanged).
+> Earned-ASI count now derives from `ClassResponse.features` rows (kind
+> `AbilityScoreImprovement`, level ≤ pick level — the same rows the backend `LevelUpPlanner`
+> reads; the old `[4,8,12,16,19]` + Fighter/Rogue name-match is gone; homebrew classes now
+> work). **Live-verified via spectral: Fighter 12 → "earned 4 ASIs / 8 points".**
+> Schedule-neutral copy sweep (5 spots): ASI hint, metamagic/invocation hints, multiclass "13+"
+> warning (real minimum is the backend's edition-dependent `minimumScore`), "Paladin before
+> level 2" example, and the **stale** LevelUpDialog multiclass note (grants ARE collected
+> in-dialog since backend mig. 048). `SpellcastingResponse.maxPreparedSpells?` modeled in
+> `types.ts` (additive, absent until backend ships).
+>
+> **⚠ Tooling correction (2026-06-11):** `spectral batch` **CAN drive interactions now** —
+> this session ran 12 actions including eval-`.click()` on step-nav/class cards and a React
+> native-setter `input` dispatch (level field), no hang, against the dev server. The
+> 2026-06-08 "hangs on any state-changing action" note below appears outdated (spectral
+> updated since?). Try `spectral batch` first; fall back to the `%TEMP%` CDP driver only if
+> the hang recurs. Recipe that worked: project `CLAUDE.md` → "Browser verification".
+
 > **▶ SCOPE B IS NEXT (2026-06-10):** backend merged the `scope-b` vertical to `master`
 > (campaigns, encounters, SignalR, DM transfer, character copy, retire flag). Frontend has
 > **no Scope B UI yet** (the local `scope-b` branch is just two config tweaks). The build
