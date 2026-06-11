@@ -162,6 +162,7 @@ verified via GET /api/character/{id} on the fixture.
 | ENC-08 | Clone combatant | duplicate added | NOT RUN | |
 | ENC-09 | Update combatant HP | persists | **PASS(API)** | delta −3 → 4/7 |
 | ENC-10 | Death saves track | render/update | BLOCKED | spectral (UI) |
+| ENC-10b | Undo a death-save misclick | click highest filled pip steps it back (even at Dead/Stable); Reset clears all | NOT RUN | shipped this session; pips stay editable at terminal state + Reset button |
 | ENC-11 | DM vs player view | visibility/disposition respected | BLOCKED | spectral; needs 2nd user |
 | ENC-12 | SignalR hub | live updates | NOT RUN | needs 2 clients |
 | ENC-13 | Duplicate-link prevention | can't link same char twice | NOT RUN | |

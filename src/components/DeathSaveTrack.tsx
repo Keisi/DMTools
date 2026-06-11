@@ -9,6 +9,10 @@ const PIPS = [0, 1, 2];
  * Interactive when `onChange` is supplied (the DM records each rolled result);
  * read-only otherwise (the player view). Clicking a pip sets the count to that
  * position, or clears it if it's already the highest filled pip.
+ *
+ * Misclick recovery: pips stay clickable even at the terminal Dead/Stable state,
+ * so the click that tipped a combatant over can be walked back one pip (the
+ * legit prior pips are preserved). A Reset clears the whole track in one click.
  */
 export default function DeathSaveTrack({
   successes,
@@ -24,7 +28,10 @@ export default function DeathSaveTrack({
   const readOnly = !onChange;
   const dead = failures >= 3;
   const stable = successes >= 3;
-  const locked = readOnly || dead || stable;
+  // Only read-only locks the pips. Dead/Stable stay editable so a misclick that
+  // triggered the terminal state can be undone.
+  const locked = readOnly;
+  const canReset = !readOnly && (successes > 0 || failures > 0);
 
   const setSucc = (i: number) =>
     onChange?.(successes >= i + 1 ? i : i + 1, failures);
@@ -63,11 +70,23 @@ export default function DeathSaveTrack({
           {PIPS.map((i) => Pip("fail", i, failures > i))}
         </span>
       </div>
-      {dead ? (
-        <span className="dst__status dst__status--dead">Dead</span>
-      ) : stable ? (
-        <span className="dst__status dst__status--stable">Stable</span>
-      ) : null}
+      {(dead || stable || canReset) && (
+        <div className="dst__foot">
+          {dead && <span className="dst__status dst__status--dead">Dead</span>}
+          {stable && <span className="dst__status dst__status--stable">Stable</span>}
+          {canReset && (
+            <button
+              type="button"
+              className="dst__reset"
+              onClick={() => onChange?.(0, 0)}
+              title="Clear death saves"
+              aria-label="Reset death saves"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

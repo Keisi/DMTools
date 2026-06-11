@@ -65,6 +65,30 @@ button.dst__pip:not(:disabled):hover {
   color: var(--c-crimson-400);
 }
 
+/* Status + reset footer row */
+.dst__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.dst__reset {
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.dst__reset:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
 /* Compact: single-line pips (player tracker rows) */
 .dst--compact {
   flex-direction: row;
