@@ -24,6 +24,12 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    // Visual Studio's .vs/ folder holds locked .vsidx index files; the file
+    // watcher throws EBUSY trying to watch them (crashes `npm run dev` on
+    // Windows when the .slnx is open in VS). Exclude it (and build output).
+    watch: {
+      ignored: ["**/.vs/**", "**/dist/**"],
+    },
     // Dev proxy: forward /api to the DMTool backend so the browser makes
     // same-origin requests (no CORS setup needed). When VITE_API_BASE is
     // empty (the default in .env), the client uses relative URLs that hit
