@@ -1008,6 +1008,7 @@ export default function EncounterView() {
         campChars={campChars}
         hubStatus={hubStatus}
         hubLabel={hubLabel}
+        onUpdate={applyUpdate}
       />
     );
   }

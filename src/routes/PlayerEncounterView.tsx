@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { characters as charApi } from "../api/endpoints";
+import { campaigns, characters as charApi } from "../api/endpoints";
 import type {
   CampaignCharacterResponse,
   CharacterResponse,
@@ -41,6 +41,7 @@ export default function PlayerEncounterView({
   campChars,
   hubStatus,
   hubLabel,
+  onUpdate,
 }: {
   encounter: EncounterResponse;
   campaignId: string;
@@ -48,6 +49,9 @@ export default function PlayerEncounterView({
   campChars: CampaignCharacterResponse[];
   hubStatus: HubStatus;
   hubLabel: string;
+  // Replace parent encounter state with a mutation's returned EncounterResponse
+  // (the parent's applyUpdate — same path as REST + hub pushes).
+  onUpdate: (enc: EncounterResponse) => void;
 }) {
   const isActive = encounter.status === EncounterStatus.Active;
   const isPending = encounter.status === EncounterStatus.Pending;
@@ -223,7 +227,14 @@ export default function PlayerEncounterView({
               </p>
             </section>
           ) : (
-            <CombatCard combatant={selected} sheet={sheet} error={sheetError} />
+            <CombatCard
+              combatant={selected}
+              sheet={sheet}
+              error={sheetError}
+              campaignId={campaignId}
+              encounterId={encounter.id}
+              onUpdate={onUpdate}
+            />
           )}
         </div>
 
@@ -370,11 +381,43 @@ function CombatCard({
   combatant,
   sheet,
   error,
+  campaignId,
+  encounterId,
+  onUpdate,
 }: {
   combatant: CombatantResponse;
   sheet: CharacterResponse | null;
   error: string | null;
+  campaignId: string;
+  encounterId: string;
+  onUpdate: (enc: EncounterResponse) => void;
 }) {
+  // Players may damage/heal their OWN combatant any time (backend authorizes by
+  // ownership, not turn — AuthorizeCombatantWriteAsync). HP math + death-save reset
+  // are server-side; we send a delta and render the returned EncounterResponse.
+  const [hpDelta, setHpDelta] = useState("");
+  const [hpBusy, setHpBusy] = useState(false);
+  const [hpError, setHpError] = useState<string | null>(null);
+
+  async function applyHpDelta(heal: boolean) {
+    const raw = parseInt(hpDelta, 10);
+    if (isNaN(raw) || raw === 0) return;
+    const delta = heal ? Math.abs(raw) : -Math.abs(raw);
+    setHpBusy(true);
+    setHpError(null);
+    try {
+      onUpdate(
+        await campaigns.updateCombatantHp(campaignId, encounterId, combatant.id, {
+          delta,
+        }),
+      );
+      setHpDelta("");
+    } catch (err) {
+      setHpError(err instanceof ApiError ? err.message : "Failed to update HP.");
+    }
+    setHpBusy(false);
+  }
+
   if (error) {
     return (
       <section className="panel penc__spectate">
@@ -440,6 +483,38 @@ function CombatCard({
             {combatant.tempHp > 0 && (
               <div className="enc__hp-temp-fill" style={{ width: `${tempPct}%` }} />
             )}
+          </div>
+
+          {/* Self-service damage/heal on your own combatant. */}
+          <div className="enc__ctrl-grp penc__hp-controls">
+            <span className="enc__ctrl-label">Damage / Heal</span>
+            <div className="enc__ctrl-row">
+              <input
+                type="number"
+                className="input enc__delta-inp"
+                value={hpDelta}
+                onChange={(e) => setHpDelta(e.target.value)}
+                disabled={hpBusy}
+                placeholder="Amt"
+                min="0"
+                aria-label="HP amount"
+              />
+              <button
+                className="btn enc__dmg-btn"
+                disabled={hpBusy}
+                onClick={() => applyHpDelta(false)}
+              >
+                Dmg
+              </button>
+              <button
+                className="btn enc__heal-btn"
+                disabled={hpBusy}
+                onClick={() => applyHpDelta(true)}
+              >
+                Heal
+              </button>
+            </div>
+            {hpError && <span className="enc__error">{hpError}</span>}
           </div>
         </div>
       </header>
