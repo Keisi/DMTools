@@ -713,6 +713,11 @@ export interface SpellcastingResponse {
   spellAttackBonus: number;
   cantripsKnown?: number | null;
   spellsKnown?: number | null;
+  // Prepared casters only (null for known casters & non-casters): the backend-derived
+  // number of levelled spells this class can prepare — max(1, castingMod + (Half ? ⌊lvl/2⌋ : lvl)).
+  // Authoritative; prefer it over any client-side estimate. See FRONTEND-REQUEST-prepared-spell-cap.md
+  // (additive — absent until the backend ships it).
+  maxPreparedSpells?: number | null;
   spellSlots: SpellSlotResponse[];
   isPactMagic: boolean;
 }

@@ -95,10 +95,18 @@ export default function ManageSpellsDialog({
       cantrips += sc.cantripsKnown ?? 0;
       const known = sc.spellsKnown;
       if (known === null || known === undefined) {
-        // Prepared caster: prepares (mod + class level), minimum 1.
-        const mod = modByName.get(sc.ability) ?? 0;
-        const lvl = levelByClass.get(sc.class) ?? 0;
-        spells += Math.max(1, mod + lvl);
+        // Prepared caster. Prefer the backend-derived cap (authoritative, correct
+        // for half-casters). Fall back to a client estimate only until the backend
+        // ships maxPreparedSpells — that estimate uses (mod + level) and is WRONG
+        // for half-casters (Paladin should be mod + ⌊level/2⌋); see
+        // FRONTEND-REQUEST-prepared-spell-cap.md.
+        if (sc.maxPreparedSpells !== null && sc.maxPreparedSpells !== undefined) {
+          spells += sc.maxPreparedSpells;
+        } else {
+          const mod = modByName.get(sc.ability) ?? 0;
+          const lvl = levelByClass.get(sc.class) ?? 0;
+          spells += Math.max(1, mod + lvl);
+        }
         anyPrepared = true;
       } else {
         spells += known;
