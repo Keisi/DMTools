@@ -1,0 +1,77 @@
+/* Death-save pip tracker — three success (green) + three failure (crimson) pips.
+   Tokens only; used by both the DM encounter view and the player view. */
+.dst {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.dst__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.dst__label {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  opacity: 0.75;
+  width: 2.75rem;
+  flex-shrink: 0;
+}
+.dst__pips {
+  display: inline-flex;
+  gap: var(--sp-1);
+}
+.dst__pip {
+  width: 13px;
+  height: 13px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+button.dst__pip:disabled {
+  cursor: default;
+}
+.dst__pip--succ {
+  border-color: #6bbf73;
+}
+.dst__pip--succ.dst__pip--on {
+  background: #6bbf73;
+}
+.dst__pip--fail {
+  border-color: var(--c-crimson-500);
+}
+.dst__pip--fail.dst__pip--on {
+  background: var(--c-crimson-500);
+}
+button.dst__pip:not(:disabled):hover {
+  border-color: var(--accent);
+}
+.dst__status {
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.dst__status--stable {
+  color: #6bbf73;
+}
+.dst__status--dead {
+  color: var(--c-crimson-400);
+}
+
+/* Compact: single-line pips (player tracker rows) */
+.dst--compact {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.dst--compact .dst__pip {
+  width: 10px;
+  height: 10px;
+}

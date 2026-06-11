@@ -207,6 +207,13 @@ export const campaigns = {
       `/api/campaigns/${campaignId}/encounters/${encounterId}/next-turn`,
       {},
     ),
+  // Step the turn pointer back one (undo an accidental Next Turn). Backend support
+  // pending — see FRONTEND-REQUEST-encounter-combat-controls.md (item 1).
+  prevTurn: (campaignId: string, encounterId: string) =>
+    api.put<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/prev-turn`,
+      {},
+    ),
   endEncounter: (campaignId: string, encounterId: string) =>
     api.put<EncounterResponse>(
       `/api/campaigns/${campaignId}/encounters/${encounterId}/end`,

@@ -169,6 +169,72 @@
   border-bottom: 1px solid var(--border);
   padding-bottom: var(--sp-3);
 }
+/* When the title shares a row with the view toggle, the row owns the divider. */
+.enc__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--sp-3);
+}
+.enc__section-title--inline {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+/* ---- View toggle (Sides / Initiative) ---- */
+.enc__view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.enc__view-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: var(--sp-1) var(--sp-3);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.enc__view-btn + .enc__view-btn {
+  border-left: 1px solid var(--border);
+}
+.enc__view-btn:hover {
+  color: var(--text);
+}
+.enc__view-btn--active {
+  background: var(--accent);
+  color: var(--c-ink-900);
+}
+
+/* ---- Turn-order rank badge (initiative view) ---- */
+.enc__rank {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  background: var(--surface);
+}
+.enc__rank--active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--c-ink-900);
+}
 
 /* ---- Ally / Enemy sub-sections ---- */
 .enc__subsection {
@@ -209,6 +275,15 @@
 .enc__now-acting--enemy {
   border-left-color: var(--c-crimson-400);
   background: color-mix(in srgb, var(--c-crimson-400) 8%, transparent);
+}
+.enc__now-acting-sword {
+  font-size: var(--fs-base);
+  color: var(--accent);
+  flex-shrink: 0;
+  line-height: 1;
+}
+.enc__now-acting--enemy .enc__now-acting-sword {
+  color: var(--c-crimson-400);
 }
 .enc__now-acting-label {
   font-size: var(--fs-xs);
@@ -279,7 +354,10 @@
 .enc__comb-left {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
+  /* Wrap the HP block under the name when the row is tight instead of letting the
+     fixed-width name/HP overflow rightward into the controls (initiative label). */
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-3);
   flex: 1;
   min-width: 200px;
 }
@@ -309,19 +387,27 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-1);
-  min-width: 80px;
+  min-width: 150px;
 }
 .enc__hp-bar {
-  height: 6px;
+  display: flex;
+  height: 9px;
   background: var(--border);
-  border-radius: 3px;
+  border-radius: 5px;
   overflow: hidden;
-  width: 80px;
+  width: 150px;
 }
 .enc__hp-fill {
   height: 100%;
+  flex-shrink: 0;
   background: var(--action);
-  border-radius: 3px;
+  transition: width var(--dur-base) var(--ease-out);
+}
+/* Temp HP rides the same bar as a distinct segment after current HP. */
+.enc__hp-temp-fill {
+  height: 100%;
+  flex-shrink: 0;
+  background: var(--accent);
   transition: width var(--dur-base) var(--ease-out);
 }
 .enc__hp-text {
@@ -338,6 +424,23 @@
   align-items: flex-end;
   gap: var(--sp-4);
   flex-wrap: wrap;
+}
+/* Sides view: enemies in edit mode carry many controls. Drop them onto their own
+   full-width row below the name/HP and lay them out as a tidy grid, so Clone/Remove
+   read as part of a clean grid instead of orphaning at the end of a ragged wrap.
+   (The initiative view keeps its aligned single-row layout — see --aligned rules.) */
+.enc__list:not(.enc__list--aligned) .enc__comb-controls {
+  flex: 1 1 100%;
+  display: grid;
+  /* Min column must fit the widest group (Damage/Heal ≈ 150px) so its trailing
+     button can't overflow the cell into the next group. */
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: var(--sp-3) var(--sp-4);
+  align-items: end;
+  justify-items: start;
+  padding-top: var(--sp-3);
+  margin-top: var(--sp-1);
+  border-top: 1px solid var(--border);
 }
 .enc__ctrl-grp {
   display: flex;
@@ -395,6 +498,16 @@
   background: var(--accent);
   color: var(--c-ink-900);
 }
+.enc__temphp-btn {
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-xs);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.enc__temphp-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--c-ink-900);
+}
 .enc__edit-name-inp {
   width: 9rem;
 }
@@ -407,12 +520,94 @@
   border-color: var(--accent);
   color: var(--accent);
 }
+/* Friend/foe disposition toggle (what players see) */
+.enc__disp-btn {
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-xs);
+  min-width: 52px;
+}
+.enc__disp-btn--ally {
+  border-color: #6bbf73;
+  color: #6bbf73;
+}
+.enc__disp-btn--enemy {
+  border-color: var(--c-crimson-500);
+  color: var(--c-crimson-400);
+}
+
+/* Per-enemy player-visibility toggles (Hidden / HP / AC) */
+.enc__vis-btn {
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-xs);
+  min-width: 28px;
+}
+.enc__vis-btn--on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
 .enc__remove-btn {
   padding: var(--sp-1) var(--sp-2);
   font-size: var(--fs-xs);
   border-color: var(--c-crimson-500);
   color: var(--c-crimson-400);
   margin-left: var(--sp-2);
+}
+
+/* ---- Initiative-view column alignment ----
+   Each <li> is its own flex container, so columns only line up across rows when
+   every cell has a deterministic width. The control groups already do (fixed-width
+   inputs + fixed buttons); the two variables were the left block (grew to fill) and
+   the enemy-only Clone/Hide columns. Fix the left block to a single % width and
+   reserve the enemy-only columns (placeholders above) so all rows match. */
+.enc__list--aligned .enc__comb-left {
+  flex: 0 0 auto;
+  width: clamp(220px, 34%, 340px);
+  min-width: 0;
+}
+.enc__list--aligned .enc__comb-info {
+  min-width: 0;
+}
+/* Let the HP bar grow across the left column's free space — more pronounced and
+   removes the dead gap between it and the controls. */
+.enc__list--aligned .enc__hp-wrap {
+  flex: 1 1 auto;
+  min-width: 110px;
+}
+.enc__list--aligned .enc__hp-bar {
+  width: 100%;
+}
+.enc__list--aligned .enc__comb-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.enc__list--aligned .enc__comb-controls {
+  flex: 1;
+}
+/* Fixed column widths ONLY in the aligned initiative view (so the mixed list lines
+   up). In the sides view these groups size to their content, so labels never
+   overflow. Clip the label as a safety net against a long column label. */
+.enc__list--aligned .enc__ctrl-grp--disp {
+  width: 4rem;
+}
+.enc__list--aligned .enc__ctrl-grp--vis {
+  width: 7rem;
+}
+.enc__list--aligned .enc__ctrl-grp--clone {
+  width: 2.75rem;
+}
+.enc__list--aligned .enc__ctrl-grp--disp,
+.enc__list--aligned .enc__ctrl-grp--vis,
+.enc__list--aligned .enc__ctrl-grp--clone {
+  min-width: 0;
+}
+.enc__list--aligned .enc__ctrl-grp--disp .enc__ctrl-label,
+.enc__list--aligned .enc__ctrl-grp--vis .enc__ctrl-label,
+.enc__list--aligned .enc__ctrl-grp--clone .enc__ctrl-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 .enc__remove-btn:hover:not(:disabled) {
   background: var(--action);

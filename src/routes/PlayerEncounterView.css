@@ -1,0 +1,319 @@
+/* Player-facing combat view. Reuses .panel / .sheet__* / .enc__* primitives;
+   this file only adds the combat-card layout and the turn-order tracker. */
+
+.penc {
+  padding-bottom: var(--sp-8);
+}
+
+/* Character switcher (only when the player fields >1 character) */
+.penc__char-switch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 180px;
+}
+.penc__switch-label {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+/* ---- Turn banner ---- */
+.penc__turn-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--border);
+  background: var(--bg-raised);
+  margin-bottom: var(--sp-4);
+}
+.penc__turn-banner--mine {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  animation: penc-glow 1.8s var(--ease-out) infinite;
+}
+.penc__turn-banner--ended {
+  opacity: 0.7;
+}
+.penc__turn-headline {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+}
+.penc__turn-banner--mine .penc__turn-headline {
+  color: var(--accent);
+}
+.penc__turn-sub {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+@keyframes penc-glow {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 14px 0 color-mix(in srgb, var(--accent) 35%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .penc__turn-banner--mine { animation: none; }
+}
+
+/* ---- Layout: character card + tracker side rail ---- */
+.penc__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--sp-4);
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .penc__grid {
+    grid-template-columns: 1fr;
+  }
+  /* On narrow screens put the tracker first — turn order matters most. */
+  .penc__main { order: 2; }
+  .penc__tracker { order: 1; }
+}
+
+/* ---- Character combat card ---- */
+.penc__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.penc__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  padding: var(--sp-4);
+}
+.penc__hp-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 160px;
+}
+.penc__hp-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  justify-content: flex-end;
+}
+.penc__hp-big {
+  font-family: var(--font-display);
+  font-size: var(--fs-2xl, 2rem);
+  line-height: 1;
+}
+.penc__hp-temp {
+  color: var(--accent);
+  font-size: var(--fs-sm);
+}
+.penc__hp-bar {
+  width: 100%;
+}
+
+.penc__vitals {
+  margin: 0;
+}
+.penc__abilities {
+  margin: 0;
+}
+
+/* Card sub-blocks: a responsive masonry-ish column flow */
+.penc__blocks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+.penc__caster {
+  margin: 0 0 var(--sp-1);
+}
+.penc__slots {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-sm);
+  margin: var(--sp-1) 0 var(--sp-2);
+}
+.penc__spell-group {
+  margin-top: var(--sp-2);
+}
+.penc__spell-level {
+  margin: 0 0 2px;
+  font-size: var(--fs-sm);
+  font-family: var(--font-display);
+}
+.penc__spell-names {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.penc__spectate {
+  padding: var(--sp-5);
+}
+
+/* ---- Turn-order tracker ---- */
+.penc__tracker {
+  padding: var(--sp-4);
+  position: sticky;
+  top: var(--sp-4);
+}
+.penc__track-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.penc__track-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+.penc__track-top,
+.penc__track-bottom {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+/* Indent the HP line so it lines up under the name (past the rank badge). */
+.penc__track-bottom {
+  padding-left: calc(20px + var(--sp-2));
+}
+.penc__track-row--active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.penc__track-row--mine {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.penc__track-row--active.penc__track-row--mine {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.penc__track-row--out {
+  opacity: 0.45;
+}
+.penc__rank {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+.penc__rank--active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--c-ink-900);
+}
+.penc__track-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.penc__you-tag {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+
+/* Friend/foe indicator — a labeled, color-coded pill. */
+.penc__disp {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid currentColor;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+.penc__disp--pc {
+  color: var(--accent);
+}
+.penc__disp--ally {
+  color: #6bbf73; /* friendly green */
+}
+.penc__disp--enemy {
+  color: var(--c-crimson-400);
+}
+
+/* Labeled stat (Init / HP / AC): muted label + value. */
+.penc__track-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.penc__stat-label {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  opacity: 0.75;
+}
+.penc__stat-val {
+  font-size: var(--fs-sm);
+}
+.penc__track-hpbar {
+  flex: 1;
+  width: auto;
+  min-width: 36px;
+}
+/* Fixed widths for the trailing stats so the flex:1 HP bar is the same length on
+   every row — i.e. the bars line up across the tracker. */
+.penc__track-hp {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: var(--fs-xs);
+  flex-shrink: 0;
+  white-space: nowrap;
+  width: 6rem;
+}
+.penc__track-ac {
+  margin-left: var(--sp-1);
+  width: 3.25rem;
+  justify-content: flex-end;
+}
+.penc__hidden {
+  color: var(--text-faint, var(--text-muted));
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* Death saves in the tracker row occupy the HP bar's flex region. */
+.penc__track-dying {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* Dying banner on the combat card */
+.penc__dying {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4);
+  border-left: 4px solid var(--c-crimson-500);
+}
+.penc__dying-label {
+  font-family: var(--font-display);
+  color: var(--c-crimson-400);
+}

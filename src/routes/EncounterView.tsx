@@ -8,14 +8,27 @@ import type {
   CombatantResponse,
   UpdateCombatantRequest,
 } from "../api/types";
-import { CampaignMemberStatus, EncounterStatus } from "../api/types";
+import { CampaignMemberStatus, CombatantDisposition, EncounterStatus } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
 import { useEncounterHub, HubStatus } from "../hooks/useEncounterHub";
+import PlayerEncounterView from "./PlayerEncounterView";
+import DeathSaveTrack from "../components/DeathSaveTrack";
 import "./EncounterView.css";
 
 type Side = "ally" | "enemy";
 const SIDES_KEY = (eid: string) => `dmtool-enc-sides-${eid}`;
+
+// Combatants view mode: split by side (default) vs. a single initiative-sorted
+// turn-order list (DM-only, see the toggle in the Combatants section header).
+type ViewMode = "sides" | "initiative";
+const VIEW_KEY = (eid: string) => `dmtool-enc-view-${eid}`;
+
+function loadView(encounterId: string): ViewMode {
+  return localStorage.getItem(VIEW_KEY(encounterId)) === "initiative"
+    ? "initiative"
+    : "sides";
+}
 
 function loadSides(encounterId: string): Record<string, Side> {
   try {
@@ -55,6 +68,8 @@ export default function EncounterView() {
   const [deltaInputs, setDeltaInputs] = useState<Record<string, string>>({});
   // Per-combatant direct set HP
   const [setHpInputs, setSetHpInputs] = useState<Record<string, string>>({});
+  // Per-combatant direct set Temp HP
+  const [tempHpInputs, setTempHpInputs] = useState<Record<string, string>>({});
   // Per-combatant stat edits (unlinked combatants only)
   const [nameInputs, setNameInputs] = useState<Record<string, string>>({});
   const [maxHpInputs, setMaxHpInputs] = useState<Record<string, string>>({});
@@ -76,6 +91,9 @@ export default function EncounterView() {
   const [actionBusy, setActionBusy] = useState(false);
   const [busyCombatant, setBusyCombatant] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
+  // Combatants view mode (DM-only toggle): 'sides' = ally/enemy split;
+  // 'initiative' = single turn-order-sorted list, no add forms.
+  const [viewMode, setViewMode] = useState<ViewMode>(() => loadView(encounterId));
   const [endConfirm, setEndConfirm] = useState(false);
   const [initiativeWarning, setInitiativeWarning] = useState<string[] | null>(null);
 
@@ -226,6 +244,23 @@ export default function EncounterView() {
     setActionBusy(false);
   }
 
+  // Undo an accidental Next Turn — steps the active-combatant pointer back one
+  // (and back a round when stepping past the top of the order). Backend support
+  // pending; see FRONTEND-REQUEST-encounter-combat-controls.md (item 1).
+  async function handleUndoTurn() {
+    setActionBusy(true);
+    try {
+      applyUpdate(await campaigns.prevTurn(campaignId, encounterId));
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Failed to undo turn. The backend endpoint may not be live yet (see FRONTEND-REQUEST-encounter-combat-controls.md).",
+      );
+    }
+    setActionBusy(false);
+  }
+
   async function handleEnd() {
     setActionBusy(true);
     try {
@@ -330,6 +365,28 @@ export default function EncounterView() {
       setError(err instanceof ApiError ? err.message : "Failed to set HP.");
     }
     setBusyCombatant(null);
+  }
+
+  async function handleSetTempHp(c: CombatantResponse) {
+    const val = parseInt(tempHpInputs[c.id] ?? "", 10);
+    if (isNaN(val) || val < 0) return;
+    setBusyCombatant(c.id);
+    try {
+      applyUpdate(
+        await campaigns.updateCombatantHp(campaignId, encounterId, c.id, {
+          setTempHp: val,
+        }),
+      );
+      setTempHpInputs((prev) => ({ ...prev, [c.id]: "" }));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to set temp HP.");
+    }
+    setBusyCombatant(null);
+  }
+
+  function changeView(mode: ViewMode) {
+    setViewMode(mode);
+    localStorage.setItem(VIEW_KEY(encounterId), mode);
   }
 
   async function handleRemove(id: string) {
@@ -450,25 +507,42 @@ export default function EncounterView() {
     }
   }
 
-  // Shared combatant row renderer
-  function renderCombatant(c: CombatantResponse) {
+  // Shared combatant row renderer. `rank` (1-based) is supplied by the
+  // initiative view to show the turn-order position; omitted in the sides view.
+  function renderCombatant(c: CombatantResponse, rank?: number) {
     const isTurn = c.id === encounter!.activeCombatantId;
     const isBusy = busyCombatant === c.id;
     const isEnemy = sideOf(c) === "enemy";
     const isUnlinked = c.characterId === null;
-    const hpPct =
-      c.maxHp > 0
-        ? Math.max(0, Math.round((c.currentHp / c.maxHp) * 100))
-        : 0;
+    // Two phases of DM controls:
+    //  - editing: building/configuring the encounter (pending, or the Edit toggle) —
+    //    initiative, stat edits, side/visibility, clone, remove, add forms.
+    //  - combatActive: running the fight (active, not editing) — only HP actions.
+    const editing = isPending || editMode;
+    const combatActive = isActive && !editMode;
+    // HP bar scaled by (maxHp + tempHp) so current HP, missing HP, and temp HP
+    // segments are all proportional within one bar.
+    const hpScale = c.maxHp + c.tempHp;
+    const hpPct = hpScale > 0 ? Math.max(0, (c.currentHp / hpScale) * 100) : 0;
+    const tempPct = hpScale > 0 ? Math.max(0, (c.tempHp / hpScale) * 100) : 0;
     return (
       <li
         key={c.id}
         className={`enc__combatant${isTurn ? " enc__combatant--active" : ""}${!c.isActive ? " enc__combatant--inactive" : ""}`}
       >
         <div className="enc__comb-left">
-          <span className="enc__turn-dot" aria-hidden="true">
-            {isTurn ? "▶" : "·"}
-          </span>
+          {rank !== undefined ? (
+            <span
+              className={`enc__rank tip${isTurn ? " enc__rank--active" : ""}`}
+              data-tooltip={isTurn ? "Acting now" : "Turn order"}
+            >
+              {isTurn ? "⚔" : rank}
+            </span>
+          ) : (
+            <span className="enc__turn-dot" aria-hidden="true">
+              {isTurn ? "⚔" : "·"}
+            </span>
+          )}
           <div className="enc__comb-info">
             <span className="enc__comb-name">{c.name}</span>
             <span className="text-muted enc__comb-ac">AC&nbsp;{c.armorClass}</span>
@@ -476,6 +550,12 @@ export default function EncounterView() {
           <div className="enc__hp-wrap">
             <div className="enc__hp-bar">
               <div className="enc__hp-fill" style={{ width: `${hpPct}%` }} />
+              {c.tempHp > 0 && (
+                <div
+                  className="enc__hp-temp-fill"
+                  style={{ width: `${tempPct}%` }}
+                />
+              )}
             </div>
             <span className="enc__hp-text">
               {c.currentHp}&thinsp;/&thinsp;{c.maxHp}
@@ -488,36 +568,38 @@ export default function EncounterView() {
 
         {isDm && !isEnded && (
           <div className="enc__comb-controls">
-            <div className="enc__ctrl-grp">
-              <span className="enc__ctrl-label">Initiative</span>
-              <div className="enc__ctrl-row">
-                <input
-                  type="number"
-                  className="input enc__init-inp"
-                  value={initInputs[c.id] ?? ""}
-                  onChange={(e) =>
-                    setInitInputs((prev) => ({
-                      ...prev,
-                      [c.id]: e.target.value,
-                    }))
-                  }
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSetInitiative(c);
-                  }}
-                  disabled={isBusy}
-                  placeholder="—"
-                />
-                <button
-                  className="btn enc__set-btn"
-                  disabled={isBusy}
-                  onClick={() => handleSetInitiative(c)}
-                >
-                  Set
-                </button>
+            {editing && (
+              <div className="enc__ctrl-grp">
+                <span className="enc__ctrl-label">Initiative</span>
+                <div className="enc__ctrl-row">
+                  <input
+                    type="number"
+                    className="input enc__init-inp"
+                    value={initInputs[c.id] ?? ""}
+                    onChange={(e) =>
+                      setInitInputs((prev) => ({
+                        ...prev,
+                        [c.id]: e.target.value,
+                      }))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSetInitiative(c);
+                    }}
+                    disabled={isBusy}
+                    placeholder="—"
+                  />
+                  <button
+                    className="btn enc__set-btn"
+                    disabled={isBusy}
+                    onClick={() => handleSetInitiative(c)}
+                  >
+                    Set
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
-            {isActive && (
+            {combatActive && (
               <div className="enc__ctrl-grp">
                 <span className="enc__ctrl-label">Damage / Heal</span>
                 <div className="enc__ctrl-row">
@@ -553,7 +635,7 @@ export default function EncounterView() {
               </div>
             )}
 
-            {isActive && (
+            {combatActive && (
               <div className="enc__ctrl-grp">
                 <span className="enc__ctrl-label">Set HP</span>
                 <div className="enc__ctrl-row">
@@ -578,6 +660,56 @@ export default function EncounterView() {
                     Set
                   </button>
                 </div>
+              </div>
+            )}
+
+            {combatActive && (
+              <div className="enc__ctrl-grp">
+                <span className="enc__ctrl-label">Temp HP</span>
+                <div className="enc__ctrl-row">
+                  <input
+                    type="number"
+                    className="input enc__sethp-inp"
+                    value={tempHpInputs[c.id] ?? ""}
+                    onChange={(e) =>
+                      setTempHpInputs((prev) => ({
+                        ...prev,
+                        [c.id]: e.target.value,
+                      }))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSetTempHp(c);
+                    }}
+                    disabled={isBusy}
+                    placeholder="Temp"
+                    min="0"
+                  />
+                  <button
+                    className="btn enc__temphp-btn"
+                    disabled={isBusy}
+                    onClick={() => handleSetTempHp(c)}
+                  >
+                    Set
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Death saves — a downed PC (linked, 0 HP) rolls each turn; the DM
+                records the result the player calls out. */}
+            {combatActive && !isUnlinked && c.currentHp === 0 && (
+              <div className="enc__ctrl-grp enc__ctrl-grp--death">
+                <span className="enc__ctrl-label">Death Saves</span>
+                <DeathSaveTrack
+                  successes={c.deathSaveSuccesses ?? 0}
+                  failures={c.deathSaveFailures ?? 0}
+                  onChange={(s, f) =>
+                    handleUpdateCombatant(c, {
+                      deathSaveSuccesses: s,
+                      deathSaveFailures: f,
+                    })
+                  }
+                />
               </div>
             )}
 
@@ -657,15 +789,100 @@ export default function EncounterView() {
               </div>
             )}
 
-            {isEnemy && (
-              <div className="enc__ctrl-grp">
+            {/* Friend/foe shown to players (unlinked combatants only — linked
+                ones are always Player Characters). Combat mode. */}
+            {combatActive && isUnlinked && (
+              <div className="enc__ctrl-grp enc__ctrl-grp--disp">
+                <span className="enc__ctrl-label">Side</span>
+                <div className="enc__ctrl-row">
+                  <button
+                    className={`btn tip enc__disp-btn enc__disp-btn--${
+                      c.disposition === CombatantDisposition.FriendlyNpc
+                        ? "ally"
+                        : "enemy"
+                    }`}
+                    disabled={isBusy}
+                    onClick={() =>
+                      handleUpdateCombatant(c, {
+                        disposition:
+                          c.disposition === CombatantDisposition.FriendlyNpc
+                            ? CombatantDisposition.Enemy
+                            : CombatantDisposition.FriendlyNpc,
+                      })
+                    }
+                    data-tooltip="Toggle how players label this combatant: friendly NPC vs enemy"
+                  >
+                    {c.disposition === CombatantDisposition.FriendlyNpc
+                      ? "Ally"
+                      : "Enemy"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Per-enemy, per-item player visibility. Each toggle is independent;
+                "hidden" removes the enemy from the player view entirely. Combat mode. */}
+            {combatActive && isEnemy && (
+              <div className="enc__ctrl-grp enc__ctrl-grp--vis">
+                <span className="enc__ctrl-label">Hide</span>
+                <div className="enc__ctrl-row">
+                  <button
+                    className={`btn tip enc__vis-btn${c.isHiddenFromPlayers ? " enc__vis-btn--on" : ""}`}
+                    disabled={isBusy}
+                    aria-pressed={!!c.isHiddenFromPlayers}
+                    onClick={() =>
+                      handleUpdateCombatant(c, {
+                        isHiddenFromPlayers: !c.isHiddenFromPlayers,
+                      })
+                    }
+                    data-tooltip={
+                      c.isHiddenFromPlayers
+                        ? "Hidden from players — click to reveal"
+                        : "Hide this enemy from the player view entirely"
+                    }
+                  >
+                    {c.isHiddenFromPlayers ? "🚫" : "👁"}
+                  </button>
+                  <button
+                    className={`btn tip enc__vis-btn${c.hpHiddenFromPlayers ? " enc__vis-btn--on" : ""}`}
+                    disabled={isBusy || !!c.isHiddenFromPlayers}
+                    aria-pressed={!!c.hpHiddenFromPlayers}
+                    onClick={() =>
+                      handleUpdateCombatant(c, {
+                        hpHiddenFromPlayers: !c.hpHiddenFromPlayers,
+                      })
+                    }
+                    data-tooltip="Hide this enemy's HP from players"
+                  >
+                    HP
+                  </button>
+                  <button
+                    className={`btn tip enc__vis-btn${c.acHiddenFromPlayers ? " enc__vis-btn--on" : ""}`}
+                    disabled={isBusy || !!c.isHiddenFromPlayers}
+                    aria-pressed={!!c.acHiddenFromPlayers}
+                    onClick={() =>
+                      handleUpdateCombatant(c, {
+                        acHiddenFromPlayers: !c.acHiddenFromPlayers,
+                      })
+                    }
+                    data-tooltip="Hide this enemy's AC from players"
+                  >
+                    AC
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Clone — edit mode only. */}
+            {editing && isEnemy && (
+              <div className="enc__ctrl-grp enc__ctrl-grp--clone">
                 <span className="enc__ctrl-label">Clone</span>
                 <div className="enc__ctrl-row">
                   <button
-                    className="btn enc__clone-btn"
+                    className="btn tip enc__clone-btn"
                     disabled={isBusy}
                     onClick={() => handleClone(c)}
-                    title={`Add another ${c.name} (${c.maxHp} HP, AC ${c.armorClass})`}
+                    data-tooltip={`Add another ${c.name} (${c.maxHp} HP, AC ${c.armorClass})`}
                   >
                     ⧉
                   </button>
@@ -753,6 +970,19 @@ export default function EncounterView() {
   const allies = ordered.filter((c) => sideOf(c) === "ally");
   const enemies = ordered.filter((c) => sideOf(c) === "enemy");
 
+  // Initiative (turn-order) view: a single list, no ally/enemy split. During
+  // Active combat sortOrder is the authoritative turn sequence; otherwise sort by
+  // initiative DESC with un-rolled (null) combatants pushed to the end.
+  const initiativeOrdered = [...encounter.combatants].sort((a, b) => {
+    if (isActive) return a.sortOrder - b.sortOrder;
+    if (a.initiative === null && b.initiative === null) return 0;
+    if (a.initiative === null) return 1;
+    if (b.initiative === null) return -1;
+    return b.initiative - a.initiative;
+  });
+  // The toggle is DM-only; players always see the sides view.
+  const showInitiativeView = isDm && viewMode === "initiative";
+
   const linkedCharIds = new Set(
     encounter.combatants.flatMap((c) => (c.characterId ? [c.characterId] : [])),
   );
@@ -769,6 +999,21 @@ export default function EncounterView() {
           ? "Connecting…"
           : "Offline";
 
+  // Players get the dedicated combat view (their character sheet + turn order);
+  // the sides / initiative tracker below is the DM's control surface.
+  if (!isDm) {
+    return (
+      <PlayerEncounterView
+        encounter={encounter}
+        campaignId={campaignId}
+        userId={userId}
+        campChars={campChars}
+        hubStatus={hubStatus}
+        hubLabel={hubLabel}
+      />
+    );
+  }
+
   return (
     <div className="container enc">
       {/* Header */}
@@ -784,8 +1029,8 @@ export default function EncounterView() {
               <span className="enc__round">Round {encounter.roundNumber}</span>
             )}
             <span
-              className={`enc__hub enc__hub--${hubStatus}`}
-              title={`Live updates: ${hubLabel}`}
+              className={`enc__hub tip enc__hub--${hubStatus}`}
+              data-tooltip={`Live updates: ${hubLabel}`}
             >
               <span className="enc__hub-dot" aria-hidden="true" />
               {hubLabel}
@@ -797,10 +1042,10 @@ export default function EncounterView() {
             {isPending && (
               <>
                 <button
-                  className="btn"
+                  className="btn tip"
                   disabled={actionBusy || encounter.combatants.length === 0}
                   onClick={handleRandomizeInitiatives}
-                  title="Roll d20 for every combatant"
+                  data-tooltip="Roll d20 for every combatant"
                 >
                   {actionBusy ? "Rolling…" : "Roll Initiatives"}
                 </button>
@@ -815,6 +1060,21 @@ export default function EncounterView() {
             )}
             {isActive && (
               <>
+                <button
+                  className="btn tip"
+                  disabled={
+                    actionBusy ||
+                    (encounter.roundNumber <= 1 &&
+                      encounter.activeCombatantId ===
+                        [...encounter.combatants].sort(
+                          (a, b) => a.sortOrder - b.sortOrder,
+                        )[0]?.id)
+                  }
+                  onClick={handleUndoTurn}
+                  data-tooltip="Undo the last Next Turn"
+                >
+                  ↩ Undo Turn
+                </button>
                 <button
                   className="btn btn--primary"
                   disabled={actionBusy}
@@ -871,15 +1131,44 @@ export default function EncounterView() {
 
       {error && <p className="enc__error">{error}</p>}
 
-      {/* Combatants — split into ally and enemy sub-sections */}
+      {/* Combatants — sides split (default) or DM-only initiative turn order */}
       <section className="enc__section panel">
-        <h2 className="enc__section-title">Combatants</h2>
+        <div className="enc__section-head">
+          <h2 className="enc__section-title enc__section-title--inline">
+            {showInitiativeView ? "Turn Order" : "Combatants"}
+          </h2>
+          {isDm && (
+            <div
+              className="enc__view-toggle"
+              role="group"
+              aria-label="Combatants view"
+            >
+              <button
+                className={`enc__view-btn tip${!showInitiativeView ? " enc__view-btn--active" : ""}`}
+                onClick={() => changeView("sides")}
+                aria-pressed={!showInitiativeView}
+                data-tooltip="Group by allies and enemies"
+              >
+                Sides
+              </button>
+              <button
+                className={`enc__view-btn tip${showInitiativeView ? " enc__view-btn--active" : ""}`}
+                onClick={() => changeView("initiative")}
+                aria-pressed={showInitiativeView}
+                data-tooltip="Single list sorted by initiative (turn order)"
+              >
+                Initiative
+              </button>
+            </div>
+          )}
+        </div>
 
         {isActive && encounter.activeCombatantId && (() => {
           const acting = encounter.combatants.find((c) => c.id === encounter.activeCombatantId);
           const side = acting ? sideOf(acting) : null;
           return acting ? (
             <div className={`enc__now-acting enc__now-acting--${side}`}>
+              <span className="enc__now-acting-sword" aria-hidden="true">⚔</span>
               <span className="enc__now-acting-label">Now acting</span>
               <span className="enc__now-acting-name">{acting.name}</span>
               <span className="enc__now-acting-meta">
@@ -891,15 +1180,30 @@ export default function EncounterView() {
           ) : null;
         })()}
 
+        {showInitiativeView ? (
+          /* Initiative (turn-order) view — single sorted list, no add forms */
+          <div className="enc__subsection">
+            {initiativeOrdered.length > 0 ? (
+              <ul className="enc__list enc__list--aligned">
+                {initiativeOrdered.map((c, i) => renderCombatant(c, i + 1))}
+              </ul>
+            ) : (
+              <p className="text-muted enc__subsection-empty">
+                No combatants yet. Switch to “Sides” to add allies and enemies.
+              </p>
+            )}
+          </div>
+        ) : (
+          <>
         {/* Players & Allies */}
         <div className="enc__subsection enc__subsection--ally">
           <h3 className="enc__subsection-head">Players &amp; Allies</h3>
           {allies.length > 0 ? (
-            <ul className="enc__list">{allies.map(renderCombatant)}</ul>
+            <ul className="enc__list">{allies.map((c) => renderCombatant(c))}</ul>
           ) : (
             <p className="text-muted enc__subsection-empty">No allies yet.</p>
           )}
-          {isDm && !isEnded && (
+          {isDm && (isPending || editMode) && (
             <form className="enc__add-form" onSubmit={handleAddAlly}>
               <div className="enc__add-field enc__add-field--name">
                 <label className="enc__add-label">Name</label>
@@ -966,11 +1270,11 @@ export default function EncounterView() {
         <div className="enc__subsection enc__subsection--enemy">
           <h3 className="enc__subsection-head">Enemies &amp; Monsters</h3>
           {enemies.length > 0 ? (
-            <ul className="enc__list">{enemies.map(renderCombatant)}</ul>
+            <ul className="enc__list">{enemies.map((c) => renderCombatant(c))}</ul>
           ) : (
             <p className="text-muted enc__subsection-empty">No enemies yet.</p>
           )}
-          {isDm && !isEnded && (
+          {isDm && (isPending || editMode) && (
             <form className="enc__add-form" onSubmit={handleAddEnemy}>
               <div className="enc__add-field enc__add-field--name">
                 <label className="enc__add-label">Name</label>
@@ -1015,6 +1319,8 @@ export default function EncounterView() {
             </form>
           )}
         </div>
+          </>
+        )}
       </section>
 
       {initiativeWarning && (

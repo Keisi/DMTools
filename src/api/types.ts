@@ -1053,6 +1053,15 @@ export const EncounterStatus = {
 export type EncounterStatus =
   (typeof EncounterStatus)[keyof typeof EncounterStatus];
 
+// Combatant disposition shown to players (friend/foe indicator). DM-set; broadcast.
+export const CombatantDisposition = {
+  PlayerCharacter: 0,
+  FriendlyNpc: 1,
+  Enemy: 2,
+} as const;
+export type CombatantDisposition =
+  (typeof CombatantDisposition)[keyof typeof CombatantDisposition];
+
 // ---- Scope B: Campaign responses ----
 
 export interface CampaignResponse {
@@ -1102,6 +1111,21 @@ export interface CombatantResponse {
   armorClass: number;
   isActive: boolean;
   sortOrder: number; // 0 = highest initiative = goes first
+  // DM-controlled per-combatant player visibility (independent toggles). Optional
+  // until the backend ships them (see FRONTEND-REQUEST-encounter-combat-controls.md
+  // item 2); treat undefined as false (visible).
+  isHiddenFromPlayers?: boolean; // hide this combatant from the player view entirely
+  hpHiddenFromPlayers?: boolean; // hide this combatant's HP from players
+  acHiddenFromPlayers?: boolean; // hide this combatant's AC from players
+  // Death saves while at 0 HP (D&D 5e): 3 successes = stable, 3 failures = dead.
+  // Optional until the backend ships them (see
+  // FRONTEND-REQUEST-encounter-combat-controls.md item 4); reset to 0 on heal.
+  deathSaveSuccesses?: number; // 0–3
+  deathSaveFailures?: number; // 0–3
+  // Friend/foe shown to players. Optional until the backend ships it (see
+  // FRONTEND-REQUEST-encounter-combat-controls.md item 3); when absent, derive from
+  // the link (character-linked ⇒ PlayerCharacter, unlinked ⇒ Enemy).
+  disposition?: CombatantDisposition;
 }
 
 /** Full encounter — returned by every mutation and GET /{encounterId}. */
@@ -1184,4 +1208,11 @@ export interface UpdateCombatantRequest {
   name?: string;
   maxHp?: number;
   armorClass?: number;
+  // DM-only per-combatant player-visibility flags (broadcast to all viewers).
+  isHiddenFromPlayers?: boolean;
+  hpHiddenFromPlayers?: boolean;
+  acHiddenFromPlayers?: boolean;
+  disposition?: CombatantDisposition;
+  deathSaveSuccesses?: number; // 0–3
+  deathSaveFailures?: number; // 0–3
 }
