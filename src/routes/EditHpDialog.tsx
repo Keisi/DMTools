@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 import { characters } from "../api/endpoints";
 import { ApiError } from "../api/client";
+import Modal from "../components/Modal";
 import type { CharacterResponse } from "../api/types";
 import "./EditHpDialog.css";
 
@@ -47,14 +47,6 @@ export default function EditHpDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const inRange =
     typeof value === "number" && value >= HP_MIN && value <= HP_MAX;
   const isOverridden = typeof hitPointsOverride === "number";
@@ -77,14 +69,13 @@ export default function EditHpDialog({
     }
   }
 
-  return createPortal(
-    <div className="hp-backdrop" onClick={onClose}>
-      <div
-        className="hp panel anim-pop-in"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label="Edit hit points"
-      >
+  return (
+    <Modal
+      onClose={onClose}
+      ariaLabel="Edit hit points"
+      backdropClassName="hp-backdrop"
+      className="hp panel anim-pop-in"
+    >
         <header className="hp__head">
           <h2>Edit Hit Points</h2>
           <button className="btn btn--ghost" onClick={onClose}>
@@ -148,8 +139,6 @@ export default function EditHpDialog({
             {busy ? "Saving..." : "Set override"}
           </button>
         </div>
-      </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 }

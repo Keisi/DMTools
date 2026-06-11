@@ -105,7 +105,10 @@ export default function CampaignDetail() {
           setNotFound(true);
           campaigns.invitations().then((invs) => {
             if (active && invs.some((c) => c.id === id)) setInvited404(true);
-          }).catch(() => {/* ignore */});
+          }).catch((e) => {
+            // Best-effort: 404 already handled; the invitation screen just won't show.
+            console.warn("[CampaignDetail] invitation check failed:", e);
+          });
         } else {
           setError(err instanceof ApiError ? err.message : "Failed to load campaign.");
         }

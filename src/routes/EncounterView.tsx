@@ -14,6 +14,7 @@ import { ApiError } from "../api/client";
 import { useEncounterHub, HubStatus } from "../hooks/useEncounterHub";
 import PlayerEncounterView from "./PlayerEncounterView";
 import DeathSaveTrack from "../components/DeathSaveTrack";
+import Modal from "../components/Modal";
 import "./EncounterView.css";
 
 type Side = "ally" | "enemy";
@@ -473,7 +474,10 @@ export default function EncounterView() {
         setAllyMaxHp(String(sheet.maxHitPoints));
         setAllyAc(String(sheet.armorClass));
       })
-      .catch(() => {});
+      .catch((e) => {
+        // Best-effort stat prefill; the DM can still enter HP/AC by hand.
+        console.warn("[EncounterView] ally stat prefill failed:", e);
+      });
   }
 
   async function handleClone(c: CombatantResponse) {
@@ -1324,8 +1328,12 @@ export default function EncounterView() {
       </section>
 
       {initiativeWarning && (
-        <div className="enc__modal-backdrop" onClick={() => setInitiativeWarning(null)}>
-          <div className="enc__modal panel" onClick={(e) => e.stopPropagation()}>
+        <Modal
+          onClose={() => setInitiativeWarning(null)}
+          ariaLabel="Set initiatives before starting"
+          backdropClassName="enc__modal-backdrop"
+          className="enc__modal panel"
+        >
             <p className="enc__modal-heading">Set initiatives before starting</p>
             <p className="enc__modal-body">
               These combatants still need an initiative value:
@@ -1350,8 +1358,7 @@ export default function EncounterView() {
                 Got it
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

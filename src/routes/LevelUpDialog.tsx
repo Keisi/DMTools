@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import { characters, reference } from "../api/endpoints";
 import { ApiError } from "../api/client";
+import Modal from "../components/Modal";
 import {
   LevelUpHitPointMode,
   SelectionType,
@@ -162,15 +162,6 @@ export default function LevelUpDialog({
       active = false;
     };
   }, [classId, characterId]);
-
-  // Close on Escape.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   const loading = classId !== null && plannedClassId !== classId;
 
@@ -344,14 +335,13 @@ export default function LevelUpDialog({
     }
   }
 
-  return createPortal(
-    <div className="lvl-backdrop" onClick={onClose}>
-      <div
-        className="lvl panel anim-pop-in"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label="Level up"
-      >
+  return (
+    <Modal
+      onClose={onClose}
+      ariaLabel="Level up"
+      backdropClassName="lvl-backdrop"
+      className="lvl panel anim-pop-in"
+    >
         <header className="lvl__head">
           <h2>{multiclass ? "Multiclass" : "Level Up"}</h2>
           <button className="btn btn--ghost" onClick={onClose}>
@@ -538,9 +528,7 @@ export default function LevelUpDialog({
             </div>
           </>
         )}
-      </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 }
 

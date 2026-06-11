@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import AppShell from "./components/AppShell";
+import ErrorBoundary from "./components/ErrorBoundary";
 import RequireAuth from "./components/RequireAuth";
 import Login from "./routes/Login";
 import Vault from "./routes/Vault";
@@ -12,7 +13,8 @@ import EncounterView from "./routes/EncounterView";
 
 export default function App() {
   return (
-    <Routes>
+    <ErrorBoundary>
+      <Routes>
       <Route path="/login" element={<Login />} />
       <Route element={<AppShell />}>
         <Route index element={<Navigate to="/vault" replace />} />
@@ -82,6 +84,7 @@ export default function App() {
         />
         <Route path="*" element={<Navigate to="/vault" replace />} />
       </Route>
-    </Routes>
+      </Routes>
+    </ErrorBoundary>
   );
 }

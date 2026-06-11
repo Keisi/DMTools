@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import { characters, reference } from "../api/endpoints";
 import { ApiError } from "../api/client";
+import Modal from "../components/Modal";
 import type { CharacterResponse, SpellResponse } from "../api/types";
 import "./ManageSpellsDialog.css";
 
@@ -44,14 +44,6 @@ export default function ManageSpellsDialog({
     reference.spells().then(setCatalog).catch(() => setCatalog([]));
   }, []);
 
-  // Close on Escape.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   // Pool = catalog spells castable by any of the character's caster classes,
   // matched case-insensitively against SpellResponse.classes — plus any spell the
@@ -145,14 +137,13 @@ export default function ManageSpellsDialog({
     }
   }
 
-  return createPortal(
-    <div className="mng-backdrop" onClick={onClose}>
-      <div
-        className="mng panel anim-pop-in"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label="Manage spells"
-      >
+  return (
+    <Modal
+      onClose={onClose}
+      ariaLabel="Manage spells"
+      backdropClassName="mng-backdrop"
+      className="mng panel anim-pop-in"
+    >
         <header className="mng__head">
           <h2>Manage Spells</h2>
           <button className="btn btn--ghost" onClick={onClose}>
@@ -204,9 +195,7 @@ export default function ManageSpellsDialog({
             </div>
           </>
         )}
-      </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 }
 
