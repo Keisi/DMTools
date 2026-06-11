@@ -199,10 +199,11 @@ effects — each block self-hides when empty.
 Level-up UI is **implemented** in `routes/LevelUpDialog.tsx` (opened from the sheet
 header): it `POST`s `{id}/levelup/plan`, renders the forced choices (HP average/roll,
 subclass, spell pools), and `POST`s `/apply`, handing the updated character back to
-the sheet. Verified live (HP, subclass, and null-count caster spell pools). Not yet
-handled: **feat-based ASI** (the plan returns `abilityScoreImprovementDue`; the dialog
-only shows the stat-point picker, not the feat picker — `/api/feats` exists, just needs
-a picker UI wired in), and multi-pick spell counts beyond toggling.
+the sheet. Verified live (HP, subclass, and null-count caster spell pools). At an ASI
+level the dialog offers an `AsiMode` toggle: distribute two ability points **or** take a
+feat (the feat picker lists `/api/feats` with prerequisites/descriptions and sends
+`featId` on apply; backend rejects sending both). Not yet handled: multi-pick spell
+counts beyond toggling.
 
 Backend features that are **not modeled** — don't build UI for them: Half-Elf
 "choose +1 to two", subrace modifiers, weapon properties (finesse/heavy/…), and

@@ -278,16 +278,22 @@ holes. Backend shipped all of it (INCOMING #5 + #6); this session consumes it.
   Decided: route the sheet's Multiclass action through `levelup/plan`+`apply` (`LevelUpDialog`
   `mode="multiclass"`); bulk-PUT `AddClassDialog` retired. INCOMING #8 confirmed this is the
   intended path + made multiclass proficiencies RAW-correct (migration 041). CDP-verified live.
-- [ ] **INCOMING #7 — optional UI enrichments** now available: `ClassResponse.features`
-  (feature-by-level), `ItemResponse.category`/`rarity` (compendium facets), `RaceResponse.traits`
-  (named racial traits). Wire into compendium/sheet/race-detail when desired.
-- [ ] Optionally extend the **Review** step to list the chosen fighting styles / metamagic
-  / expertise / spells / improvements (currently collected + saved but not shown on Review).
+- [x] **INCOMING #7 — optional UI enrichments** — DONE (Compendium). `ItemResponse.category`/
+  `rarity` show as item tags, `RaceResponse.traits` + subrace traits render as expandable
+  detail, `ClassResponse.features` render as a per-level feature list. (Sheet/race-detail not
+  separately enriched — Compendium covers the catalog browse.)
+- [x] Extend the **Review** step to list chosen fighting styles / metamagic / expertise /
+  invocations / spells / above-L1 improvements — DONE 2026-06-11. `CharacterBuilder` derives
+  display names from `choiceGroups` + the spell pools + the `improvements` record and passes
+  them to `Review` (`classChoices` / `improvements` / `cantripNames` / `spellNames`).
 - [ ] Live-verify (Node CDP driver) the 401→login redirect and the Compendium grouping/detail
-  render. (The multiclass dialog success path is now CDP-verified — see the session-4 banner.)
-- [ ] Consider an app-level **ErrorBoundary** (baseline `async-no-error-boundary` gap) so
-  a render throw shows a fallback instead of a blank screen — would have surfaced the
-  PUT-204 bug as an error, not a white screen.
+  render. (The multiclass dialog success path is CDP-verified — see the session-4 banner.)
+  Still owed: needs backend (:3501) + dev (:5173) running; on 2026-06-11 the IIS pool was
+  stopped (503) and starting it needs an elevated shell.
+- [x] App-level **ErrorBoundary** — DONE 2026-06-11. `src/components/ErrorBoundary.tsx` wraps
+  all routes in `App.tsx`; a render throw now shows a recoverable fallback (with Reload)
+  instead of a blank screen. Cleared the `comp-missing-error-boundary` +
+  `async-no-error-boundary` high-severity findings.
 
 ## Still open / never-started (from FRONTEND-CONTEXT next-steps)
 - Homebrew `*CreateRequest` DTOs + POST flows when the Compendium gains "add homebrew".
