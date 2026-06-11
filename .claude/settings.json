@@ -1,5 +1,19 @@
 {
   "env": {
     "CODEBRIDGE_SKIP_CASCADE": "1"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/no-client-derive.mjs",
+            "statusMessage": "Checking for client-side derived-value recompute"
+          }
+        ]
+      }
+    ]
   }
 }
