@@ -888,7 +888,7 @@ export default function EncounterView() {
               </div>
             )}
 
-            <div className="enc__ctrl-grp">
+            <div className="enc__ctrl-grp enc__ctrl-grp--remove">
               <span className="enc__ctrl-label">Remove</span>
               <div className="enc__ctrl-row">
                 <button

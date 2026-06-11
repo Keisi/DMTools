@@ -609,6 +609,19 @@
   text-overflow: ellipsis;
   max-width: 100%;
 }
+/* Remove is always the last group; pin it to the right edge so it lines up across
+   rows regardless of which optional middle groups (death saves / side) are present.
+   Aligned view = flex row → auto left margin absorbs the slack. */
+.enc__list--aligned .enc__ctrl-grp--remove {
+  margin-left: auto;
+}
+/* Sides view = auto-fill grid → margin-auto won't cross tracks. Pin Remove to the
+   last column, right-aligned. auto-fill keeps empty tracks, so line -1 is the
+   container's right edge, and every row's grid is the same width → they line up. */
+.enc__list:not(.enc__list--aligned) .enc__ctrl-grp--remove {
+  grid-column-end: -1;
+  justify-self: end;
+}
 .enc__remove-btn:hover:not(:disabled) {
   background: var(--action);
   color: #fff;
