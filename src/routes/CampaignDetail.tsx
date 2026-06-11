@@ -561,7 +561,10 @@ export default function CampaignDetail() {
           </ul>
         )}
 
-        {(isDm || isActive) && (unregisteredMyChars.length > 0 || (isDm && unregisteredMemberChars.length > 0)) && (
+        {/* DMs register *member* characters, never their own; members register
+            their own (only once the campaign is active). The backend rejects a DM
+            registering an owned character with a 400, so don't offer it here. */}
+        {(isDm ? unregisteredMemberChars.length > 0 : isActive && unregisteredMyChars.length > 0) && (
           <form className="camp__register-form" onSubmit={handleRegisterChar}>
             <select
               className="input camp__register-sel"
@@ -569,7 +572,7 @@ export default function CampaignDetail() {
               onChange={(e) => setRegisterCharId(e.target.value)}
             >
               <option value="">— register a character —</option>
-              {unregisteredMyChars.length > 0 && (
+              {!isDm && unregisteredMyChars.length > 0 && (
                 <optgroup label="My characters">
                   {unregisteredMyChars.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
