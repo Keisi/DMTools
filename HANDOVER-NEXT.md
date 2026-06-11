@@ -16,10 +16,17 @@
 >   (builder hint already counts only ASI points — feats deliberately NOT counted,
 >   backend decision).
 >
-> **▶ STILL PENDING with the backend:** `FRONTEND-REQUEST-dm-register-member-character.md`
-> (CAMP-08 — DM registering an active member's character 400s; includes the
-> AddedBy-as-ownerId response bug to fix with it). On the reply: re-run CAMP-08 +
-> verify `ownerId` mapping; the existing DM dropdown then just works.
+> **✓ CAMP-08 ALSO RESOLVED (same day):** backend `cbcec90`
+> (`BACKEND-RESPONSE-dm-register-member-character.md`) — DM-first branch (accept-set ==
+> member-character dropdown set) + `ownerId` now the true owner. Re-tested: DM register
+> member char → 204 with `ownerId` = member; CAMP-08b 400 + ENC-13 400 no-regression.
+> Catalog FAIL count is back to **0**. **No backend requests pending.** Design note from
+> the backend worth remembering: a DM who is ALSO an Active member of their own campaign
+> can register their own chars (offer-set rule) — the common case excludes them. Their
+> standing offer: server-side player-scoped `EncounterResponse` projection (the
+> hidden-combatant network-tab leak) — ask when it matters.
+> Op note: an IIS 503 mid-session usually means the backend was rebuilding (in-process
+> hosting locks the DLL) — `Start-WebAppPool DMTool` recovers; not an app fault.
 >
 > **✓ DONE 2026-06-11 (this session)** — commits `fab5d68` / `6b1511d` / `a35663b`:
 > a L10 Paladin (prepared caster) couldn't select any creation spells — `toggleCapped` read the

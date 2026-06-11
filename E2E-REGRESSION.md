@@ -197,7 +197,7 @@ Later run: sheet **rendered live in-browser** for the Paladin 10 fixture.
 | CAMP-05 | Pending invitations | list shows | **PASS(API)** | player `GET /invitations` lists E2E Camp |
 | CAMP-06 | Accept invitation | joins | **PASS(API)** | invitee `POST /join` → 204; member role=2 status=3 (Active) |
 | CAMP-07 | Decline invitation | removed (btn enabled) | **PASS(API)** | invitee `DELETE /members/{own}` → 204; invitation gone |
-| CAMP-08 | DM registers a *member* character | linked | **FAIL (contract mismatch)** | backend 400 "not owned by you" — registration is OWNER-scoped; the DM "Member characters" optgroup is dead on submit. **Handover sent: `FRONTEND-REQUEST-dm-register-member-character.md`** (incl. the AddedBy-as-ownerId response bug to fix with it). Re-test on backend reply |
+| CAMP-08 | DM registers a *member* character | linked; `ownerId` = the member | **PASS(API)** | FIXED backend `cbcec90` (DM-first branch: accept-set == member-character dropdown set) — re-tested: DM register → 204, `ownerId`/`ownerUsername` = the MEMBER (the AddedBy-as-ownerId bug fixed too). CAMP-08b (DM own char → 400) + ENC-13 (duplicate → 400) re-verified, no regression. See `BACKEND-RESPONSE-dm-register-member-character.md` |
 | CAMP-08b | DM registers their *own* character | rejected; not offered in UI | **PASS** | backend 400 (correct); UI hides DM's own chars |
 | CAMP-08c | Member registers their OWN character | linked | **PASS(API)** | player POST own char → 204; listed with ownerId |
 | CAMP-09 | Remove member character | unlinked | **PASS(API)** | DM `DELETE /characters/{id}` → 204; list empty |
@@ -241,7 +241,7 @@ Later run: sheet **rendered live in-browser** for the Paladin 10 fixture.
 | PASS(UI) | 7 (COMP-01, BUILD-17, BUILD-18, SHEET-12, CAMP-11, ENC-11, ENC-12) |
 | PASS (mixed) | 1 (CAMP-08b) |
 | PARTIAL | 3 (COMP-02, BUILD-01..13, SHEET-14) |
-| **FAIL** | **1 (CAMP-08 — contract mismatch: owner-scoped registration vs the DM register form; decision pending)** |
+| **FAIL** | **0 (CAMP-08 fixed backend `cbcec90`, re-tested → PASS)** |
 | BLOCKED (not yet driven) | ~18 (auth redirects, vault, compendium interaction, EDIT-01, sheet dialogs SHEET-13/15, level-up UI, CAMP-03, ENC-07/10, ERR-02) |
 | NOT RUN | ~12 (LVL-02..09 UI, ENC-04 (deferred to backend roll endpoint), ENC-08/10b, ERR-01, VAULT-04, BUILD-14/16, EDIT-02) |
 
