@@ -5,20 +5,18 @@ import Modal from "../components/Modal";
 import type { CharacterResponse, SpellResponse } from "../api/types";
 import "./ManageSpellsDialog.css";
 
-const abilityMod = (effective: number) => Math.floor((effective - 10) / 2);
-
 /**
  * Quick spell editor opened from the sheet — a lighter path than the full Edit
  * wizard for changing a character's cantrips / prepared spells. Persists via
  * PUT /api/character/{id}/spells (backend 827c50d), which replaces the whole
  * known/prepared list with exactly the ids sent and returns the updated
- * character (existence-checked only, no count/class gate — a DM may pick freely).
+ * character. Since backend 28ed633/c03001f the endpoint enforces the prepared
+ * cap + class-list/level subset server-side (400 in ApiError.body surfaces here).
  *
- * Selection is uncapped (DM tool), but we surface the rules-as-written target per
- * tier so the player knows how many they "should" have: cantrips = cantripsKnown;
- * levelled = spellsKnown for known casters, or (casting mod + class level) for
- * prepared casters (Cleric/Druid/Wizard). Exceeding it shows a soft warning, not
- * a block. The levelled list is grouped by spell level to tame its length.
+ * The displayed target is fully backend-derived: cantrips = cantripsKnown;
+ * levelled = spellsKnown (known casters) or maxPreparedSpells (prepared casters).
+ * Exceeding it shows a soft warning client-side — the real gate is the 400 on
+ * save. The levelled list is grouped by spell level to tame its length.
  */
 export default function ManageSpellsDialog({
   character,
@@ -76,41 +74,26 @@ export default function ManageSpellsDialog({
     return { cantripPool: cantrips, spellPool: levelled, maxSpellLevel: maxLevel };
   }, [catalog, spellcasting, current]);
 
-  // Rules-as-written targets (advisory; selection isn't capped). Cantrips are
-  // KNOWN for every caster. Levelled: known casters expose spellsKnown; prepared
-  // casters prepare (casting-ability mod + class level), which the API doesn't
-  // return, so derive it from the character's scores + caster levels.
+  // Backend-derived targets (advisory; the server 400s an over-cap save).
+  // Cantrips are KNOWN for every caster. Levelled: known casters expose
+  // spellsKnown; prepared casters expose maxPreparedSpells (backend 28ed633 —
+  // correct per tier, incl. half-casters' ⌊level/2⌋). No client recompute.
   const { cantripTarget, spellTarget, spellTargetLabel } = useMemo(() => {
-    const modByName = new Map(
-      character.abilityScores.map((a) => [a.name, abilityMod(a.effective)]),
-    );
-    const levelByClass = new Map(
-      character.classes.map((c) => [c.name, c.level]),
-    );
     let cantrips = 0;
     let spells = 0;
     let anyPrepared = false;
     let anyKnown = false;
     for (const sc of spellcasting) {
       cantrips += sc.cantripsKnown ?? 0;
-      const known = sc.spellsKnown;
-      if (known === null || known === undefined) {
-        // Prepared caster. Prefer the backend-derived cap (authoritative, correct
-        // for half-casters). Fall back to a client estimate only until the backend
-        // ships maxPreparedSpells — that estimate uses (mod + level) and is WRONG
-        // for half-casters (Paladin should be mod + ⌊level/2⌋); see
-        // FRONTEND-REQUEST-prepared-spell-cap.md.
-        if (sc.maxPreparedSpells !== null && sc.maxPreparedSpells !== undefined) {
-          spells += sc.maxPreparedSpells;
-        } else {
-          const mod = modByName.get(sc.ability) ?? 0;
-          const lvl = levelByClass.get(sc.class) ?? 0;
-          spells += Math.max(1, mod + lvl);
-        }
-        anyPrepared = true;
-      } else {
-        spells += known;
+      if (sc.spellsKnown !== null && sc.spellsKnown !== undefined) {
+        spells += sc.spellsKnown;
         anyKnown = true;
+      } else if (
+        sc.maxPreparedSpells !== null &&
+        sc.maxPreparedSpells !== undefined
+      ) {
+        spells += sc.maxPreparedSpells;
+        anyPrepared = true;
       }
     }
     const label =
@@ -124,7 +107,7 @@ export default function ManageSpellsDialog({
       spellTarget: spells,
       spellTargetLabel: label,
     };
-  }, [character.abilityScores, character.classes, spellcasting]);
+  }, [spellcasting]);
 
   async function save() {
     setBusy(true);

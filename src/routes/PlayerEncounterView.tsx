@@ -16,8 +16,6 @@ import "./EncounterView.css";
 import "./PlayerEncounterView.css";
 
 const fmtMod = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
-// The API returns effective ability scores but NOT their modifier — derive it.
-const abilityMod = (effective: number) => Math.floor((effective - 10) / 2);
 
 // Friend/foe shown to players. Falls back to the link when the DM hasn't set a
 // disposition: character-linked ⇒ Player Character, unlinked ⇒ Enemy.
@@ -472,7 +470,7 @@ function CombatCard({
         {c.abilityScores.map((a) => (
           <div key={a.statId} className="ability panel">
             <div className="ability__code">{a.name}</div>
-            <div className="ability__mod">{fmtMod(abilityMod(a.effective))}</div>
+            <div className="ability__mod">{fmtMod(a.modifier)}</div>
             <div className="ability__score">{a.effective}</div>
           </div>
         ))}

@@ -597,12 +597,16 @@ export interface CharacterRequest extends CharacterDetails {
 // Focused spell-list update (PUT /api/character/{id}/spells, backend 827c50d).
 // Full replacement of the known/prepared list — cantripIds + spellIds are unioned
 // (the stored list is flat; a spell's own level distinguishes a cantrip). Both
-// optional; {} or empty arrays clears the list. Existence-checked only (no count
-// or class-list gate). Returns 200 + the updated CharacterResponse. Safer than a
-// whole-character PUT for spell edits — it touches only the spell list.
+// optional; {} or empty arrays clears the list. Since backend 28ed633/c03001f the
+// endpoint enforces the prepared-spell cap AND the class-list/max-level subset
+// gates (400 problem-details on spellIds); allowHomebrewSelections relaxes both
+// (DM escape hatch — only send true behind an explicit homebrew toggle). Returns
+// 200 + the updated CharacterResponse. Safer than a whole-character PUT for
+// spell edits — it touches only the spell list.
 export interface UpdateSpellsRequest {
   cantripIds?: string[] | null;
   spellIds?: string[] | null;
+  allowHomebrewSelections?: boolean;
 }
 
 // Focused HP-override update (PUT /api/character/{id}/hp, backend mig.-less #10).
@@ -657,8 +661,6 @@ export interface HitDieResponse {
   count: number;
 }
 
-/** NOTE: the API does NOT return the ability modifier — derive it from
- *  `effective` via the 5e formula floor((effective - 10) / 2). */
 export interface AbilityScoreResponse {
   statId: string;
   name: string;
@@ -668,6 +670,9 @@ export interface AbilityScoreResponse {
   featModifier: number;
   improvementModifier: number;
   effective: number;
+  // Server-derived floor((effective - 10) / 2) — render this, never recompute
+  // (BACKEND-RESPONSE-rules-enforcement-audit.md item 4).
+  modifier: number;
 }
 
 export interface SavingThrowResponse {
@@ -715,8 +720,8 @@ export interface SpellcastingResponse {
   spellsKnown?: number | null;
   // Prepared casters only (null for known casters & non-casters): the backend-derived
   // number of levelled spells this class can prepare — max(1, castingMod + (Half ? ⌊lvl/2⌋ : lvl)).
-  // Authoritative; prefer it over any client-side estimate. See FRONTEND-REQUEST-prepared-spell-cap.md
-  // (additive — absent until the backend ships it).
+  // Authoritative AND enforced server-side on create / PUT spells / level-up since
+  // backend 28ed633 (BACKEND-RESPONSE-prepared-spell-cap.md) — render it, never recompute.
   maxPreparedSpells?: number | null;
   spellSlots: SpellSlotResponse[];
   isPactMagic: boolean;
@@ -1197,6 +1202,14 @@ export interface AddCombatantRequest {
 
 export interface SetInitiativeRequest {
   initiative: number;
+}
+
+// POST .../roll-initiatives (backend 92eadf8): server rolls d20 + the linked
+// character's initiative bonus per combatant (flat d20 for unlinked NPCs).
+// Omit/empty combatantIds = roll for everyone. DM-only; returns the full
+// EncounterResponse and pushes EncounterUpdated over SignalR.
+export interface RollInitiativesRequest {
+  combatantIds?: string[];
 }
 
 /** Three independent fields — send only what you need.

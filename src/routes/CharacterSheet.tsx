@@ -30,15 +30,13 @@ import { MAX_TOTAL_LEVEL } from "./CharacterBuilder.steps";
 import "./CharacterSheet.css";
 
 const fmtMod = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
-// The API returns effective ability scores but NOT their modifier — derive it
-// (pure 5e formula, not server state).
-const abilityMod = (effective: number) => Math.floor((effective - 10) / 2);
-// Exact composition of an effective ability score (all parts are in the response).
+// Exact composition of an effective ability score (all parts — including the
+// modifier, since backend c03001f — are in the response; nothing is recomputed).
 const abilityBreakdown = (a: AbilityScoreResponse) => {
   const parts = [`Base ${a.base}`, `racial ${fmtMod(a.racialModifier)}`];
   if (a.subraceModifier !== 0) parts.push(`subrace ${fmtMod(a.subraceModifier)}`);
   parts.push(`feat ${fmtMod(a.featModifier)}`, `ASI ${fmtMod(a.improvementModifier)}`);
-  return `${parts.join(" · ")}  =  ${a.effective} (mod ${fmtMod(abilityMod(a.effective))})`;
+  return `${parts.join(" · ")}  =  ${a.effective} (mod ${fmtMod(a.modifier)})`;
 };
 
 const rechargeLabel = (r: ResourceRecharge) =>
@@ -279,7 +277,7 @@ export default function CharacterSheet() {
       ? `Custom override ${c.armorClass} (derived ${c.derivedArmorClass}: ${acDerivedLine})`
       : acDerivedLine;
   const initTip = dex
-    ? `Initiative = Dexterity modifier (${fmtMod(abilityMod(dex.effective))})`
+    ? `Initiative = Dexterity modifier (${fmtMod(dex.modifier)})`
     : "Initiative = your Dexterity modifier";
   const speedTip = [
     `walk ${c.walkingSpeed}ft`,
@@ -297,10 +295,10 @@ export default function CharacterSheet() {
   // Ability-modifier lookups for derived-number breakdowns (saves/skills/attacks/spells).
   const prof = c.proficiencyBonus;
   const modByStatId = new Map(
-    c.abilityScores.map((a) => [a.statId, abilityMod(a.effective)]),
+    c.abilityScores.map((a) => [a.statId, a.modifier]),
   );
   const modByName = new Map(
-    c.abilityScores.map((a) => [a.name, abilityMod(a.effective)]),
+    c.abilityScores.map((a) => [a.name, a.modifier]),
   );
   const renderBlock = (key: BlockKey) => {
     switch (key) {
@@ -459,7 +457,7 @@ export default function CharacterSheet() {
             style={{ "--stagger-i": i } as CSSProperties}
           >
             <div className="ability__code">{a.name}</div>
-            <div className="ability__mod">{fmtMod(abilityMod(a.effective))}</div>
+            <div className="ability__mod">{fmtMod(a.modifier)}</div>
             <div className="ability__score">{a.effective}</div>
           </div>
         ))}

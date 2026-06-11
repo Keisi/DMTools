@@ -291,23 +291,17 @@ export default function EncounterView() {
     if (combatants.length === 0) return;
     setActionBusy(true);
     try {
-      let enc: EncounterResponse | null = null;
-      for (const c of combatants) {
-        const roll = Math.floor(Math.random() * 20) + 1;
-        enc = await campaigns.setInitiative(campaignId, encounterId, c.id, {
-          initiative: roll,
-        });
-      }
-      if (enc) {
-        applyUpdate(enc);
-        // syncInitInputs preserves existing inputs; force-overwrite after a roll
-        // so the fields reflect the server's authoritative values immediately.
-        const rolled: Record<string, string> = {};
-        enc.combatants.forEach((c) => {
-          rolled[c.id] = c.initiative !== null ? String(c.initiative) : "";
-        });
-        setInitInputs(rolled);
-      }
+      // Server-side roll (backend 92eadf8): d20 + the linked character's
+      // initiative bonus per combatant (flat d20 for NPCs), one round-trip.
+      const enc = await campaigns.rollInitiatives(campaignId, encounterId);
+      applyUpdate(enc);
+      // syncInitInputs preserves existing inputs; force-overwrite after a roll
+      // so the fields reflect the server's authoritative values immediately.
+      const rolled: Record<string, string> = {};
+      enc.combatants.forEach((c) => {
+        rolled[c.id] = c.initiative !== null ? String(c.initiative) : "";
+      });
+      setInitInputs(rolled);
       setInitiativeWarning(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to set initiatives.");

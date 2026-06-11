@@ -38,6 +38,7 @@ import type {
   RegisterCampaignCharacterRequest,
   RetireCharacterRequest,
   SessionResponse,
+  RollInitiativesRequest,
   SetInitiativeRequest,
   SkillResponse,
   SpellResponse,
@@ -244,6 +245,17 @@ export const campaigns = {
   ) =>
     api.put<EncounterResponse>(
       `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}/initiative`,
+      body,
+    ),
+  // Server-side d20 + initiative bonus per combatant (rules live in the backend —
+  // the old client-side Math.random loop dropped the Dex mod). One round-trip.
+  rollInitiatives: (
+    campaignId: string,
+    encounterId: string,
+    body: RollInitiativesRequest = {},
+  ) =>
+    api.post<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/roll-initiatives`,
       body,
     ),
   updateCombatantHp: (
