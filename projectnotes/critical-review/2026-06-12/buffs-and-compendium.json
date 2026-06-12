@@ -1,0 +1,53 @@
+{
+  "date": "2026-06-12",
+  "commits": [
+    "f7769ed docs(requests): 4 FRONTEND-REQUEST reference copies",
+    "d382aab feat(buffs): consume roll-modifier / duration / concentration system",
+    "7db6b62 feat(compendium): Fighting Styles / Metamagic / Invocations tabs"
+  ],
+  "branch": "main",
+  "scope": "buffs consumption + compendium tabs (3 commits ahead of origin/main; pre-push)",
+  "files_reviewed": [
+    "src/api/types.ts", "src/api/endpoints.ts",
+    "src/routes/EncounterView.tsx", "src/routes/EncounterView.css",
+    "src/routes/CharacterSheet.tsx", "src/routes/CharacterSheet.css",
+    "src/routes/Compendium.tsx"
+  ],
+  "strategy": "PASS",
+  "summary": {
+    "oby_pipeline": {
+      "precheck": "pass", "codescan:critical": "pass", "hindsight": "pass",
+      "health": "fail (repo baseline 35<40 — pre-existing scaffold, track-don't-block)",
+      "drift-sentinel": "fail (typecheck evidence — oby cannot spawn npm; documented false negative)"
+    },
+    "authoritative_gates": {
+      "npm_run_build": "GREEN at HEAD (tsc -b + vite build)",
+      "npm_run_lint": "GREEN at HEAD",
+      "oby_verify_files": "delta 0 on all changed files"
+    },
+    "live_verification": "spectral screenshots: (1) encounter with Bless badge (8r + concentration marker), Guidance with USE action, Break Concentration control on the source combatant; (2) character sheet 'At roll time' section — +1d4 attack/save (Bless), Disadvantage attack + Advantage incoming (Restrained), and DEX-save Cancelled (Restrained disadvantage + Haste advantage netted) — confirms the netting + colour coding; (3) compendium Invocations tab, 32 SRD rows, collapsible bodies. Live rollModifiers/rollAdvantages JSON from the PUT matched the rendered output."
+  },
+  "findings": { "blocking": [], "serious": [], "recommendations": [], "edge_cases": [
+    "Consumed-on-use badges show both a 'use' button and the ✕ — both call DELETE. Intentional: 'use' = spent (semantic), ✕ = remove-by-mistake. Minor redundancy, accepted.",
+    "Concentration source is set only at apply time via the palette dropdown; changing it later means re-applying (backend upserts). Acceptable for v1."
+  ]},
+  "adversarial_notes": [
+    "No-double-counting invariant honoured: flat riders are NOT rendered as separate instructions — only RollModifierKind.Dice and the rollAdvantages list surface; flat folds stay inside the derived save/skill/attack numbers. Verified live (the displayed riders match the backend's rollModifiers/rollAdvantages, which exclude flat).",
+    "All new response fields are optional (consumedOnUse?, remainingRounds?, rollModifiers?, rollAdvantages?, etc.) — the client degrades cleanly if the backend omits them (e.g. an older deploy).",
+    "handleAddStatusEffect signature changed to take the StatusEffectResponse (to read defaultDurationRounds); the only caller (the palette chip) was updated to pass the object. No other callers (grep).",
+    "breakConcentration control gated on isConcentrationSource (any badge in the encounter sourced by this combatant) — verified it appears on the source and the action drops the effect via the new endpoint.",
+    "Compendium: the three catalogs share { id, name, description }; SimpleEntry reuses the existing EntryShell/Header/Desc primitives; groupRows fallthrough renders them as one flat sorted group. No new list/sort/filter logic.",
+    "PlayerEncounterView shares the badge classes but not the new DM-only controls (palette/break-concentration are inside isDm blocks) — players see badges, not the controls. No leak."
+  ],
+  "hindsight": { "verdict": "ACCEPT", "rewrite": [], "adjust": [], "accept": [
+    "Reused EntryShell for the compendium catalogs instead of a new component — minimal surface.",
+    "Module-level summarizeRiders / ROLL_TARGET_LABEL keep the tooltip/label logic pure and testable.",
+    "Rendering the character-level aggregated rollModifiers/rollAdvantages (deduped, netted server-side) rather than re-deriving from per-effect riders client-side — defers to the backend's authoritative computation."
+  ]},
+  "deferred": [
+    "Pipeline health/drift-sentinel fails: documented repo-reality (baseline anti-patterns; oby npm-spawn os error 193). Authoritative build+lint ran green at HEAD."
+  ],
+  "new_pitfalls": [
+    "Catalog ids look like 5a7e00XX-0000-...-0000000000XX — when debugging, never use a slice(0,8) display id as a real GUID in an API call (STJ rejects it as a request-deserialization failure, not an obvious 'bad id' error)."
+  ]
+}

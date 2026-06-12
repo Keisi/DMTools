@@ -1,0 +1,40 @@
+{
+  "date": "2026-06-12",
+  "commits": ["3489839 ui(vault): retire button redesign", "5b76691 ui(builder): ASI panel redesign"],
+  "branch": "main",
+  "scope": "two UI commits (post-commit, pre-push)",
+  "files_reviewed": ["src/routes/Vault.css", "src/routes/CharacterBuilder.steps.tsx", "src/routes/CharacterBuilder.css"],
+  "strategy": "PASS",
+  "summary": {
+    "oby_pipeline": {
+      "precheck": "pass", "codescan:critical": "pass", "hindsight": "pass",
+      "health": "fail (repo baseline 35<40 — pre-existing scaffold anti-patterns, track-don't-block per CLAUDE.md)",
+      "drift-sentinel": "fail (missing typecheck evidence — oby cannot spawn npm, os error 193; documented false negative)"
+    },
+    "authoritative_gates": {
+      "npm_run_build": "GREEN at HEAD (tsc -b + vite build)",
+      "npm_run_lint": "GREEN at HEAD",
+      "oby_verify_files": "delta 0 (pre-commit, both changesets)"
+    },
+    "live_verification": "spectral screenshots: vault default + retired (3 equal-height cards, pill centered, no text overlap — confirmed via getBoundingClientRect overlap=false probe on every card); ASI panel in edit mode (effective score 18 in accent, +4 chip on name row). Hover-jump + card-drop fixes verified against Kevin's screen recording report."
+  },
+  "findings": { "blocking": [], "serious": [], "recommendations": [], "edge_cases": [] },
+  "adversarial_notes": [
+    "CSS/markup only — no state, handler, or data-flow changes. No new I/O or error paths.",
+    "Grep sweep: old .vault__card:hover fully replaced by .vault__card-wrap:hover (none left); builder__ability-delta + builder__stepper-val--up class refs match between TSX and CSS; old stacked '+{inc} = {b+inc}' line fully removed — no orphaned CSS or dead markup.",
+    "Hover fix root-caused to two independent CSS issues (transform-property collision with .btn:hover; hover target on Link vs wrapper) — both addressed, neither a band-aid.",
+    "translate-property centering composes with .btn:hover transform — verified no regression to the lift animation.",
+    "PlayerEncounterView and other consumers of .btn are unaffected (changes scoped to .vault__* and .builder__* selectors)."
+  ],
+  "hindsight": { "verdict": "ACCEPT", "rewrite": [], "adjust": [], "accept": [
+    "Reserved-lane + always-visible pill is more durable than the hover-only overlay (works on touch, immune to text length).",
+    "translate vs transform for centering is the correct CSS-native fix, not a magic-number nudge.",
+    "Equal-height via flex wrap + flex:1 child is the idiomatic grid-cell-fill pattern."
+  ]},
+  "tech_debt_delta": { "net_lines": "+46 / -34 across 3 files", "notes": "No new abstractions; replaced fragile hover/centering with composable CSS." },
+  "deferred": [
+    "Pipeline health fail: repo-wide baseline, not introduced here (codescan delta 0).",
+    "Pipeline drift-sentinel/typecheck + workflow-sentinel warnings: oby cannot spawn npm (os error 193) so evidence-minting steps are structurally unsatisfiable; authoritative typecheck/lint ran green externally at HEAD (documented repo-reality in CLAUDE.md)."
+  ],
+  "new_pitfalls": []
+}
