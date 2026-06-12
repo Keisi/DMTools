@@ -1245,3 +1245,49 @@ export interface UpdateCombatantRequest {
   deathSaveSuccesses?: number; // 0–3
   deathSaveFailures?: number; // 0–3
 }
+
+// ---- Scope B: combat log (DM-only, Phase 1) ----
+
+// The kind of a combat-log entry. Serializes as a NUMBER over the wire (backend
+// CombatEventType). Used only to pick an icon/label — the human-readable text is
+// server-rendered in `message`, never composed client-side.
+export const CombatEventType = {
+  EncounterStarted: 1,
+  EncounterEnded: 2,
+  TurnChanged: 3,
+  CombatantAdded: 10,
+  CombatantRemoved: 11,
+  InitiativeSet: 12,
+  Damage: 20,
+  Heal: 21,
+  HpSet: 22,
+  TempHpSet: 23,
+  StatusEffectApplied: 30,
+  StatusEffectRemoved: 31,
+  DmNote: 90,
+} as const;
+export type CombatEventType =
+  (typeof CombatEventType)[keyof typeof CombatEventType];
+
+export interface CombatLogEntryResponse {
+  seq: number; // natural order + pagination cursor (newest = highest)
+  id: string;
+  roundNumber: number;
+  eventType: number; // CombatEventType numeric value
+  actorUserId: string;
+  combatantId: string | null;
+  message: string; // server-rendered; render as-is
+  data: string | null; // optional JSON blob (unused by the panel)
+  created: string; // ISO timestamp
+}
+
+/** A page of log entries, newest-first. `nextBefore` is the cursor for the next
+ *  (older) page — pass it as `before`; null once the log is exhausted. */
+export interface CombatLogPageResponse {
+  entries: CombatLogEntryResponse[];
+  nextBefore: number | null;
+}
+
+export interface AddCombatLogNoteRequest {
+  message: string; // 1–400 chars (server-validated)
+}

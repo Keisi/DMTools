@@ -1,0 +1,125 @@
+/* DM combat-log panel. Tokens only — see src/styles/tokens.css. */
+
+.enc-log {
+  margin-top: var(--sp-5);
+  /* .panel is unpadded (background/border only) — match the other encounter
+     sections' inset so the title and content aren't flush to the edges. */
+  padding: var(--sp-5);
+}
+
+.enc-log__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+.enc-log__hint {
+  font-size: 0.8rem;
+}
+
+.enc-log__note {
+  display: flex;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+.enc-log__note-input {
+  flex: 1;
+}
+
+.enc-log__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.enc-log__entry {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-raised);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+/* Color-code the left edge by event family. */
+.enc-log__entry--dmg {
+  border-left-color: var(--c-crimson-400);
+}
+.enc-log__entry--heal {
+  border-left-color: var(--c-green-500);
+}
+.enc-log__entry--note {
+  border-left-color: var(--c-gold-500);
+}
+.enc-log__entry--flow {
+  border-left-color: var(--c-gold-400);
+}
+
+.enc-log__glyph {
+  flex: none;
+  width: 1.25rem;
+  text-align: center;
+  line-height: 1.4;
+}
+.enc-log__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.enc-log__msg {
+  color: var(--text);
+  line-height: 1.35;
+}
+.enc-log__meta {
+  font-size: 0.75rem;
+  color: var(--text-faint);
+}
+
+/* Per-row delete: faint by default, brightens to the action color on hover/focus
+   so it's discoverable without cluttering the timeline. */
+.enc-log__del {
+  flex: none;
+  margin-left: auto;
+  align-self: center;
+  background: none;
+  border: none;
+  padding: var(--sp-1);
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.45;
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.enc-log__entry:hover .enc-log__del,
+.enc-log__entry:focus-within .enc-log__del {
+  opacity: 1;
+}
+.enc-log__del:hover {
+  color: var(--action);
+}
+
+.enc-log__confirm-msg {
+  font-style: italic;
+}
+
+.enc-log__more {
+  margin-top: var(--sp-3);
+  width: 100%;
+}
+.enc-log__empty {
+  padding: var(--sp-4) 0;
+}
+.enc-log__skeleton {
+  padding: var(--sp-2) 0;
+}

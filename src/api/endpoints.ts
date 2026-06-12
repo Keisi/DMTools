@@ -44,6 +44,9 @@ import type {
   SpellResponse,
   StatResponse,
   TransferDmRequest,
+  AddCombatLogNoteRequest,
+  CombatLogEntryResponse,
+  CombatLogPageResponse,
   RecordDeathSavesRequest,
   UpdateCombatantHpRequest,
   UpdateCombatantRequest,
@@ -290,5 +293,37 @@ export const campaigns = {
     api.put<EncounterResponse>(
       `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}/death-saves`,
       body,
+    ),
+
+  // Combat log (DM-only, Phase 1). Newest-first page; pass the previous page's
+  // `nextBefore` as `before` to page backwards. `take` clamps 1–100 server-side.
+  getLog: (
+    campaignId: string,
+    encounterId: string,
+    before?: number,
+    take?: number,
+  ) => {
+    const qs = new URLSearchParams();
+    if (before != null) qs.set("before", String(before));
+    if (take != null) qs.set("take", String(take));
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return api.get<CombatLogPageResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/log${suffix}`,
+    );
+  },
+  addLogNote: (
+    campaignId: string,
+    encounterId: string,
+    body: AddCombatLogNoteRequest,
+  ) =>
+    api.post<CombatLogEntryResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/log`,
+      body,
+    ),
+  // Delete one log entry by its seq. Backend route pending — see
+  // FRONTEND-REQUEST-delete-log-entry.md (DM-only DELETE .../log/{seq}).
+  deleteLogEntry: (campaignId: string, encounterId: string, seq: number) =>
+    api.del<void>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/log/${seq}`,
     ),
 };

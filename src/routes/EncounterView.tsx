@@ -12,7 +12,9 @@ import { CampaignMemberStatus, CombatantDisposition, EncounterStatus } from "../
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
 import { useEncounterHub, HubStatus } from "../hooks/useEncounterHub";
+import { useCombatLog } from "../hooks/useCombatLog";
 import PlayerEncounterView from "./PlayerEncounterView";
+import EncounterLogPanel from "./EncounterLogPanel";
 import DeathSaveTrack from "../components/DeathSaveTrack";
 import Modal from "../components/Modal";
 import "./EncounterView.css";
@@ -140,6 +142,10 @@ export default function EncounterView() {
     setError(null);
   }
 
+  // Combat log (DM-only): owns its own entry list + pagination; its appendEntry
+  // receives live CombatLogAppended hub pushes. Enabled once loaded, DM only.
+  const log = useCombatLog(campaignId, encounterId, isDm && !loading);
+
   // Live sync: hub pushes flow through the same applyUpdate as REST responses,
   // so the DM's own mutations and any other observer's view stay identical.
   // Connect only after the initial REST load (enabled=!loading) to avoid a push
@@ -149,6 +155,8 @@ export default function EncounterView() {
     enabled: !loading,
     onUpdated: applyUpdate,
     onArchived: () => setArchived(true),
+    onLogAppended: log.appendEntry,
+    onLogRemoved: log.removeEntry,
   });
 
   // After a mutation, find the newly added combatant (id not previously in encounter)
@@ -1326,6 +1334,8 @@ export default function EncounterView() {
           </>
         )}
       </section>
+
+      <EncounterLogPanel log={log} />
 
       {initiativeWarning && (
         <Modal
