@@ -1,0 +1,16 @@
+{
+  "date": "2026-06-12",
+  "commit": "a34bbb7",
+  "scope": "INCOMING #20 (spell source-class display) + #21 (TurnRewound log glyph)",
+  "strategy": "PASS",
+  "gates": {
+    "oby_pipeline": "precheck pass, codescan:critical pass (0 issues), hindsight pass (health/drift omitted — documented false-negatives)",
+    "npm_build": "GREEN", "npm_lint": "GREEN", "oby_verify_delta": 0
+  },
+  "live_verification": "seeded Cleric/Sorcerer multiclass — sheet spell rows show sources=Sorcerer,Cleric,Cleric,Sorcerer with governing DC in tooltip; single-class sheets unaffected. Clean encounter rewound (next-turn+prev-turn) → log shows '↩ Round 1: turn rewound to Orc B.' distinct from ⏭ turn-changed. Screenshots .claude/shot-20-sheet.png, shot-21-log.png.",
+  "notes": [
+    "#20 write-path (spellPicks) modeled but no manual per-spell source-class picker UI built — tags populate via level-up auto-tagging; display lights up for those. Manual retag picker is a clean follow-up.",
+    "#21 grammar fix is server-rendered — zero frontend change."
+  ],
+  "deferred": ["health 35<40 baseline; drift-sentinel npm-spawn os error 193 — both documented repo-reality"]
+}
