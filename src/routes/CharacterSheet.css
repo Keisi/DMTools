@@ -368,6 +368,11 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* Read-only block wrapper (DM combat popup): same grid slot as a draggable block
+   but no drag affordance — it carries no handle and isn't grabbable. */
+.sheet__draggable--static:hover {
+  cursor: default;
+}
 
 /* Equipped rows: 3-column grid so the "not proficient" warning aligns into its
    own column (name | warning | slot) instead of sitting ragged after each name. */

@@ -626,6 +626,65 @@
   gap: var(--sp-4);
   padding: var(--sp-5);
 }
+
+/* ---- DM read-only character-sheet popup (issue #5) ---- */
+.enc__sheet-modal {
+  width: min(960px, 95vw);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+.enc__sheet-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.enc__sheet-modal-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  color: var(--accent);
+}
+.enc__sheet-modal-close {
+  flex-shrink: 0;
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-sm);
+}
+/* The sheet body scrolls inside the dialog; the embedded CharacterSheetView
+   renders its own .container.sheet — drop its outer padding so the popup head
+   owns the framing. */
+.enc__sheet-modal-body {
+  overflow-y: auto;
+  padding: var(--sp-3) var(--sp-4) var(--sp-5);
+}
+.enc__sheet-modal-body .container.sheet {
+  padding-left: 0;
+  padding-right: 0;
+  margin: 0;
+}
+.enc__sheet-modal-msg {
+  padding: var(--sp-5);
+  text-align: center;
+}
+/* The 📜 view-sheet button — ghost styling matching the Remove (✕) glyph. */
+.enc__sheet-x {
+  flex-shrink: 0;
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-xs);
+  border-color: transparent;
+  color: var(--text-muted);
+}
+.enc__sheet-x:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
 .enc__modal-heading {
   margin: 0;
   font-size: var(--fs-base);

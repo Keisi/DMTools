@@ -5,6 +5,7 @@ import type {
   EncounterResponse,
   CampaignCharacterResponse,
   CampaignMemberResponse,
+  CharacterResponse,
   CombatantResponse,
   StatusEffectResponse,
   UpdateCombatantRequest,
@@ -20,6 +21,7 @@ import { useEncounterHub, HubStatus } from "../hooks/useEncounterHub";
 import { useCombatLog } from "../hooks/useCombatLog";
 import { summarizeRiders } from "../lib/sheetTips";
 import PlayerEncounterView from "./PlayerEncounterView";
+import CharacterSheetView from "./CharacterSheetView";
 import EncounterLogPanel from "./EncounterLogPanel";
 import DeathSaveTrack from "../components/DeathSaveTrack";
 import Modal from "../components/Modal";
@@ -117,6 +119,14 @@ export default function EncounterView() {
   // the NEXT chip applied from the open palette. Reset when the palette opens.
   const [paletteRounds, setPaletteRounds] = useState("");
   const [paletteSource, setPaletteSource] = useState("");
+
+  // DM read-only character-sheet popup (issue #5): the linked combatant whose
+  // sheet is open (null = closed), the fetched sheet, and load/error state. The
+  // DM's read access rides the campaign-containment rule, which can lapse if the
+  // character was unregistered → a graceful 404 message rather than a hard error.
+  const [sheetModalFor, setSheetModalFor] = useState<CombatantResponse | null>(null);
+  const [modalSheet, setModalSheet] = useState<CharacterResponse | null>(null);
+  const [modalSheetError, setModalSheetError] = useState<string | null>(null);
 
   const isDm = dmUserId === userId;
   const activeMemberIds = new Set(
@@ -601,6 +611,35 @@ export default function EncounterView() {
     }
   }
 
+  // Open the read-only sheet popup for a linked combatant: clear prior state,
+  // mark which combatant is open (drives the Modal), then fetch its full sheet.
+  // A 404 means the DM no longer has access (character unregistered) — show a
+  // graceful message in the modal body rather than failing the page.
+  function openSheetModal(c: CombatantResponse) {
+    if (!c.characterId) return;
+    setSheetModalFor(c);
+    setModalSheet(null);
+    setModalSheetError(null);
+    charApi
+      .get(c.characterId)
+      .then(setModalSheet)
+      .catch((err: unknown) => {
+        setModalSheetError(
+          err instanceof ApiError && err.status === 404
+            ? "You no longer have access to this character."
+            : err instanceof ApiError
+              ? err.message
+              : "Failed to load this character.",
+        );
+      });
+  }
+
+  function closeSheetModal() {
+    setSheetModalFor(null);
+    setModalSheet(null);
+    setModalSheetError(null);
+  }
+
   // The apply-popover body: the catalog split into harmful / beneficial chips.
   // Already-applied conditions render as a disabled checkmark (apply is idempotent
   // server-side, but disabling avoids a pointless round-trip).
@@ -811,6 +850,20 @@ export default function EncounterView() {
             </ul>
           )}
         </div>
+
+        {/* View the linked character's full sheet (read-only) — DM only, any
+            state. Sits on the identity row's right edge next to Remove. */}
+        {isDm && c.characterId !== null && (
+          <button
+            className="btn tip enc__sheet-x"
+            disabled={isBusy}
+            onClick={() => openSheetModal(c)}
+            aria-label={`View ${c.name}'s character sheet`}
+            data-tooltip="View character sheet"
+          >
+            📜
+          </button>
+        )}
 
         {/* Remove lives on the identity row's right edge — never part of the
             controls toolbar, so it can't orphan-wrap onto its own line. */}
@@ -1647,6 +1700,40 @@ export default function EncounterView() {
                 Got it
               </button>
             </div>
+        </Modal>
+      )}
+
+      {/* DM read-only character-sheet popup (issue #5). Wide, internally
+          scrolling; the full sheet renders read-only (no actions, no drag). */}
+      {sheetModalFor && (
+        <Modal
+          onClose={closeSheetModal}
+          ariaLabel={`${sheetModalFor.name} character sheet`}
+          backdropClassName="enc__modal-backdrop"
+          className="enc__sheet-modal panel"
+        >
+          <div className="enc__sheet-modal-head">
+            <h2 className="enc__sheet-modal-title">{sheetModalFor.name}</h2>
+            <button
+              className="btn enc__sheet-modal-close"
+              onClick={closeSheetModal}
+              aria-label="Close character sheet"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="enc__sheet-modal-body">
+            {modalSheetError ? (
+              <p className="text-muted enc__sheet-modal-msg">{modalSheetError}</p>
+            ) : !modalSheet ? (
+              <>
+                <div className="skeleton" style={{ height: 120 }} />
+                <div className="skeleton" style={{ height: 200, marginTop: 16 }} />
+              </>
+            ) : (
+              <CharacterSheetView character={modalSheet} readOnly />
+            )}
+          </div>
         </Modal>
       )}
     </div>
