@@ -1,5 +1,62 @@
 # Handover — DMTool-FrontEnd (for the next session)
 
+> ## ✅ SESSION 2026-06-12/13 — all shipped + pushed (HEAD `16dd4b3` on `origin/main`)
+>
+> A long session; **everything below is committed AND pushed to production** (GitHub
+> Pages). Working tree is clean of source changes. The backend cleared its **entire**
+> request queue overnight (migrations 061–068) and every callback is now consumed.
+>
+> **Shipped this session, in order:**
+> 1. **Encounter combatant-row declutter** (`63635f5`) — two-row card, label-less
+>    toolbar, merged Set/Temp HP, ghost ✕ remove. Killed the `--aligned` CSS.
+> 2. **Vault retire redesign + ASI panel redesign** (`3489839`, `5b76691`) — reserved
+>    retire lane / equal-height cards / stable hover; ASI shows effective score + `+N` chip.
+> 3. **Buffs system** (`d382aab`) — consumes mig 061–063: `RollTarget`/`RollModifierKind`/
+>    `AdvantageState` enums; encounter badge durations + ◈ concentration + "use"; **Break
+>    Concentration**; CharacterSheet **"At roll time"** dice/advantage riders. Flat riders
+>    are pre-folded server-side — never re-rendered (no double-counting invariant).
+> 4. **Combat-UX batch** (`2b07996`/`7a91af3`/`56efdc2`/`523f85c`/`96fed93`, Opus agent) —
+>    shared libs (`lib/sheetTips.ts`, `lib/useBlockOrder.ts`, `components/DraggableBlock.tsx`,
+>    `lib/sheetBlocks.ts`); player-combat design-system tooltips + sheet-grade breakdowns;
+>    drag-reorder of the player's 4 boxes; **DM read-only sheet popup** (extracted
+>    `routes/CharacterSheetView.tsx` — the route sheet is now a thin fetch/actions wrapper);
+>    session-required encounter creation + session-grouped list.
+> 5. **Resource tracking** (`c93242e`/`a95de78`, Sonnet agent) — consumes mig 064:
+>    `components/CombatantPools.tsx` pip tracks + set-semantics steppers + Short/Long Rest on
+>    DM + player cards; pact slots; log glyphs 40/41/42.
+> 6. **#20 spell source-class + #21 TurnRewound** (`a34bbb7`) — multiclass sheets attribute
+>    each spell to its governing caster's DC (chip + tooltip); `↩` log glyph for undo-turn.
+>    `spellPicks` write path modeled (no manual picker UI — tags populate via level-up).
+> 7. **#22 hide-turn-order + #24 wizard-spellbook + #23 session-delete warning** (`faed744`)
+>    — DM header toggle (🙈/👁) via generic `campaigns.patchEncounter`; player hides the
+>    tracker (banner stays); Wizard `spellbookSize` is a required builder count; session
+>    delete warns + surfaces the backend 409.
+>
+> **▶ ONLY OUTSTANDING WORK = backend-blocked:** `FRONTEND-REQUEST-subrace-choice-traits.md`
+> is filed in the backend root but **the backend has NOT started it** (no HANDOFF, no
+> INCOMING; their last commit is the wizard spellbook). When it ships: consume High Elf
+> cantrip/language as Selections in the builder Race step + Drow Magic racial-spell display.
+> Nothing to do until the callback lands.
+>
+> **Optional / nobody-asked (don't start without Kevin):** a manual per-spell source-class
+> picker in `ManageSpellsDialog` (#20 follow-up; today tags only auto-populate via level-up);
+> Compendium "add homebrew" POST flows; richer multi-pick spell UX.
+>
+> **Verification debt (not features):** the **#24 Wizard builder screenshot** was never
+> captured — blocked by a **dead Vite dev `/api` proxy** (`:5173/api` times out while
+> `:3501` serves fine) that went stale after this session's repeated IIS pool recycles.
+> **Fix: restart `npm run dev`.** #24 is build + logic + live-API-data verified
+> (Wizard L1 `spellbookSize=6`); only the visual is owed.
+>
+> **Backend contract state:** DB through **migration 068**; INCOMING #19–#24 all DONE +
+> consumed. `INCOMING-FROM-BACKEND.md` is the source of truth; read the newest entries.
+> Two gotchas added to project `CLAUDE.md` this session: orphaned spectral Chromes hold
+> SignalR connections and starve the IIS worker; the Vite dev proxy dies after pool recycles.
+>
+> ---
+>
+> ## Earlier session notes (HISTORICAL — superseded by the block above)
+>
 > **⚠ UNCOMMITTED WORK ON DISK (2026-06-12, gates green — commit these first):**
 > `src/routes/Vault.css` + `src/routes/CharacterBuilder.steps.tsx` +
 > `src/routes/CharacterBuilder.css` (two UI redesigns, both live-verified via

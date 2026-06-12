@@ -181,20 +181,19 @@ Commit: `feat(campaign): require a session for new encounters; group encounter l
 
 ---
 
-## Phase 5 — BLOCKED on backend callbacks (do not start; check INCOMING-FROM-BACKEND.md)
+## Phase 5 — ✅ DONE 2026-06-13 (was backend-blocked; all callbacks shipped + consumed)
 
-- **Log grammar (#1):** zero frontend work — text is server-rendered.
-- **Prev-turn log entry (#2):** when the backend ships `CombatEventType.TurnRewound`,
-  mirror the numeric value in `types.ts` and add a glyph + kind in
-  `src/routes/EncounterLogPanel.tsx` (`eventGlyph` ~14, `eventKind` ~46 — suggest "↩").
-  Unknown types already fall back safely, so order doesn't matter.
-- **Hide turn order (#3):** when `EncounterResponse.turnOrderHiddenFromPlayers` + its
-  mutation ship: mirror the field; DM toggle button in the `EncounterView` header
-  (`enc__head-right`, next to Edit — follow the Edit button's toggle styling);
-  player side: in `PlayerEncounterView`, when the flag is true, don't render the
-  Turn Order `<aside className="penc__tracker panel">` (~242–259). **Deliberate,
-  agreed behavior:** the now-acting banner STAYS (players must know when it's their
-  turn); only the order list hides.
+The whole plan (Phases 0–5) is **complete and pushed**. Phase 5 items landed as the
+backend cleared its queue:
+
+- **Log grammar (#1):** server-rendered — shipped backend-side (INCOMING #21), zero FE work.
+- **Prev-turn log entry (#2):** `CombatEventType.TurnRewound = 4` mirrored + `↩` glyph in
+  `EncounterLogPanel` (commit `a34bbb7`, INCOMING #21). Live-verified.
+- **Hide turn order (#3):** `turnOrderHiddenFromPlayers` flag + `campaigns.patchEncounter`;
+  DM header toggle; `PlayerEncounterView` hides the tracker, banner stays (commit `faed744`,
+  INCOMING #22). Live-verified both views.
+
+> **This plan file is now fully executed — kept as the as-built record. No remaining work.**
 
 ---
 

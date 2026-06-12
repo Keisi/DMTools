@@ -37,9 +37,8 @@ backend lives at `C:\Users\keisi\source\repos\DMTool` — read its `CLAUDE.md`,
   (Azure DevOps, branch `master`); it's on IIS `:3501` (pool `DMTool`). The
   backend↔frontend contract is exchanged via `INCOMING-FROM-BACKEND.md`
   (backend→us, in THIS repo) and `FRONTEND-REQUEST-*.md` files (us→backend, in
-  the BACKEND repo). DB through **migration 063** as of the buffs INCOMING
-  (2026-06-12; "049" was the INCOMING #11 snapshot — trust the newest INCOMING
-  entry over this line).
+  the BACKEND repo). DB through **migration 068** as of 2026-06-13 (INCOMING
+  #19–#24 all shipped + consumed; trust the newest INCOMING entry over this line).
 
 ### Backend requests outstanding (filed in the backend repo)
 - **`FRONTEND-REQUEST-scope-b-invitation-discovery.md`** (2026-06-10, NEW) — **invited

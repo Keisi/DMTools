@@ -133,6 +133,14 @@ launch* mechanics from it. What's relevant for this app:
     log). Fix: kill all Chrome processes (PowerShell `Stop-Process -Name chrome
     -Force`), recycle the pool, re-check `/api/health`. Prevention: kill orphan
     Chromes before each spectral batch, not just `browser close --force`.
+  - **The Vite dev `/api` proxy dies after repeated IIS pool recycles (2026-06-13):**
+    once the backend pool has been stopped/started several times in a session, the
+    running `npm run dev` proxy to `:3501` goes stale and **hangs** — `curl :5173/api/...`
+    times out (`000`) while `curl :3501/api/...` works fine. Symptom in the browser:
+    pages that fetch on mount (e.g. CharacterBuilder's class list) render **empty** with
+    no error, app-wide. **Fix: restart `npm run dev`.** Don't mistake this for a code bug
+    — verify the proxy with `curl -m5 :5173/api/classes` before debugging a "missing data"
+    screen.
 
 ## TypeScript constraints (will fail the build if violated)
 
@@ -296,20 +304,32 @@ Backend features that are **not modeled** — don't build UI for them: Half-Elf
 anything but a single int. (Subraces ARE modeled — picker in the builder race
 step, modifiers in the ability tooltip.)
 
-## Backend context you can't see from this repo (synced 2026-06-12)
+## Backend context you can't see from this repo (synced 2026-06-13)
 
-- **Buffs system shipped 2026-06-12 (migrations 061–063, live on `:3501`) — NOT
-  consumed yet; this is the standing next work item.** Read the newest
-  INCOMING-FROM-BACKEND entry end-to-end first. The one rule: **flat** roll
-  modifiers are already folded into the derived numbers we render (saves, skill
-  bonuses, attack bonuses, passive perception) — render-only, never re-apply;
-  only **dice** riders (Bless +1d4) and **advantage/disadvantage** arrive as new
-  data (`rollModifiers`/`rollAdvantages`). Combatant badges gained
-  `remainingRounds` (server ticks them on round wrap), `sourceCombatantId`
-  (concentration; new `POST .../break-concentration`), and `consumedOnUse`
-  (render a "use" button → existing DELETE). Apply accepts `remainingRounds`
-  (pre-fill from the catalog's `defaultDurationRounds`) + `sourceCombatantId`;
-  re-apply refreshes in place. DB is now **through migration 063**.
+- **Backend request queue is FULLY DRAINED + consumed (DB through migration 068).**
+  INCOMING #19–#24 are all DONE and wired into the client (pushed to `origin/main`):
+  - **#19 resource tracking** (mig 064) — per-combatant `resources`/`spellSlots`/`pactSlot`
+    pools; `components/CombatantPools.tsx` renders pip tracks + set-semantics steppers +
+    Short/Long Rest on DM + player cards. Endpoints `…/resources/{key}`,
+    `…/spell-slots/{level}` (`isPact?`), `…/rest` (`RestKind` 1/2 numeric).
+  - **#20 spell source-class** (mig 067) — `SpellRef.sourceClassId/sourceClass`; multiclass
+    sheets attribute each spell to its governing caster's DC. `spellPicks` write path modeled
+    (no manual picker UI yet — tags auto-populate via level-up).
+  - **#21 log grammar + `TurnRewound=4`** — server-reworded ("gains/loses Bless"); `↩` glyph.
+  - **#22 hide-turn-order** (mig 065) — `EncounterResponse.turnOrderHiddenFromPlayers` +
+    generic `PATCH …/encounters/{id}` (`campaigns.patchEncounter`). DM header toggle; player
+    hides the tracker, keeps the turn banner.
+  - **#23 session-required encounters** (mig 066) — backend now 400s a null `sessionId` and
+    **409s a session delete that still holds live encounters** (frontend warns + surfaces it).
+    Orphan encounters were backfilled into auto-created "General" sessions.
+  - **#24 Wizard spellbook** (mig 068) — `progression[].spellbookSize` (Wizard 6/8/…); the
+    builder treats it as a required levelled count.
+  - **The buffs-system rule still holds:** **flat** roll modifiers are pre-folded into the
+    derived numbers — render-only, NEVER re-apply; only **dice** + **advantage/disadvantage**
+    surface via `CharacterResponse.rollModifiers`/`rollAdvantages` (the no-double-counting
+    invariant). Badges carry `remainingRounds`/`sourceCombatantId`/`consumedOnUse`.
+- **Only outstanding backend request:** `FRONTEND-REQUEST-subrace-choice-traits.md` — filed,
+  **not started** by the backend (no HANDOFF/INCOMING). Consume when it ships.
 
 - **The backend has a real xUnit suite now** (`DMTool.Tests`, run with
   `dotnet test DMTool.slnx` in the backend repo) covering the domain rules in
@@ -318,8 +338,9 @@ step, modifiers in the ability tooltip.)
   unarmed/unarmored). When you file a `FRONTEND-REQUEST-*.md` for rule
   enforcement, the rule + tests land there — asking is cheap; don't work around
   missing rules client-side.
-- **DB baseline fold is at migration 057** (2026-06-11); migrations 058–063
-  (incl. the buffs system) sit on top of it.
+- **DB baseline fold is at migration 057** (2026-06-11); migrations 058–068
+  (buffs 061–063, resource pools 064, hide-turn-order 065, session-enforce 066,
+  spell source-class 067, wizard spellbook 068) sit on top of it.
 - **Hub auth is enforced server-side** (backend commit 2026-06-11):
   `JoinEncounter` verifies encounter access before the group join, and DM-only
   pushes go to a separate `encounter-{id}-dm` group. If live updates stop for a
