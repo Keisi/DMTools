@@ -1,0 +1,20 @@
+{
+  "date": "2026-06-13",
+  "commit": "faed744",
+  "scope": "INCOMING #22 (hide turn order) + #24 (wizard spellbook) + #23 (session-delete warning)",
+  "strategy": "PASS",
+  "gates": {
+    "oby_pipeline": "precheck pass, codescan:critical pass (0 issues), hindsight pass",
+    "npm_build": "GREEN", "npm_lint": "GREEN", "oby_verify_delta": 0
+  },
+  "live_verification": {
+    "22": "FULLY VERIFIED — DM header toggle '🙈 Order Hidden' (PATCH round-trip hidden=true); player view tracker=0 banner=1 (tracker hidden, turn banner kept). shot-22-dm.png, shot-22-player.png.",
+    "23": "build-verified; backend 409 contract documented+tested (116 tests). Native confirm() dialog not spectral-testable.",
+    "24": "build + logic + DATA verified (live API: Wizard L1 spellbookSize=6, isPrepared=true). Live builder screenshot BLOCKED by a dead Vite dev /api proxy (:5173/api times out, :3501 serves 12 classes) — app-wide env issue from session pool recycles, NOT this change. Restart npm run dev to confirm visually."
+  },
+  "notes": [
+    "Vite dev proxy died after repeated IIS pool recycles this session — builder mounts with empty class list app-wide until dev server restart. Pre-existing robustness gap (builder class fetch has no retry); out of scope.",
+    "#22 reuses enc__edit-mode-btn--active style for the active/hidden state — no new CSS."
+  ],
+  "deferred": ["health 35<40 baseline; drift-sentinel npm-spawn os error 193 — documented repo-reality"]
+}
