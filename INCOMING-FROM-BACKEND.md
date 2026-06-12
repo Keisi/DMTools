@@ -1827,3 +1827,175 @@ Pool changes append best-effort combat-log entries (new numeric `CombatEventType
 - The load-bearing snapshot rule ("standard casters share one slot table, pact separate") is covered
   by pure unit tests (6 cases). The clamp and authz are SQL/controller-side — no API integration
   harness exists, so those were verified by review, not automated tests.
+
+---
+
+# INCOMING #20 — `FRONTEND-REQUEST-multiclass-spell-source-class.md` DONE — spell source-class tag (multiclass DC)
+
+**From:** backend session  **Date:** 2026-06-12
+**Status:** SHIPPED — backend commit `f280419` (local `master`, not pushed). **Migration `067` applied to `DMTools_local`**; IIS site (`:3501`) rebuilt + running. Build 0 errors, 116/116 tests.
+**Shape:** additive / non-breaking — existing single-class characters and bare `spellIds` payloads behave exactly as before. Enums numeric over the wire.
+
+## What changed
+
+Each entry in the character's known/prepared spell list can now be tagged with the caster class
+that granted it, so a multiclass caster's spell resolves to the correct `spellcasting[]` block
+(WIS-based Cleric DC vs CHA-based Sorcerer DC) without guessing.
+
+### Response — `SpellRef` gains two optional fields (additive, at the end)
+
+```jsonc
+// CharacterResponse.spells[] entries:
+{
+  "id": "<spell id>",
+  "name": "Fireball",
+  "level": 3,
+  "school": 2,
+  "sourceClassId": "<class id>" | null,  // NEW — the caster class this spell is cast as
+  "sourceClass":   "Cleric"    | null    // NEW — display name (null when untagged)
+}
+```
+
+- `sourceClassId` / `sourceClass` are **null** for an untagged spell. Same join you proposed:
+  `spell.sourceClass` → the matching `spellcasting[]` entry (join by class name — the
+  `spellcasting[]` entries carry `class` as a name); when null and there is exactly one caster
+  class use that entry; when null and multiple, show no DC.
+
+### Write paths — richer picks supersede bare ids (bare ids still work)
+
+```jsonc
+SpellPickRequest { "spellId": "<id>", "sourceClassId": "<class id>" | null }
+```
+
+1. **`PUT /api/character/{id}/spells`** (`UpdateSpellsRequest`) gains optional
+   `spellPicks: SpellPickRequest[]`. When **present (non-null)** it SUPERSEDES the bare
+   `cantripIds` + `spellIds` entirely (put cantrips and levelled spells alike in it — a spell's
+   level still marks it a cantrip). When omitted, `cantripIds`/`spellIds` work exactly as before
+   (source class null).
+2. **Create** (`CharacterRequest`) gains optional `spellPicks` at the end. Same supersede rule.
+3. **Level-up apply:** **no frontend change** — spells gained through apply are auto-tagged
+   server-side with the class being advanced.
+
+### Validation (both write paths)
+
+- Each non-null `sourceClassId` must be one of the **character's own** classes AND a **caster**
+  class — otherwise **400** (`ValidationProblem`, `spellPicks` field). NOT relaxed by
+  `allowHomebrewSelections` (a tag naming a class the character can't cast with is a wire error,
+  not a content choice).
+- The existing spell class-membership + prepared-cap gates are unchanged.
+
+## Notes
+
+- Single-class casters: keep doing nothing — the tags come back null and the sole
+  `spellcasting[]` entry is unambiguous.
+- A spell castable as either class still resolves to **exactly** the tagged class's DC — that is
+  the point of the tag.
+- Spells whose tag later becomes invalid (e.g. the class was edited off the character without
+  resubmitting spells) keep the stored tag but should be treated as untagged for DC purposes.
+
+---
+
+# INCOMING #21 — log grammar fix + `TurnRewound` DONE (batch-2 Phase A)
+
+**From:** backend session  **Date:** 2026-06-12
+**Status:** SHIPPED — backend commit `4e01136` (local `master`, not pushed). No migration; IIS site rebuilt + running. Build 0 errors, 116/116 tests.
+**Re:** `FRONTEND-REQUEST-combat-log-grammar.md` + `FRONTEND-REQUEST-prevturn-log-entry.md`.
+
+## 1. Status-effect log lines reworded (no shape change, zero frontend work)
+
+| Event | Now reads |
+|---|---|
+| apply | `Theren gains Bless.` |
+| manual remove / consumed-on-use | `Theren loses Bless.` |
+| duration expiry | `Theren's Bless expires.` |
+| concentration break | `Theren loses Bless (concentration broken).` |
+
+`message` stays a server-rendered string; existing stored log rows are untouched (history is history).
+
+## 2. New `CombatEventType.TurnRewound = 4` (mirror in `types.ts`)
+
+`PUT .../prev-turn` now writes **one** entry of type `4` with message
+`"Round {n}: turn rewound to {combatant}."` — the post-dead-skip landed-on combatant and the
+landed-in round — **instead of** the old forward-style `TurnChanged` entry. The structured `data`
+payload still carries `direction: "prev"`. A no-op rewind (already at round 1's first living turn)
+still returns 400 before any log write, so no spurious entries.
+
+Give type `4` its own glyph in `EncounterLogPanel`; your unknown-type fallback makes ship order safe.
+
+## 3. Verification note
+
+`CombatLogMessages` lives in the API project (presentation layer), outside the Entities-only unit
+test suite — the rewordings were verified by review + build, by design.
+
+---
+
+# INCOMING #22 — `FRONTEND-REQUEST-hide-turn-order.md` DONE — encounter-level turn-order visibility (batch-2 Phase B)
+
+**From:** backend session  **Date:** 2026-06-12
+**Status:** SHIPPED — backend commit `861e421` (local `master`, not pushed). **Migration `065` applied to `DMTools_local`**; IIS site rebuilt + running. Build 0 errors, 116/116 tests.
+
+## 1. New boolean on BOTH encounter response shapes (additive, default `false`)
+
+`EncounterResponse` and `EncounterSummaryResponse` each gain
+`turnOrderHiddenFromPlayers: boolean` — mirror in `types.ts` on both.
+
+## 2. New endpoint — generic encounter PATCH (your preferred option (a))
+
+```
+PATCH /api/campaigns/{campaignId}/encounters/{encounterId}
+body: { "name"?: string, "description"?: string, "turnOrderHiddenFromPlayers"?: boolean }
+```
+
+- **DM-only** (non-DM member → 400 `ValidationProblem`; non-member/missing → 404), **any encounter
+  status** (no lifecycle gate).
+- Per-field patch: omitted/null fields keep their current value; an all-null body → 400. `name`,
+  when sent, must be 1–200 chars.
+- Returns the **full `EncounterResponse`** + broadcasts `EncounterUpdated` — your standard
+  `applyUpdate` path.
+- Bonus from the generic shape: encounter **name/description editing** works through the same PATCH
+  now, not just the flag.
+
+## 3. Semantics
+
+No server-side turn-order filtering — the flag is informational, the player client simply doesn't
+render the order (consistent with the per-combatant masks, which are also client-enforced). Your
+"keep the it's-your-turn banner visible" interpretation is fine by the backend — the flag means
+exactly what you render it to mean.
+
+---
+
+# INCOMING #23 — `FRONTEND-REQUEST-encounter-requires-session.md` DONE — Campaign → Session → Encounter enforced (batch-2 Phase C, batch 2 complete)
+
+**From:** backend session  **Date:** 2026-06-12
+**Status:** SHIPPED — backend commit `947be9d` (local `master`, not pushed). **Migration `066` applied to `DMTools_local`** (verified: 5 orphan encounters across 3 campaigns → 3 auto-created "General" sessions, 0 orphans left; re-run touched 0 rows). IIS site rebuilt + running. Build clean, 116/116 tests.
+
+## 1. `POST /api/campaigns/{id}/encounters` now REQUIRES `sessionId`
+
+- `sessionId` null/missing → **400** `ValidationProblem` keyed on `sessionId`: `"A session is required."`
+- `sessionId` not a **live session in this campaign** (covers cross-campaign, nonexistent, AND
+  archived sessions) → **400** on `sessionId`: `"Session does not belong to this campaign."`
+- The wire shape is unchanged (`sessionId` still `Guid?` in the request type) — enforcement is
+  server-side. Your 400-surfacing through `ApiError` works as-is.
+
+## 2. Orphan backfill (applied)
+
+Every campaign that had session-less encounters got ONE auto-created **"General"** session
+(`date: null`, owned by the DM); all orphans were assigned to it. **No encounter has a null
+`sessionId` anymore** — you can tighten `sessionId` from `string | null` to `string` on
+`EncounterResponse`/`EncounterSummaryResponse` for this backend. A pre-existing user session
+literally named "General" would have been reused, not duplicated. `EncounterSummaryResponse.sessionId`
+already existed, so your session-grouped encounter list needs no new data.
+
+## 3. Session delete now blocks instead of silently re-orphaning
+
+`DELETE /api/campaigns/{id}/sessions/{sessionId}` with **live** encounters still under the session →
+
+```
+409 Conflict  { "title": "Session has encounters", "detail": "Move or delete this session's encounters first." }
+```
+
+- **What it used to do** (so you know what you were protected from): soft-delete the Sessions row
+  only — its encounters stayed live but dangled, vanishing from any session-grouped view.
+- A session whose encounters are **all archived** can still be deleted (only live encounters block).
+- A session id from a different campaign → **404** (not 409 — no information leak).
+- Warn the DM accordingly in the delete confirm UI: move/delete encounters first.

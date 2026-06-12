@@ -1,0 +1,39 @@
+{
+  "date": "2026-06-12",
+  "commits": [
+    "cc1b9cd docs(spec): resource-tracking consumption spec",
+    "c93242e feat(api): combatant resource/slot pools + rest (INCOMING #19)",
+    "a95de78 feat(combat): resource & spell-slot trackers on combatant cards"
+  ],
+  "branch": "main",
+  "scope": "INCOMING #19 consumption — built by Sonnet agent (stalled+resumed), independently reviewed by orchestrator",
+  "strategy": "PASS",
+  "summary": {
+    "oby_pipeline": { "precheck": "pass", "codescan:critical": "pass", "hindsight": "pass",
+      "health": "fail (repo baseline 35<40 — pre-existing)", "drift-sentinel": "fail (npm-spawn os error 193 — documented false negative)" },
+    "authoritative_gates": {
+      "npm_run_build": "GREEN — per commit by agent AND independently re-run at HEAD a95de78 by orchestrator",
+      "npm_run_lint": "GREEN (double-run)",
+      "oby_verify_files": "delta 0 per commit (codescan 0, no cross-module dupes)"
+    },
+    "live_verification": "spectral, fresh-seeded data (pools only exist post-mig-064): DM view — Seraphine pools (Lay on Hands 50/50 numeric fallback, Channel Divinity pip, L1-3 slots), freeform Goblin self-hides (resRows=2/slotRows=3/goblinPools=0); CD minus 1->0; Long Rest restores 0->1 with log entries (ResourceChanged + Rested glyphs). Player view — E2E Player Char Resources box shows Second Wind interactive pip, click round-trips 1->0. Screenshots .claude/shot-restrack-{dm,player}.png reviewed by orchestrator."
+  },
+  "findings": { "blocking": [], "serious": [], "recommendations": [], "edge_cases": [
+    "Set-semantics (sends remaining∓1) could race on rapid clicks, but the parent busyCombatant/disabled guard serializes mutations + backend clamps 0..max — safe.",
+    "max>8 renders remaining/max text instead of pips (homebrew defensive) — verified live with Lay on Hands (50)."
+  ]},
+  "adversarial_notes": [
+    "CombatantPools self-hides (returns null) when resources/spellSlots/pactSlot all empty — verified on the freeform Goblin card.",
+    "pactSlot handled as a single nullable object (not array) per #19 contract; isPact:true routed correctly to onSetSlot.",
+    "−/+ disabled at 0/max client-side AND clamped server-side — no out-of-range writes.",
+    "Tooltips use design-system tip+data-tooltip (not native title); rest-button tooltips state exact restore semantics.",
+    "One shared component for DM + player views — no duplication; flows through each parent's full-response applyUpdate path.",
+    "Glyph conflict resolved correctly by agent: ✚ was taken by Heal, so Rested uses ↺ (◉ ResourceChanged, ◇ SpellSlotChanged)."
+  ],
+  "hindsight": { "verdict": "ACCEPT", "rewrite": [], "adjust": [], "accept": [
+    "Reused DeathSaveTrack's pip-track idiom + the handleSetHp mutation pattern — consistent with the existing combat surface.",
+    "All pools in one interactive surface (Resources box player-side) per the spec's explicit decision — no split-brain with the Spellcasting box."
+  ]},
+  "deferred": ["Pipeline health/drift-sentinel: documented repo-reality; authoritative gates green twice."],
+  "new_pitfalls": []
+}
