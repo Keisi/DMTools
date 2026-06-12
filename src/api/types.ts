@@ -343,6 +343,10 @@ export interface ClassSpellcastingProgressionResponse {
   spellsKnown?: number | null;
   maxSpellLevel: number; // highest castable spell level (0 = cantrips only)
   slots: SpellSlotResponse[];
+  // Wizard spellbook size (INCOMING #24) — cumulative levelled spells in the book
+  // at this level (6,8,…); null for every non-spellbook class. When set, the builder
+  // treats it as a REQUIRED levelled count even though isPrepared is true.
+  spellbookSize?: number | null;
 }
 export interface ClassSpellcastingResponse {
   abilityStatId: string; // casting ability (match StatResponse.id)
@@ -1299,6 +1303,9 @@ export interface EncounterResponse {
   roundNumber: number;
   activeCombatantId: string | null;
   combatants: CombatantResponse[];
+  // DM hides the turn order from the player view (INCOMING #22); informational —
+  // the player client just doesn't render the tracker. Optional until consumed.
+  turnOrderHiddenFromPlayers?: boolean;
 }
 
 /** List-level summary — no combatants array. */
@@ -1310,6 +1317,7 @@ export interface EncounterSummaryResponse {
   description?: string | null;
   status: EncounterStatus;
   roundNumber: number;
+  turnOrderHiddenFromPlayers?: boolean; // INCOMING #22 (also on the summary shape)
 }
 
 // ---- Scope B: Campaign + encounter requests ----
@@ -1341,6 +1349,14 @@ export interface CreateEncounterRequest {
   name: string;
   description?: string | null;
   sessionId?: string | null;
+}
+
+// Generic DM-only encounter patch (INCOMING #22). Per-field: omitted/null keeps the
+// current value; an all-null body is a 400. Returns the full EncounterResponse.
+export interface PatchEncounterRequest {
+  name?: string;
+  description?: string | null;
+  turnOrderHiddenFromPlayers?: boolean;
 }
 
 export interface AddCombatantRequest {

@@ -35,6 +35,7 @@ import type {
   LevelUpPlanRequest,
   LevelUpPlanResponse,
   MetamagicResponse,
+  PatchEncounterRequest,
   RaceResponse,
   RegisterCampaignCharacterRequest,
   RestRequest,
@@ -209,6 +210,17 @@ export const campaigns = {
     ),
   createEncounter: (campaignId: string, body: CreateEncounterRequest) =>
     api.post<EncounterResponse>(`/api/campaigns/${campaignId}/encounters`, body),
+  // Generic DM-only encounter patch (INCOMING #22): name / description /
+  // turnOrderHiddenFromPlayers. Returns the full EncounterResponse + broadcasts.
+  patchEncounter: (
+    campaignId: string,
+    encounterId: string,
+    body: PatchEncounterRequest,
+  ) =>
+    api.patch<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}`,
+      body,
+    ),
   deleteEncounter: (campaignId: string, encounterId: string) =>
     api.del<void>(`/api/campaigns/${campaignId}/encounters/${encounterId}`),
   startEncounter: (campaignId: string, encounterId: string) =>

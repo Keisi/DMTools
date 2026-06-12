@@ -323,6 +323,25 @@ export default function EncounterView() {
     setActionBusy(false);
   }
 
+  // INCOMING #22 — flip the encounter-level turn-order visibility (players stop
+  // seeing the tracker; the DM's view is unaffected). Generic encounter PATCH.
+  async function handleToggleTurnOrder() {
+    if (!encounter) return;
+    setActionBusy(true);
+    try {
+      applyUpdate(
+        await campaigns.patchEncounter(campaignId, encounterId, {
+          turnOrderHiddenFromPlayers: !encounter.turnOrderHiddenFromPlayers,
+        }),
+      );
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Failed to update turn-order visibility.",
+      );
+    }
+    setActionBusy(false);
+  }
+
   async function handleDelete() {
     if (!confirm("Archive this encounter? This cannot be undone.")) return;
     setActionBusy(true);
@@ -1462,6 +1481,21 @@ export default function EncounterView() {
         </div>
         {isDm && (
           <div className="enc__head-right">
+            {!isEnded && (
+              <button
+                className={`btn tip${encounter.turnOrderHiddenFromPlayers ? " enc__edit-mode-btn--active" : ""}`}
+                disabled={actionBusy}
+                onClick={handleToggleTurnOrder}
+                aria-pressed={!!encounter.turnOrderHiddenFromPlayers}
+                data-tooltip={
+                  encounter.turnOrderHiddenFromPlayers
+                    ? "Turn order is hidden from players — click to reveal"
+                    : "Hide the turn order from the player view (the “your turn” banner stays)"
+                }
+              >
+                {encounter.turnOrderHiddenFromPlayers ? "🙈 Order Hidden" : "👁 Order Shown"}
+              </button>
+            )}
             {isPending && (
               <>
                 <button

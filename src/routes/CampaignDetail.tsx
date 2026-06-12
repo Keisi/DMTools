@@ -266,9 +266,28 @@ export default function CampaignDetail() {
   }
 
   async function handleDeleteSession(sessionId: string) {
-    await campaigns.deleteSession(id, sessionId);
-    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-    if (expandedSession === sessionId) setExpandedSession(null);
+    // INCOMING #23: the backend blocks (409) deleting a session that still holds
+    // live encounters. Warn up front when we can see encounters under it, and
+    // surface the 409's problem-details if the delete is rejected anyway.
+    const held = encounters.filter((e) => e.sessionId === sessionId).length;
+    const msg =
+      held > 0
+        ? `This session has ${held} encounter${held === 1 ? "" : "s"}. Move or delete ${held === 1 ? "it" : "them"} first — a session can't be deleted while it holds live encounters.\n\nTry to delete anyway?`
+        : "Delete this session?";
+    if (!confirm(msg)) return;
+    try {
+      await campaigns.deleteSession(id, sessionId);
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      if (expandedSession === sessionId) setExpandedSession(null);
+      setError(null);
+    } catch (err) {
+      // 409 problem-details: title is err.message, the actionable line is body.detail.
+      const detail =
+        err instanceof ApiError
+          ? ((err.body as { detail?: string } | undefined)?.detail ?? err.message)
+          : "Failed to delete session.";
+      setError(detail);
+    }
   }
 
   async function handleRosterAdd(sessionId: string, charId: string) {

@@ -259,25 +259,30 @@ export default function PlayerEncounterView({
         </div>
 
         {/* ---- Turn order tracker ---- */}
-        <aside className="penc__tracker panel">
-          <h3 className="sheet__block-title">Turn Order</h3>
-          <hr className="rule" />
-          <ul className="penc__track-list">
-            {visibleOrder.map((c, i) => (
-              <TrackerRow
-                key={c.id}
-                combatant={c}
-                rank={i + 1}
-                isActive={c.id === encounter.activeCombatantId}
-                isMine={myCombatants.some((m) => m.id === c.id)}
-                allCombatants={encounter.combatants}
-              />
-            ))}
-            {visibleOrder.length === 0 && (
-              <li className="text-faint">No combatants to show.</li>
-            )}
-          </ul>
-        </aside>
+        {/* INCOMING #22 — the DM can hide the turn order from players. The
+            "now acting / your turn" banner above stays (players still need to
+            know when to act); only this order list is suppressed. */}
+        {!encounter.turnOrderHiddenFromPlayers && (
+          <aside className="penc__tracker panel">
+            <h3 className="sheet__block-title">Turn Order</h3>
+            <hr className="rule" />
+            <ul className="penc__track-list">
+              {visibleOrder.map((c, i) => (
+                <TrackerRow
+                  key={c.id}
+                  combatant={c}
+                  rank={i + 1}
+                  isActive={c.id === encounter.activeCombatantId}
+                  isMine={myCombatants.some((m) => m.id === c.id)}
+                  allCombatants={encounter.combatants}
+                />
+              ))}
+              {visibleOrder.length === 0 && (
+                <li className="text-faint">No combatants to show.</li>
+              )}
+            </ul>
+          </aside>
+        )}
       </div>
     </div>
   );

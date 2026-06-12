@@ -459,10 +459,16 @@ export default function CharacterBuilder() {
         .sort((a, b) => b.classLevel - a.classLevel)[0];
       if (!row) continue;
       const cantrips = row.cantripsKnown ?? 0;
-      const levelled = sc.isPrepared ? 0 : (row.spellsKnown ?? 0);
-      // Prepared casters with castable spell levels (Paladin L2+, Cleric/Druid/Wizard L1+)
-      // get an optional non-blocking pool so starting spells can be pre-selected at creation.
-      const hasPreparedPool = sc.isPrepared && row.maxSpellLevel > 0;
+      // Known casters use spellsKnown. Wizard is prepared BUT carries a spellbookSize
+      // (INCOMING #24) — its book is a required levelled count, collected at creation
+      // like a known caster. Other prepared casters (Cleric/Druid/Paladin) have null
+      // spellbookSize → 0 here and fall through to the optional pre-pick pool below.
+      const levelled = sc.isPrepared
+        ? (row.spellbookSize ?? 0)
+        : (row.spellsKnown ?? 0);
+      // Prepared casters with castable spell levels but NO required count (spellbookSize
+      // null) get an optional non-blocking pool so starting spells can be pre-selected.
+      const hasPreparedPool = sc.isPrepared && row.maxSpellLevel > 0 && levelled === 0;
       if (cantrips === 0 && levelled === 0 && !hasPreparedPool) continue;
       casterNames.push(cls.name);
       cantripsNeed += cantrips;
