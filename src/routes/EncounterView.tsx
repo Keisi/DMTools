@@ -1063,11 +1063,16 @@ export default function EncounterView() {
                   className="btn tip"
                   disabled={
                     actionBusy ||
+                    // Disabled at the encounter's true first turn: the backend skips
+                    // the dead, so "first turn of round 1" is the first *living*
+                    // combatant by sort order, not the first overall. Comparing
+                    // against the first overall left Undo enabled when that combatant
+                    // was dead, and prev-turn then 400'd.
                     (encounter.roundNumber <= 1 &&
                       encounter.activeCombatantId ===
-                        [...encounter.combatants].sort(
-                          (a, b) => a.sortOrder - b.sortOrder,
-                        )[0]?.id)
+                        [...encounter.combatants]
+                          .sort((a, b) => a.sortOrder - b.sortOrder)
+                          .find((c) => !c.isDead)?.id)
                   }
                   onClick={handleUndoTurn}
                   data-tooltip="Undo the last Next Turn"
