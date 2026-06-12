@@ -37,6 +37,7 @@ import type {
   MetamagicResponse,
   RaceResponse,
   RegisterCampaignCharacterRequest,
+  RestRequest,
   RetireCharacterRequest,
   SessionResponse,
   RollInitiativesRequest,
@@ -52,6 +53,8 @@ import type {
   RecordDeathSavesRequest,
   UpdateCombatantHpRequest,
   UpdateCombatantRequest,
+  UpdateCombatantResourceRequest,
+  UpdateCombatantSpellSlotRequest,
   UpdateHpRequest,
   UpdateSpellsRequest,
   WeaponResponse,
@@ -278,6 +281,42 @@ export const campaigns = {
       `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}/hp`,
       body,
     ),
+  // Resource pool mutations (INCOMING #19, mig. 064). All three return the full
+  // EncounterResponse + broadcast EncounterUpdated (same applyUpdate path as HP).
+  // Authz: DM or the owner of the linked character (same as HP).
+  updateCombatantResource: (
+    campaignId: string,
+    encounterId: string,
+    combatantId: string,
+    resourceKey: string,
+    body: UpdateCombatantResourceRequest,
+  ) =>
+    api.put<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}/resources/${encodeURIComponent(resourceKey)}`,
+      body,
+    ),
+  updateCombatantSpellSlot: (
+    campaignId: string,
+    encounterId: string,
+    combatantId: string,
+    level: number,
+    body: UpdateCombatantSpellSlotRequest,
+  ) =>
+    api.put<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}/spell-slots/${level}`,
+      body,
+    ),
+  restCombatant: (
+    campaignId: string,
+    encounterId: string,
+    combatantId: string,
+    body: RestRequest,
+  ) =>
+    api.post<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}/rest`,
+      body,
+    ),
+
   updateCombatant: (
     campaignId: string,
     encounterId: string,

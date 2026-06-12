@@ -85,6 +85,10 @@ export const ResourceRecharge = {
 export type ResourceRecharge =
   (typeof ResourceRecharge)[keyof typeof ResourceRecharge];
 
+// RestKind: 1 = Short, 2 = Long (INCOMING #19). Numeric over the wire.
+export const RestKind = { Short: 1, Long: 2 } as const;
+export type RestKind = (typeof RestKind)[keyof typeof RestKind];
+
 export const FeatureKind = {
   Normal: 0,
   AbilityScoreImprovement: 1,
@@ -1182,6 +1186,30 @@ export interface SessionResponse {
   characterIds: string[];
 }
 
+// ---- Scope B: Combatant resource pools (INCOMING #19, migration 064) ----
+
+// A snapshotted consumable pool on a combatant (INCOMING #19). `max` is frozen at
+// snapshot like maxHp; `remaining` is the mutable part (set-semantics endpoint).
+export interface CombatantResourceResponse {
+  resourceKey: string; // opaque stable slug — the PUT path segment
+  name: string;
+  max: number;
+  remaining: number;
+  recharge: ResourceRecharge; // 0 None / 1 ShortRest / 2 LongRest
+  source: string; // class name, for the tooltip
+}
+
+export interface CombatantSpellSlotResponse {
+  level: number;
+  max: number;
+  remaining: number;
+}
+
+// Request bodies for the three pool mutation endpoints.
+export interface UpdateCombatantResourceRequest { remaining: number; }
+export interface UpdateCombatantSpellSlotRequest { remaining: number; isPact?: boolean; }
+export interface RestRequest { kind: RestKind; }
+
 // ---- Scope B: Encounter responses ----
 
 export interface CombatantResponse {
@@ -1220,6 +1248,11 @@ export interface CombatantResponse {
   // catalog's numeric effects are intentionally ignored here (display only). Always
   // present in the response (backend CombatantStatusEffect hydration).
   statusEffects: CombatantStatusEffectResponse[];
+  // Consumable pools (backend mig. 064). Empty/null for freeform NPCs and for
+  // combatants snapshotted before the migration.
+  resources?: CombatantResourceResponse[];
+  spellSlots?: CombatantSpellSlotResponse[]; // standard pool (multiclass-combined)
+  pactSlot?: CombatantSpellSlotResponse | null; // Warlock pact pool — single object
 }
 
 // A status badge on a combatant. Now mechanically annotated (buffs system): carries
@@ -1367,6 +1400,9 @@ export const CombatEventType = {
   TempHpSet: 23,
   StatusEffectApplied: 30,
   StatusEffectRemoved: 31,
+  ResourceChanged: 40, // INCOMING #19
+  SpellSlotChanged: 41, // INCOMING #19
+  Rested: 42, // INCOMING #19
   DmNote: 90,
 } as const;
 export type CombatEventType =

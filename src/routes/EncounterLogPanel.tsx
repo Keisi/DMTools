@@ -37,6 +37,12 @@ function eventGlyph(eventType: number): string {
       return "✦";
     case CombatEventType.DmNote:
       return "📝";
+    case CombatEventType.ResourceChanged: // 40 — INCOMING #19
+      return "◉";
+    case CombatEventType.SpellSlotChanged: // 41 — INCOMING #19
+      return "◇";
+    case CombatEventType.Rested: // 42 — INCOMING #19
+      return "↺";
     default:
       return "•";
   }
