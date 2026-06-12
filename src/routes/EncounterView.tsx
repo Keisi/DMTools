@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { campaigns, characters as charApi } from "../api/endpoints";
+import { campaigns, characters as charApi, reference } from "../api/endpoints";
 import type {
   EncounterResponse,
   CampaignCharacterResponse,
   CampaignMemberResponse,
   CombatantResponse,
+  StatusEffectResponse,
   UpdateCombatantRequest,
 } from "../api/types";
 import { CampaignMemberStatus, CombatantDisposition, EncounterStatus } from "../api/types";
@@ -103,6 +104,11 @@ export default function EncounterView() {
   // Set when a live EncounterArchived push arrives for a viewer who didn't
   // trigger the delete (the DM who archives navigates away in handleDelete).
   const [archived, setArchived] = useState(false);
+
+  // Condition palette: the shared status-effect catalog (loaded once) and the
+  // combatant whose apply-popover is currently open (null = closed).
+  const [statusCatalog, setStatusCatalog] = useState<StatusEffectResponse[]>([]);
+  const [paletteFor, setPaletteFor] = useState<string | null>(null);
 
   const isDm = dmUserId === userId;
   const activeMemberIds = new Set(
@@ -214,6 +220,23 @@ export default function EncounterView() {
       active = false;
     };
   }, [campaignId, encounterId]);
+
+  // Condition catalog for the apply-palette (DM-only control surface). Loaded once;
+  // best-effort — a failure just leaves the palette empty, it doesn't block combat.
+  useEffect(() => {
+    let active = true;
+    reference
+      .statusEffects()
+      .then((list) => {
+        if (active) setStatusCatalog(list);
+      })
+      .catch((e) => {
+        console.warn("[EncounterView] status-effect catalog load failed:", e);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function handleStart() {
     const missing = (encounter?.combatants ?? [])
@@ -513,6 +536,83 @@ export default function EncounterView() {
     }
   }
 
+  async function handleAddStatusEffect(c: CombatantResponse, statusEffectId: string) {
+    setBusyCombatant(c.id);
+    setPaletteFor(null);
+    try {
+      applyUpdate(
+        await campaigns.addCombatantStatusEffect(
+          campaignId,
+          encounterId,
+          c.id,
+          { statusEffectId },
+        ),
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to apply condition.");
+    } finally {
+      setBusyCombatant(null);
+    }
+  }
+
+  async function handleRemoveStatusEffect(c: CombatantResponse, statusEffectId: string) {
+    setBusyCombatant(c.id);
+    try {
+      applyUpdate(
+        await campaigns.removeCombatantStatusEffect(
+          campaignId,
+          encounterId,
+          c.id,
+          statusEffectId,
+        ),
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to remove condition.");
+    } finally {
+      setBusyCombatant(null);
+    }
+  }
+
+  // The apply-popover body: the catalog split into harmful / beneficial chips.
+  // Already-applied conditions render as a disabled checkmark (apply is idempotent
+  // server-side, but disabling avoids a pointless round-trip).
+  function renderConditionPalette(c: CombatantResponse) {
+    const applied = new Set(c.statusEffects.map((s) => s.statusEffectId));
+    const sorted = [...statusCatalog].sort((a, b) => a.name.localeCompare(b.name));
+    const harmful = sorted.filter((s) => !s.isBeneficial);
+    const beneficial = sorted.filter((s) => s.isBeneficial);
+    const group = (title: string, items: StatusEffectResponse[], mod: string) =>
+      items.length > 0 ? (
+        <div className="enc__cond-group">
+          <span className="enc__cond-group-title">{title}</span>
+          <div className="enc__cond-chips">
+            {items.map((s) => {
+              const on = applied.has(s.id);
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`enc__cond-chip enc__cond-chip--${mod}${on ? " enc__cond-chip--on" : ""}`}
+                  disabled={on || busyCombatant === c.id}
+                  title={s.description ?? undefined}
+                  onClick={() => handleAddStatusEffect(c, s.id)}
+                >
+                  {on ? "✓ " : ""}
+                  {s.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null;
+    return (
+      <>
+        {group("Conditions & Debuffs", harmful, "debuff")}
+        {group("Buffs", beneficial, "buff")}
+      </>
+    );
+  }
+
   // Shared combatant row renderer. `rank` (1-based) is supplied by the
   // initiative view to show the turn-order position; omitted in the sides view.
   function renderCombatant(c: CombatantResponse, rank?: number) {
@@ -570,6 +670,30 @@ export default function EncounterView() {
               )}
             </span>
           </div>
+          {c.statusEffects.length > 0 && (
+            <ul className="enc__badges">
+              {c.statusEffects.map((s) => (
+                <li
+                  key={s.statusEffectId}
+                  className={`enc__badge enc__badge--${s.isBeneficial ? "buff" : "debuff"}`}
+                  title={s.description ?? undefined}
+                >
+                  <span className="enc__badge-name">{s.name}</span>
+                  {isDm && !isEnded && (
+                    <button
+                      type="button"
+                      className="enc__badge-x"
+                      disabled={isBusy}
+                      onClick={() => handleRemoveStatusEffect(c, s.statusEffectId)}
+                      aria-label={`Remove ${s.name}`}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {isDm && !isEnded && (
@@ -895,6 +1019,43 @@ export default function EncounterView() {
                 </div>
               </div>
             )}
+
+            {/* Conditions — apply a catalog badge via the palette popover. Available
+                in any non-ended DM state (setup, edit, or live combat). */}
+            <div className="enc__ctrl-grp enc__ctrl-grp--cond">
+              <span className="enc__ctrl-label">Conditions</span>
+              <div className="enc__ctrl-row enc__cond-anchor">
+                <button
+                  className="btn enc__cond-btn"
+                  disabled={isBusy}
+                  aria-expanded={paletteFor === c.id}
+                  onClick={() =>
+                    setPaletteFor((prev) => (prev === c.id ? null : c.id))
+                  }
+                >
+                  + Condition
+                </button>
+                {paletteFor === c.id && (
+                  <>
+                    <button
+                      type="button"
+                      className="enc__cond-backdrop"
+                      aria-label="Close condition picker"
+                      onClick={() => setPaletteFor(null)}
+                    />
+                    <div className="enc__cond-palette panel" role="menu">
+                      {statusCatalog.length === 0 ? (
+                        <p className="text-muted enc__cond-empty">
+                          No conditions in the catalog.
+                        </p>
+                      ) : (
+                        renderConditionPalette(c)
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
 
             <div className="enc__ctrl-grp enc__ctrl-grp--remove">
               <span className="enc__ctrl-label">Remove</span>

@@ -1140,6 +1140,20 @@ export interface CombatantResponse {
   // FRONTEND-REQUEST-encounter-combat-controls.md item 3); when absent, derive from
   // the link (character-linked ⇒ PlayerCharacter, unlinked ⇒ Enemy).
   disposition?: CombatantDisposition;
+  // Purely-visual condition/buff/debuff badges applied to this combatant in combat.
+  // Distinct from a character's mechanical CharacterStatusEffectResponse — the
+  // catalog's numeric effects are intentionally ignored here (display only). Always
+  // present in the response (backend CombatantStatusEffect hydration).
+  statusEffects: CombatantStatusEffectResponse[];
+}
+
+// One visual status badge on a combatant (name/flavor hydrated from the catalog;
+// no numeric effects — see CombatantResponse.statusEffects).
+export interface CombatantStatusEffectResponse {
+  statusEffectId: string;
+  name: string;
+  description?: string | null;
+  isBeneficial: boolean;
 }
 
 /** Full encounter — returned by every mutation and GET /{encounterId}. */
@@ -1231,6 +1245,12 @@ export interface UpdateCombatantHpRequest {
 export interface RecordDeathSavesRequest {
   successes: number;
   failures: number;
+}
+
+// Apply a catalog status effect to a combatant (POST .../status-effects). Idempotent
+// server-side; returns the full EncounterResponse.
+export interface AddStatusEffectRequest {
+  statusEffectId: string;
 }
 
 export interface UpdateCombatantRequest {

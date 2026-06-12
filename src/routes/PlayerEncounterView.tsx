@@ -373,6 +373,21 @@ function TrackerRow({
           </span>
         </span>
       </div>
+
+      {/* DM-applied condition badges (read-only for players). */}
+      {c.statusEffects.length > 0 && (
+        <ul className="enc__badges penc__track-badges">
+          {c.statusEffects.map((s) => (
+            <li
+              key={s.statusEffectId}
+              className={`enc__badge enc__badge--${s.isBeneficial ? "buff" : "debuff"}`}
+              title={s.description ?? undefined}
+            >
+              <span className="enc__badge-name">{s.name}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </li>
   );
 }

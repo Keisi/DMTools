@@ -5,6 +5,7 @@
 import { api } from "./client";
 import type {
   AddCombatantRequest,
+  AddStatusEffectRequest,
   ArmorResponse,
   AuthRequest,
   AuthResponse,
@@ -43,6 +44,7 @@ import type {
   SkillResponse,
   SpellResponse,
   StatResponse,
+  StatusEffectResponse,
   TransferDmRequest,
   AddCombatLogNoteRequest,
   CombatLogEntryResponse,
@@ -130,7 +132,11 @@ export const reference = {
   metamagics: () => api.get<MetamagicResponse[]>("/api/metamagics"),
   eldritchInvocations: () =>
     api.get<EldritchInvocationResponse[]>("/api/eldritchinvocations"),
-  // ...armorcategories, weaponcategories, editions, statuseffects
+  // Condition/buff/debuff catalog (GET /api/statuseffects). Used to populate the
+  // encounter condition palette; the combatant-side application ignores the
+  // catalog's numeric effects (purely-visual badges).
+  statusEffects: () => api.get<StatusEffectResponse[]>("/api/statuseffects"),
+  // ...armorcategories, weaponcategories, editions
 };
 
 export const health = () =>
@@ -293,6 +299,29 @@ export const campaigns = {
     api.put<EncounterResponse>(
       `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}/death-saves`,
       body,
+    ),
+
+  // Purely-visual condition badges on a combatant (DM-only). Both ops are
+  // idempotent server-side, log to the combat log, and return the full
+  // EncounterResponse (single applyUpdate path; also pushed over SignalR).
+  addCombatantStatusEffect: (
+    campaignId: string,
+    encounterId: string,
+    combatantId: string,
+    body: AddStatusEffectRequest,
+  ) =>
+    api.post<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}/status-effects`,
+      body,
+    ),
+  removeCombatantStatusEffect: (
+    campaignId: string,
+    encounterId: string,
+    combatantId: string,
+    statusEffectId: string,
+  ) =>
+    api.del<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}/status-effects/${statusEffectId}`,
     ),
 
   // Combat log (DM-only, Phase 1). Newest-first page; pass the previous page's
