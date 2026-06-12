@@ -1619,3 +1619,103 @@ running API:
 
 Files: `EncountersController.cs` (new endpoint + skip logic), `EncounterContracts.cs`
 (`RecordDeathSavesRequest` + `isDead`), `Entities/Encounters/Combatant.cs` (derived `IsDead`).
+
+---
+
+# INCOMING FROM BACKEND — Buffs system: roll modifiers + combat durations ✅ SHIPPED
+
+**Date:** 2026-06-12
+**Re:** new buffs/debuffs mechanics (Bless-style). Backend shipped + live on `:3501`. **All changes
+additive; enums stay numeric on the wire** (no `JsonStringEnumConverter`).
+
+## TL;DR — the one rule that prevents double-counting
+
+A status effect can now affect **rolls** (attacks, saves, checks), not just the four flat sheet
+values. There are two channels and **a given modifier is only ever in one of them**:
+
+1. **Flat** roll modifiers are **already folded** into the derived numbers you display
+   (`savingThrows[].modifier`, `skills[].bonus`, `weaponAttacks[].attackBonus`, the spell
+   `attackBonus`, `passivePerception`). Do **nothing** — they're baked in.
+2. **Dice** (Bless +1d4) and **advantage/disadvantage** can't fold — they ride as data for you to
+   apply at roll time. They are **never** in the folded numbers above.
+
+So: render the dice/advantage from the new lists; trust the existing bonus numbers for everything flat.
+
+## New enums (numeric unions — add to `src/api/types.ts`)
+
+```ts
+// RollTarget
+0 = AttackRoll, 1 = SavingThrow, 2 = AbilityCheck, 3 = IncomingAttackRoll  // 3 = attacks made AGAINST this creature
+// RollModifierKind
+0 = Flat, 1 = Dice, 2 = Advantage, 3 = Disadvantage
+// AdvantageState
+1 = Advantage, 2 = Disadvantage, 3 = Cancelled   // 5e: any adv + any disadv on a slice → straight roll
+```
+
+## CharacterResponse — two new lists (+ status-effect fields)
+
+```diff
+  statusEffects: CharacterStatusEffect[],
++ rollModifiers: RollModifier[],     // non-flat riders (dice + adv/disadv), for roll-time display
++ rollAdvantages: RollAdvantage[],   // net adv/disadv per slice (already cancelled per 5e)
+```
+```ts
+type RollModifier   = { target: number /*RollTarget*/, kind: number /*RollModifierKind*/, diceCount: number /*signed: Bane = -1*/, dieSize: number, appliesToStatId: string | null, source: string /*e.g. "Bless"*/ };
+type RollAdvantage  = { target: number, appliesToStatId: string | null /*null = whole target; set = that ability only*/, state: number /*AdvantageState*/ };
+```
+`CharacterStatusEffect` (the applied-effect entries) also gained `consumedOnUse: boolean` and
+`rollModifiers: StatusEffectRollModifier[]` (the catalog definition, for explaining the effect).
+
+## /api/statuseffects (catalog) — new fields
+
+```diff
+  { id, name, description, isBeneficial,
++   consumedOnUse: boolean,            // Guidance / Bardic Inspiration: spent on one roll
++   defaultDurationRounds: number|null,// client pre-fill for combat duration (Bless = 10)
+    effects: StatusEffectEffect[],
++   rollModifiers: StatusEffectRollModifier[] }
+```
+```ts
+type StatusEffectRollModifier = { target: number, kind: number, amount: number /*flat only*/, diceCount: number|null, dieSize: number|null, appliesToStatId: string|null };
+```
+Homebrew POST `/api/statuseffects` accepts an optional `rollModifiers` array (+ `consumedOnUse`,
+`defaultDurationRounds`). Per-kind validation: Flat needs a non-zero `amount`; Dice needs
+`diceCount`(≠0)+`dieSize`(≥2); Advantage/Disadvantage carry neither; `appliesToStatId` only on
+SavingThrow/AbilityCheck and must exist; IncomingAttackRoll must be advantage/disadvantage.
+
+Seeded buffs now carry real mechanics: **Bless/Bane** (+/−1d4 attack & save), **Guidance** (+1d4
+check, consumed), **Bardic Inspiration** (+1d6, consumed), **Haste** (+2 AC + DEX-save advantage),
+**Shield/Aid/Longstrider** (flat), **Heroism** (descriptive). The seeded **conditions** are now
+mechanical too (Blinded/Restrained/Poisoned/Exhaustion → advantage/disadvantage riders).
+
+## Encounters — combatant badges gained duration + concentration
+
+`CombatantStatusEffectResponse` (in `EncounterResponse.combatants[].statusEffects[]`):
+```diff
+  { statusEffectId, name, description, isBeneficial,
++   consumedOnUse: boolean,
++   remainingRounds: number | null,    // ticks down each round; auto-removed at 0 (null = untimed)
++   sourceCombatantId: string | null,  // concentration link
++   rollModifiers: StatusEffectRollModifier[] }
+```
+- **Apply** `POST .../combatants/{id}/status-effects` now takes optional `remainingRounds` and
+  `sourceCombatantId` (must be a combatant in the same encounter). **Re-applying refreshes** the
+  duration/source in place (no duplicate badge).
+- **Expiry:** on a round wrap (`next-turn`), every timed badge decrements; at 0 it's removed and a
+  combat-log line is written. `prev-turn` does **not** restore them (one-way).
+- **Concentration sweep:** when the source combatant dies (NPC→0 HP, or PC→3 failed saves) or is
+  removed, every effect it sourced is removed + logged. New endpoint **`POST
+  .../combatants/{combatantId}/break-concentration`** drops them voluntarily (same DM/owner authz,
+  returns the full `EncounterResponse`).
+- `consumedOnUse` badges: render a "use" button that calls the existing DELETE (no new endpoint).
+
+Every encounter mutation still returns the **full `EncounterResponse`** and broadcasts `EncounterUpdated`.
+
+## Status
+Build 0-err, 106/106 tests, migrations `061`–`063` applied + idempotent, live IIS round-trips passed
+(reference riders; character `rollModifiers`/`rollAdvantages` incl. DEX-scoped save disadvantage;
+duration tick 2→1→expired; concentration sweep + log). Files: `Entities/Enums/Roll*.cs`,
+`Entities/Reference/StatusEffectRollModifier.cs`, `Entities/Derived/{ActiveRollModifier,RollAdvantage}.cs`,
+`Entities/Characters/Character.cs`, `Entities/Encounters/CombatantStatusEffect.cs`,
+`{Reference,Character,Encounter}Contracts.cs`, `StatusEffectsController.cs`, `EncountersController.cs`,
+`{StatusEffectReference,Combat}Repository.cs`, migrations `061`/`062`/`063`.

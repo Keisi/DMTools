@@ -1,6 +1,66 @@
 # Handover — DMTool-FrontEnd (for the next session)
 
-> **✓ RESOLVED (2026-06-11, same day): both backend requests SHIPPED and CONSUMED.**
+> **⚠ UNCOMMITTED WORK ON DISK (2026-06-12, gates green — commit these first):**
+> `src/routes/Vault.css` + `src/routes/CharacterBuilder.steps.tsx` +
+> `src/routes/CharacterBuilder.css` (two UI redesigns, both live-verified via
+> spectral screenshots) and `INCOMING-FROM-BACKEND.md` if not already in the docs
+> commit (the backend appended the buffs entry; committing it here is our job).
+> Kevin reviews screenshots first, then says "commit and push" — **push = GitHub
+> Pages production deploy** and is gated on the critical-review marker
+> (`.claude/.critical-review-done-main-<sha7>`, minted by `/critical-review`).
+> - **Vault retire redesign:** card reserves a 5.25rem right lane; Retire/Unretire
+>   is an always-visible ghost pill, vertically centered (was hover-only overlay
+>   that covered the meta text). Three real bugs fixed: (1) `.vault__card-body`
+>   was a flex item with default `min-width:auto` → long names pushed text under
+>   the button THROUGH the padding lane (fixed `min-width:0` +
+>   `overflow-wrap:break-word`; verified with a `getBoundingClientRect` overlap
+>   probe in the live page); (2) `.btn:hover`'s `transform: translateY(-1px)`
+>   **replaced** the pill's `translateY(-50%)` centering → hover jump; centering
+>   now uses the separate `translate` property, which composes; (3) the card's
+>   3px hover-lift keyed off the Link's own `:hover`, so entering the pill (a
+>   sibling overlay) dropped the card — lift now keys off `.vault__card-wrap`.
+>   Cards are equal-height (wrap is flex, card `flex:1`); grid floor 260→300px.
+> - **ASI panel redesign (`ImprovementsPanel`):** the dangling `+4 = 19` line is
+>   gone — the stepper shows the **effective** score (accent + semibold via
+>   `builder__stepper-val--up`, tooltip carries "Base N + M"), and the allocation
+>   rides as a `+N` chip at the right end of the stat-name row. Markup + CSS
+>   only; no state or handler changes.
+>
+> **✓ DONE + PUSHED 2026-06-12 (deployed): encounter combatant-row declutter** —
+> commit `63635f5`. Both Sides and Initiative views now share one two-row card:
+> identity row (marker · name/AC · full-width-capped HP bar · condition chips ·
+> ghost ✕ remove pinned top-right) + a label-less control toolbar (hairline
+> separators; inline labels kept only where bare inputs would be ambiguous: Init,
+> Name, Max HP, AC, Death Saves). **Set HP + Temp HP merged into one cluster**
+> (`[HP] Set Temp` mirroring `[Amt] Dmg Heal`) — `tempHpInputs` state deleted,
+> both handlers read `setHpInputs`. The whole `--aligned` fixed-column CSS
+> section and the sides-view auto-fill grid were deleted (net −84 lines).
+> Critical-review report: `projectnotes/critical-review/2026-06-12/`.
+>
+> **▶ NEXT WORK — consume the buffs system (backend shipped 2026-06-12, live,
+> migrations 061–063, ZERO frontend consumption).** Read the newest
+> INCOMING-FROM-BACKEND entry + `<backend>/docs/HANDOVER-buffs-rollmodifiers.md`.
+> Order: (1) `types.ts` — `RollTarget`/`RollModifierKind`/`AdvantageState`
+> numeric enums + new fields on `CharacterResponse` (`rollModifiers`,
+> `rollAdvantages`), `StatusEffectResponse` (`consumedOnUse`,
+> `defaultDurationRounds`, `rollModifiers`), combatant badges (`remainingRounds`,
+> `sourceCombatantId`, `consumedOnUse`); (2) `EncounterView` — duration input on
+> "+ Condition" (pre-fill `defaultDurationRounds`), rounds-left counter on
+> badges, concentration source + `break-concentration`, "use" button on
+> consumed-on-use badges (existing DELETE); (3) `CharacterSheet` — render dice /
+> advantage riders. **Never re-apply flat riders — they're pre-folded** into the
+> derived numbers (the backend's no-double-counting invariant).
+>
+> **Roadmap gap analysis (2026-06-12, verified by grep not docs):** every other
+> shipped backend surface IS consumed (featureChoices, multiclass
+> prereqs/grants/choices, invocations, isPactMagic/combined slots, subraces,
+> spell scaling Tier 1+2, HP-override dialog, invitations+decline,
+> member-characters dropdown, combatant PATCH, initiative re-sort, player death
+> saves, isDead). CAMP-08 closed (catalog 0 FAIL). Backend-first items to track,
+> nothing to build yet: combat resource/slot spend (the only unbuilt Mode B MVP
+> bullet), subrace choice-traits, Wizard spellbook, 5.5e Phase 2, multiclass
+> spell-DC source-class. Optional fill-out nobody asked for: compendium browse
+> pages for the fighting-style/metamagic/invocation catalogs.
 > Backend replies: `BACKEND-RESPONSE-prepared-spell-cap.md` +
 > `BACKEND-RESPONSE-rules-enforcement-audit.md` (commits 28ed633/c03001f/92eadf8, live
 > on `:3501`). Frontend consumption done + live-verified the same day:

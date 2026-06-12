@@ -103,7 +103,28 @@ launch* mechanics from it. What's relevant for this app:
   ```
 - **Character access is owner-scoped** (the IDOR fix): you can only view a character
   under the account that created it; another account's id returns 404. `dungeonmaster` /
-  `Passw0rd!23` is a working login (owns nothing by default — create test chars under it).
+  `Passw0rd!23` is a working login.
+- **Seeded test data under `dungeonmaster` (2026-06-12, reusable):** vault characters
+  Seraphine Dawnbringer (Paladin 10, `6311ebed-e957-49b0-a789-d3a4593f9c67`) and Borin
+  Ironfist (Fighter 5, retired); campaign "Layout Preview"
+  (`020242eb-17ce-4c4b-b072-a55fc2e47afe`) with Active encounter "Goblin Ambush"
+  (`60a4574c-3d64-4ede-baf7-41435561d7fa`: Theren ally w/ temp HP + condition, Goblin
+  4/7, Goblin Boss). Note: ally/enemy *sides* live in `dmtool-enc-sides-<eid>`
+  localStorage — seed it in the batch eval or unlinked combatants all read as enemies.
+- **More batch gotchas (2026-06-12):**
+  - **Guard the login token** — if the `curl` login fails (pool mid-restart → 503) the
+    eval writes an empty `dmtool.jwt` and the app renders a **fully black page** (empty
+    React root). A solid-black screenshot means the app crashed/didn't mount, not that
+    capture failed. `[ -n "$TOKEN" ] || exit 1` before writing action files.
+  - **Eval results are NOT echoed** in batch output — smuggle diagnostics through
+    `document.title` (the JSON result's `final_state.title`). This also works for live
+    layout assertions, e.g. `getBoundingClientRect` overlap checks.
+  - **Repeated clicks on the same React control need separate eval actions** with a
+    wait between them — N synchronous `.click()`s in one eval all see the same stale
+    state closure and collapse into one increment. (Same root cause as the 2026-06-08
+    CDP-driver note in HANDOVER-NEXT.md.)
+  - **First page load after a pool restart can exceed 8s** — use `wait` ≥ 8000ms after
+    navigate, and re-run rather than trust a skeleton screenshot.
 
 ## TypeScript constraints (will fail the build if violated)
 
@@ -250,7 +271,9 @@ counts beyond toggling.
   initiative, HP delta/set/temp; ally-vs-enemy split persisted per-encounter in
   localStorage). **Every encounter mutation returns the full `EncounterResponse`**
   and flows through a single `applyUpdate` state-replace path — SignalR pushes use
-  the same path. `PlayerEncounterView.tsx` exists but is **not routed** (WIP).
+  the same path. `PlayerEncounterView.tsx` has no route of its own by design:
+  `EncounterView` renders it for any **non-DM** viewer (the sides/initiative
+  tracker below it is the DM control surface).
 
 **Live sync:** `src/hooks/useEncounterHub.ts` (`@microsoft/signalr`) connects to
 `/hubs/encounter` with the JWT as `?access_token=` (WS can't carry a Bearer
@@ -265,7 +288,20 @@ Backend features that are **not modeled** — don't build UI for them: Half-Elf
 anything but a single int. (Subraces ARE modeled — picker in the builder race
 step, modifiers in the ability tooltip.)
 
-## Backend context you can't see from this repo (synced 2026-06-11)
+## Backend context you can't see from this repo (synced 2026-06-12)
+
+- **Buffs system shipped 2026-06-12 (migrations 061–063, live on `:3501`) — NOT
+  consumed yet; this is the standing next work item.** Read the newest
+  INCOMING-FROM-BACKEND entry end-to-end first. The one rule: **flat** roll
+  modifiers are already folded into the derived numbers we render (saves, skill
+  bonuses, attack bonuses, passive perception) — render-only, never re-apply;
+  only **dice** riders (Bless +1d4) and **advantage/disadvantage** arrive as new
+  data (`rollModifiers`/`rollAdvantages`). Combatant badges gained
+  `remainingRounds` (server ticks them on round wrap), `sourceCombatantId`
+  (concentration; new `POST .../break-concentration`), and `consumedOnUse`
+  (render a "use" button → existing DELETE). Apply accepts `remainingRounds`
+  (pre-fill from the catalog's `defaultDurationRounds`) + `sourceCombatantId`;
+  re-apply refreshes in place. DB is now **through migration 063**.
 
 - **The backend has a real xUnit suite now** (`DMTool.Tests`, run with
   `dotnet test DMTool.slnx` in the backend repo) covering the domain rules in
@@ -274,9 +310,8 @@ step, modifiers in the ability tooltip.)
   unarmed/unarmored). When you file a `FRONTEND-REQUEST-*.md` for rule
   enforcement, the rule + tests land there — asking is cheap; don't work around
   missing rules client-side.
-- **DB baseline is through migration 057** (folded into the baseline 2026-06-11;
-  next migration starts at `058_*`). `FRONTEND-CONTEXT.md`'s "DB through
-  migration 049" is stale.
+- **DB baseline fold is at migration 057** (2026-06-11); migrations 058–063
+  (incl. the buffs system) sit on top of it.
 - **Hub auth is enforced server-side** (backend commit 2026-06-11):
   `JoinEncounter` verifies encounter access before the group join, and DM-only
   pushes go to a separate `encounter-{id}-dm` group. If live updates stop for a

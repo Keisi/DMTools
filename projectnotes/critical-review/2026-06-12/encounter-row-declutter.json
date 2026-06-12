@@ -1,0 +1,62 @@
+{
+  "date": "2026-06-12",
+  "commit": "63635f5",
+  "branch": "main",
+  "scope": "HEAD commit (post-commit, pre-push)",
+  "files_reviewed": ["src/routes/EncounterView.tsx", "src/routes/EncounterView.css"],
+  "pass": 1,
+  "strategy": "PASS",
+  "summary": {
+    "codescan": { "critical": 0, "delta_vs_baseline": 0 },
+    "oby_pipeline": {
+      "precheck": "pass",
+      "codescan_critical": "pass",
+      "hindsight": "pass",
+      "health": "fail (repo baseline 35<40 — pre-existing, track-don't-block per pipeline's own signal)",
+      "drift_sentinel": "fail (missing typecheck evidence — oby cannot spawn npm, os error 193; documented false negative in project CLAUDE.md)"
+    },
+    "authoritative_gates": {
+      "npm_run_build": "GREEN at 63635f5 (tsc -b + vite build)",
+      "npm_run_lint": "GREEN at 63635f5",
+      "oby_verify_files": "delta 0 (pre-commit run)"
+    },
+    "live_verification": "spectral screenshots of sides + initiative views in active combat (real data: temp HP segment, condition chip, enemy hide toggles, now-acting banner) — both render the new layout correctly"
+  },
+  "findings": {
+    "blocking": [],
+    "serious": [],
+    "recommendations": [],
+    "edge_cases": [
+      "Toolbar cluster separator (border-left) shows on the first item of a wrapped line at narrow widths — cosmetic only, toolbar fits one line at >=900px content width. DEFERRED: cosmetic, no functional impact.",
+      "Edit-mode visual verification not captured live — backend IIS pool went 503 mid-session (environment, unrelated to change). Edit-mode changes are class-only (--inline modifier additions); tsc+eslint green. DEFERRED: verify visually when backend pool is restarted."
+    ]
+  },
+  "adversarial_notes": [
+    "Merged Set/Temp HP input: handleSetTempHp keeps its val<0 guard; handleSetHp keeps server-side validation path; both clear the shared buffer on success; Enter maps to Set (primary action). Behavior change is intentional UX consolidation.",
+    "Remove X keeps identical gating (isDm && !isEnded), isBusy disable, and aria-label; gains a tooltip. Moved out of the controls flow so it cannot orphan-wrap.",
+    "PlayerEncounterView shares enc__ctrl-grp/label/row + delta/dmg/heal classes — base styles unchanged; all new rules scoped under .enc__comb-controls (DM-only container) and the new --inline modifier (unused by player view).",
+    "Grep sweep: zero references remain to enc__list--aligned, enc__ctrl-grp--disp/vis/clone/remove/cond, enc__remove-btn, tempHpInputs — no orphaned CSS or dead state.",
+    "No new I/O, error paths, or retry surfaces introduced; all mutations still flow through existing try/catch -> setError -> applyUpdate state-replace."
+  ],
+  "hindsight": {
+    "verdict": "ACCEPT",
+    "rewrite": [],
+    "adjust": [],
+    "accept": [
+      "Corner X placement: most durable — immune to future control-set growth, vs least-durable width tweaking of the labeled column.",
+      "Unified two-row card for both views: most durable — single layout path; deleted the fragile fixed-column --aligned CSS that caused the ragged wrapping.",
+      "Merged HP cluster mirrors the existing Amt/Dmg/Heal pattern and removes a state map — net complexity down."
+    ]
+  },
+  "tech_debt_delta": {
+    "lines_added": 77,
+    "lines_removed": 161,
+    "net": -84,
+    "notes": "Removed one useState map, one CSS layout mode (auto-fill grid), and the entire --aligned fixed-column section."
+  },
+  "deferred": [
+    "Pipeline 'health' fail: repo-wide baseline (scaffold anti-patterns documented in project CLAUDE.md); not introduced by this change (codescan delta 0, net -84 lines).",
+    "Pipeline 'drift-sentinel/typecheck' + workflow-sentinel warnings (completion-sentinel/correctness/causal-proof steps absent): oby cannot spawn npm in this repo (os error 193) so those evidence-minting steps are structurally unsatisfiable here; authoritative typecheck/lint gates ran green externally at HEAD (documented repo-reality in project CLAUDE.md)."
+  ],
+  "new_pitfalls": []
+}
