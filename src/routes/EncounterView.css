@@ -354,8 +354,8 @@
 .enc__comb-left {
   display: flex;
   align-items: center;
-  /* Wrap the HP block under the name when the row is tight instead of letting the
-     fixed-width name/HP overflow rightward into the controls (initiative label). */
+  /* Wrap the HP block under the name when the identity row is tight; condition
+     badges (flex-basis 100%) always drop to their own line. */
   flex-wrap: wrap;
   gap: var(--sp-2) var(--sp-3);
   flex: 1;
@@ -382,12 +382,15 @@
   font-size: var(--fs-xs);
 }
 
-/* HP display */
+/* HP display — grows across the identity row's free space (controls live on
+   their own row below), capped so the bar stays readable on wide screens. */
 .enc__hp-wrap {
   display: flex;
   flex-direction: column;
   gap: var(--sp-1);
+  flex: 1 1 auto;
   min-width: 150px;
+  max-width: 320px;
 }
 .enc__hp-bar {
   display: flex;
@@ -395,7 +398,7 @@
   background: var(--border);
   border-radius: 5px;
   overflow: hidden;
-  width: 150px;
+  width: 100%;
 }
 .enc__hp-fill {
   height: 100%;
@@ -418,34 +421,37 @@
   color: var(--accent);
 }
 
-/* Controls column */
+/* Controls toolbar — one compact label-less row below the identity row, same in
+   both views. Self-describing controls carry tooltips; only ambiguous inputs keep
+   a small inline label (--inline). Hairline separators divide the clusters. */
 .enc__comb-controls {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--sp-4);
-  flex-wrap: wrap;
-}
-/* Sides view: enemies in edit mode carry many controls. Drop them onto their own
-   full-width row below the name/HP and lay them out as a tidy grid, so Clone/Remove
-   read as part of a clean grid instead of orphaning at the end of a ragged wrap.
-   (The initiative view keeps its aligned single-row layout — see --aligned rules.) */
-.enc__list:not(.enc__list--aligned) .enc__comb-controls {
   flex: 1 1 100%;
-  display: grid;
-  /* Min column must fit the widest group (Damage/Heal ≈ 150px) so its trailing
-     button can't overflow the cell into the next group. */
-  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
-  gap: var(--sp-3) var(--sp-4);
-  align-items: end;
-  justify-items: start;
-  padding-top: var(--sp-3);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2) 0;
+  padding-top: var(--sp-2);
   margin-top: var(--sp-1);
   border-top: 1px solid var(--border);
+}
+.enc__comb-controls .enc__ctrl-grp + .enc__ctrl-grp {
+  border-left: 1px solid var(--border);
+}
+.enc__comb-controls .enc__ctrl-grp {
+  padding-right: var(--sp-3);
+}
+.enc__comb-controls .enc__ctrl-grp + .enc__ctrl-grp {
+  padding-left: var(--sp-3);
 }
 .enc__ctrl-grp {
   display: flex;
   flex-direction: column;
   gap: var(--sp-1);
+}
+.enc__ctrl-grp--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sp-2);
 }
 .enc__ctrl-row {
   display: flex;
@@ -514,7 +520,6 @@
 .enc__clone-btn {
   padding: var(--sp-1) var(--sp-2);
   font-size: var(--fs-xs);
-  margin-left: var(--sp-2);
 }
 .enc__clone-btn:hover:not(:disabled) {
   border-color: var(--accent);
@@ -546,85 +551,20 @@
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
-.enc__remove-btn {
+
+/* Remove ✕ — ghost button on the identity row's right edge (the left block's
+   flex:1 pushes it there). Quiet until hovered: destructive, but rare. */
+.enc__remove-x {
+  flex-shrink: 0;
   padding: var(--sp-1) var(--sp-2);
   font-size: var(--fs-xs);
+  border-color: transparent;
+  color: var(--text-muted);
+}
+.enc__remove-x:hover:not(:disabled) {
   border-color: var(--c-crimson-500);
   color: var(--c-crimson-400);
-  margin-left: var(--sp-2);
-}
-
-/* ---- Initiative-view column alignment ----
-   Each <li> is its own flex container, so columns only line up across rows when
-   every cell has a deterministic width. The control groups already do (fixed-width
-   inputs + fixed buttons); the two variables were the left block (grew to fill) and
-   the enemy-only Clone/Hide columns. Fix the left block to a single % width and
-   reserve the enemy-only columns (placeholders above) so all rows match. */
-.enc__list--aligned .enc__comb-left {
-  flex: 0 0 auto;
-  width: clamp(220px, 34%, 340px);
-  min-width: 0;
-}
-.enc__list--aligned .enc__comb-info {
-  min-width: 0;
-}
-/* Let the HP bar grow across the left column's free space — more pronounced and
-   removes the dead gap between it and the controls. */
-.enc__list--aligned .enc__hp-wrap {
-  flex: 1 1 auto;
-  min-width: 110px;
-}
-.enc__list--aligned .enc__hp-bar {
-  width: 100%;
-}
-.enc__list--aligned .enc__comb-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.enc__list--aligned .enc__comb-controls {
-  flex: 1;
-}
-/* Fixed column widths ONLY in the aligned initiative view (so the mixed list lines
-   up). In the sides view these groups size to their content, so labels never
-   overflow. Clip the label as a safety net against a long column label. */
-.enc__list--aligned .enc__ctrl-grp--disp {
-  width: 4rem;
-}
-.enc__list--aligned .enc__ctrl-grp--vis {
-  width: 7rem;
-}
-.enc__list--aligned .enc__ctrl-grp--clone {
-  width: 2.75rem;
-}
-.enc__list--aligned .enc__ctrl-grp--disp,
-.enc__list--aligned .enc__ctrl-grp--vis,
-.enc__list--aligned .enc__ctrl-grp--clone {
-  min-width: 0;
-}
-.enc__list--aligned .enc__ctrl-grp--disp .enc__ctrl-label,
-.enc__list--aligned .enc__ctrl-grp--vis .enc__ctrl-label,
-.enc__list--aligned .enc__ctrl-grp--clone .enc__ctrl-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-/* Remove is always the last group; pin it to the right edge so it lines up across
-   rows regardless of which optional middle groups (death saves / side) are present.
-   Aligned view = flex row → auto left margin absorbs the slack. */
-.enc__list--aligned .enc__ctrl-grp--remove {
-  margin-left: auto;
-}
-/* Sides view = auto-fill grid → margin-auto won't cross tracks. Pin Remove to the
-   last column, right-aligned. auto-fill keeps empty tracks, so line -1 is the
-   container's right edge, and every row's grid is the same width → they line up. */
-.enc__list:not(.enc__list--aligned) .enc__ctrl-grp--remove {
-  grid-column-end: -1;
-  justify-self: end;
-}
-.enc__remove-btn:hover:not(:disabled) {
-  background: var(--action);
-  color: #fff;
+  background: color-mix(in srgb, var(--c-crimson-500) 12%, transparent);
 }
 
 /* Read-only (ended / non-DM) */
