@@ -302,12 +302,13 @@ rebuild the connection.
 Backend features that are **not modeled** — don't build UI for them: Half-Elf
 "choose +1 to two", weapon properties (finesse/heavy/…), and spell slots as
 anything but a single int. (Subraces ARE modeled — picker in the builder race
-step, modifiers in the ability tooltip.)
+step, modifiers in the ability tooltip, plus subrace choice-Selections — High Elf
+cantrip + extra language — and auto-granted racial spells; see INCOMING #25.)
 
 ## Backend context you can't see from this repo (synced 2026-06-13)
 
-- **Backend request queue is FULLY DRAINED + consumed (DB through migration 068).**
-  INCOMING #19–#24 are all DONE and wired into the client (pushed to `origin/main`):
+- **Backend request queue is FULLY DRAINED + consumed (DB through migration 069).**
+  INCOMING #19–#25 are all DONE and wired into the client (pushed to `origin/main`):
   - **#19 resource tracking** (mig 064) — per-combatant `resources`/`spellSlots`/`pactSlot`
     pools; `components/CombatantPools.tsx` renders pip tracks + set-semantics steppers +
     Short/Long Rest on DM + player cards. Endpoints `…/resources/{key}`,
@@ -324,12 +325,19 @@ step, modifiers in the ability tooltip.)
     Orphan encounters were backfilled into auto-created "General" sessions.
   - **#24 Wizard spellbook** (mig 068) — `progression[].spellbookSize` (Wizard 6/8/…); the
     builder treats it as a required levelled count.
+  - **#25 subrace choice-traits** (mig 069) — `SubraceResponse.featureSelections` (High Elf
+    cantrip = `SelectionType.Cantrip` 9 / extra language = type 3) + `racialSpells[]`;
+    `CharacterResponse.racialSpells[]` (auto-grants, level-gated, own-ability DC). Builder
+    Race step renders the two pickers (`SubraceSelections` in `CharacterBuilder.steps.tsx`),
+    merges the cantrip into bare `spellIds` (null source) + the language into `languageIds`;
+    sheet shows a "Racial Spells" subsection (visible even for non-casters). Open offer NOT
+    taken: server-side INT DC for the *chosen* High Elf cantrip (it shows no DC, by design).
   - **The buffs-system rule still holds:** **flat** roll modifiers are pre-folded into the
     derived numbers — render-only, NEVER re-apply; only **dice** + **advantage/disadvantage**
     surface via `CharacterResponse.rollModifiers`/`rollAdvantages` (the no-double-counting
     invariant). Badges carry `remainingRounds`/`sourceCombatantId`/`consumedOnUse`.
-- **Only outstanding backend request:** `FRONTEND-REQUEST-subrace-choice-traits.md` — filed,
-  **not started** by the backend (no HANDOFF/INCOMING). Consume when it ships.
+- **No outstanding backend requests — the queue is empty.** The last one
+  (`FRONTEND-REQUEST-subrace-choice-traits.md`) shipped as INCOMING #25 and is consumed (above).
 
 - **The backend has a real xUnit suite now** (`DMTool.Tests`, run with
   `dotnet test DMTool.slnx` in the backend repo) covering the domain rules in
@@ -338,9 +346,11 @@ step, modifiers in the ability tooltip.)
   unarmed/unarmored). When you file a `FRONTEND-REQUEST-*.md` for rule
   enforcement, the rule + tests land there — asking is cheap; don't work around
   missing rules client-side.
-- **DB baseline fold is at migration 057** (2026-06-11); migrations 058–068
+- **DB baseline fold is at migration 057** (2026-06-11); migrations 058–069
   (buffs 061–063, resource pools 064, hide-turn-order 065, session-enforce 066,
-  spell source-class 067, wizard spellbook 068) sit on top of it.
+  spell source-class 067, wizard spellbook 068, subrace selections 069) sit on top of it.
+  **Production note:** the Azure App Service backend + its DB are NOT yet migrated to 069 —
+  #25 works locally only until that deploy + migration runs in prod.
 - **Hub auth is enforced server-side** (backend commit 2026-06-11):
   `JoinEncounter` verifies encounter access before the group join, and DM-only
   pushes go to a separate `encounter-{id}-dm` group. If live updates stop for a

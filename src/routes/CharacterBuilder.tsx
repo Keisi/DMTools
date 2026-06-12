@@ -47,6 +47,7 @@ import {
   SpellsStep,
   STEPS,
   StepNav,
+  SubraceSelections,
   toggleCapped,
   ZERO_COINS,
   type AbilityMode,
@@ -113,6 +114,10 @@ export default function CharacterBuilder() {
   // Known-caster spells (Spells step): cantrips (level 0) + levelled spells.
   const [cantripIds, setCantripIds] = useState<string[]>([]);
   const [spellIds, setSpellIds] = useState<string[]>([]);
+  // Subrace-specific picks (High Elf cantrip + extra language). Kept separate from
+  // cantripIds/languageIds so each picker validates its own budget independently.
+  const [subraceCantripIds, setSubraceCantripIds] = useState<string[]>([]);
+  const [subraceLanguageIds, setSubraceLanguageIds] = useState<string[]>([]);
   const [backgroundId, setBackgroundId] = useState<string | null>(null);
   const [languageIds, setLanguageIds] = useState<string[]>([]);
   const [featIds, setFeatIds] = useState<string[]>([]);
@@ -185,8 +190,8 @@ export default function CharacterBuilder() {
   // the promise callback, never synchronously in the effect body.
   useEffect(() => {
     if (!editId) return;
-    Promise.all([characters.get(editId), reference.backgrounds()])
-      .then(([ch, bgs]) => {
+    Promise.all([characters.get(editId), reference.backgrounds(), reference.races()])
+      .then(([ch, bgs, loadedRaces]) => {
         setOriginal(ch);
         setName(ch.name);
         setDescription(ch.description ?? "");
@@ -289,6 +294,41 @@ export default function CharacterBuilder() {
             ch.languages.filter((l) => optionIds.has(l.id)).map((l) => l.id),
           );
         }
+        // Recover subrace picks using the loaded races data.
+        const loadedSubrace = loadedRaces
+          .find((r) => r.id === ch.race?.id)
+          ?.subraces.find((s) => s.id === ch.subrace?.id);
+        if (loadedSubrace) {
+          // Language: intersect character's languages with the subrace language pool.
+          const srLangSel = loadedSubrace.featureSelections.find(
+            (s) => s.type === SelectionType.Language,
+          );
+          if (srLangSel) {
+            const srLangIds = new Set(srLangSel.options.map((o) => o.optionId));
+            setSubraceLanguageIds(
+              ch.languages.filter((l) => srLangIds.has(l.id)).map((l) => l.id),
+            );
+          }
+          // Cantrip: move level-0 spells in the subrace cantrip pool out of cantripIds
+          // and into subraceCantripIds so the Race-step picker displays them correctly.
+          // KNOWN SIMPLIFICATION: for a High Elf Wizard, class cantrips and the racial
+          // cantrip share the same pool — recovery may attribute the wrong one to each
+          // picker, but edit re-submits a deduped flat list under the homebrew flag so
+          // the round-trip is correct regardless.
+          const srCantripSel = loadedSubrace.featureSelections.find(
+            (s) => s.type === SelectionType.Cantrip,
+          );
+          if (srCantripSel) {
+            const srCantripPool = new Set(srCantripSel.options.map((o) => o.optionId));
+            const recovered = ch.spells
+              .filter((s) => s.level === 0 && srCantripPool.has(s.id))
+              .map((s) => s.id)
+              .slice(0, srCantripSel.choose);
+            setSubraceCantripIds(recovered);
+            // Remove recovered ids from cantripIds to avoid double-counting in payload.
+            setCantripIds((prev) => prev.filter((id) => !recovered.includes(id)));
+          }
+        }
       })
       .catch((err) => setError(describeError(err)));
   }, [editId]);
@@ -361,6 +401,22 @@ export default function CharacterBuilder() {
         (s) => s.type === SelectionType.Language,
       ) ?? null,
     [selectedBackground],
+  );
+
+  // The currently chosen subrace object (null when no subrace or no match).
+  const selectedSubrace = useMemo(
+    () => races.find((r) => r.id === raceId)?.subraces.find((s) => s.id === subraceId) ?? null,
+    [races, raceId, subraceId],
+  );
+  // Subrace cantrip selection (High Elf "choose 1 wizard cantrip", type 9).
+  const subraceCantripSelection = useMemo(
+    () => selectedSubrace?.featureSelections.find((s) => s.type === SelectionType.Cantrip) ?? null,
+    [selectedSubrace],
+  );
+  // Subrace extra-language selection (High Elf "choose 1 extra language", type 3).
+  const subraceLanguageSelection = useMemo(
+    () => selectedSubrace?.featureSelections.find((s) => s.type === SelectionType.Language) ?? null,
+    [selectedSubrace],
   );
 
   // Proficiency grants unioned across the chosen classes (by category id + item id).
@@ -556,8 +612,15 @@ export default function CharacterBuilder() {
     (cantripIds.length === spellPlan.cantripsNeed &&
       (spellPlan.spellsOptional || spellIds.length === spellPlan.spellsNeed));
 
+  // Subrace picks must be fully made before advancing from the Race step.
+  // Relaxed on edit (allowHomebrewSelections covers re-submission).
+  const subraceComplete =
+    isEdit ||
+    ((!subraceCantripSelection || subraceCantripIds.length === subraceCantripSelection.choose) &&
+      (!subraceLanguageSelection || subraceLanguageIds.length === subraceLanguageSelection.choose));
+
   const canAdvance = [
-    !!raceId, // Race
+    !!raceId && subraceComplete, // Race
     classesValid, // Class
     abilitiesComplete, // Abilities
     skillsComplete, // Skills
@@ -592,6 +655,7 @@ export default function CharacterBuilder() {
     !languagesComplete
       ? `${bgLanguageSelection?.choose} background language${bgLanguageSelection?.choose === 1 ? "" : "s"} (${languageIds.length}/${bgLanguageSelection?.choose})`
       : null,
+    !subraceComplete ? "your subrace choices" : null,
     !choicesComplete
       ? `class choices (fighting style ${fightingStyleIds.length}/${subFeature.fsBudget}, expertise ${expertiseSkillIds.length}/${subFeature.exBudget}, metamagic ${metamagicIds.length}/${subFeature.mmBudget}, invocations ${eldritchInvocationIds.length}/${subFeature.eiBudget})`
       : null,
@@ -604,7 +668,7 @@ export default function CharacterBuilder() {
   // Per-step validity (optional steps are always satisfied). Drives the StepNav
   // coloring: a prior step is only "done" (green) if it actually passes.
   const stepValid = [
-    !!raceId,
+    !!raceId && subraceComplete,
     classesValid,
     abilitiesComplete,
     skillsComplete,
@@ -740,6 +804,12 @@ export default function CharacterBuilder() {
   function toggleLanguage(id: string) {
     setLanguageIds((prev) => toggleCapped(prev, id, bgLanguageSelection?.choose));
   }
+  function toggleSubraceCantrip(id: string) {
+    setSubraceCantripIds((prev) => toggleCapped(prev, id, subraceCantripSelection?.choose));
+  }
+  function toggleSubraceLanguage(id: string) {
+    setSubraceLanguageIds((prev) => toggleCapped(prev, id, subraceLanguageSelection?.choose));
+  }
   function toggleFeat(id: string) {
     setFeatIds((prev) => toggleCapped(prev, id, undefined));
   }
@@ -863,11 +933,13 @@ export default function CharacterBuilder() {
           ? SkillProficiencyLevel.Expertise
           : SkillProficiencyLevel.Proficient,
       })),
-      // Known-caster picks: cantrips (level 0) + levelled spells go in one flat list.
-      spellIds:
-        cantripIds.length || spellIds.length
-          ? [...cantripIds, ...spellIds]
-          : undefined,
+      // Known-caster picks + subrace cantrip: merged into one flat list (deduped).
+      // subraceCantripIds uses sourceClassId: null (subrace, not a class), which
+      // the backend exempts from class-membership validation.
+      spellIds: (() => {
+        const allSpellIds = [...new Set([...cantripIds, ...spellIds, ...subraceCantripIds])];
+        return allSpellIds.length ? allSpellIds : undefined;
+      })(),
       fightingStyleIds: fightingStyleIds.length ? fightingStyleIds : undefined,
       metamagicIds: metamagicIds.length ? metamagicIds : undefined,
       eldritchInvocationIds: eldritchInvocationIds.length
@@ -876,7 +948,10 @@ export default function CharacterBuilder() {
       // Above-L1 ability improvements (base/improvement split preserved server-side).
       abilityImprovements: improvementList.length ? improvementList : undefined,
       backgroundId: backgroundId ?? undefined,
-      languageIds: languageIds.length ? languageIds : undefined,
+      languageIds: (() => {
+        const allLanguageIds = [...new Set([...languageIds, ...subraceLanguageIds])];
+        return allLanguageIds.length ? allLanguageIds : undefined;
+      })(),
       featIds: featIds.length ? featIds : undefined,
       armorId: armorId ?? undefined,
       shieldId: shieldId ?? undefined,
@@ -1021,6 +1096,8 @@ export default function CharacterBuilder() {
                 onPick={(id) => {
                   setRaceId(id);
                   setSubraceId(null);
+                  setSubraceCantripIds([]);
+                  setSubraceLanguageIds([]);
                 }}
               />
               {selectedRace && selectedRace.subraces.length > 0 && (
@@ -1030,7 +1107,19 @@ export default function CharacterBuilder() {
                     label="subrace"
                     items={selectedRace.subraces}
                     selectedId={subraceId}
-                    onPick={setSubraceId}
+                    onPick={(id) => {
+                      setSubraceId(id);
+                      setSubraceCantripIds([]);
+                      setSubraceLanguageIds([]);
+                    }}
+                  />
+                  <SubraceSelections
+                    cantripSelection={subraceCantripSelection}
+                    languageSelection={subraceLanguageSelection}
+                    chosenCantrips={subraceCantripIds}
+                    chosenLanguages={subraceLanguageIds}
+                    onToggleCantrip={toggleSubraceCantrip}
+                    onToggleLanguage={toggleSubraceLanguage}
                   />
                 </div>
               )}
@@ -1210,6 +1299,16 @@ export default function CharacterBuilder() {
             spellNames={spellPlan.spellPool
               .filter((s) => spellIds.includes(s.id))
               .map((s) => s.name)}
+            subraceCantripNames={
+              subraceCantripSelection?.options
+                .filter((o) => subraceCantripIds.includes(o.optionId))
+                .map((o) => o.name) ?? []
+            }
+            subraceLanguageNames={
+              subraceLanguageSelection?.options
+                .filter((o) => subraceLanguageIds.includes(o.optionId))
+                .map((o) => o.name) ?? []
+            }
             armorName={armors.find((a) => a.id === armorId)?.name}
             shieldName={armors.find((a) => a.id === shieldId)?.name}
             weaponNames={weapons

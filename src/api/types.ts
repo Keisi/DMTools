@@ -105,6 +105,7 @@ export const SelectionType = {
   Metamagic: 6,
   EldritchInvocation: 7,
   Tool: 8,
+  Cantrip: 9,
 } as const;
 export type SelectionType = (typeof SelectionType)[keyof typeof SelectionType];
 
@@ -220,6 +221,15 @@ export interface RaceDamageResistanceResponse {
   kind: ResistanceKind;
 }
 
+export interface SubraceSpellResponse {
+  id: string;
+  name: string;
+  level: number;
+  minCharacterLevel: number;
+  spellcastingAbilityStatId?: string | null;
+  spellcastingAbility?: string | null;
+}
+
 export interface SubraceResponse {
   id: string;
   raceId: string;
@@ -230,6 +240,8 @@ export interface SubraceResponse {
   walkingSpeedBonus: number;
   darkvisionOverride: number;
   traits: { name: string; description?: string | null }[];
+  featureSelections: SelectionResponse[];   // [] when none; entries are type 9 (Cantrip) or 3 (Language)
+  racialSpells: SubraceSpellResponse[];     // [] when none; auto-grant catalog view
 }
 
 export interface RaceResponse {
@@ -811,6 +823,16 @@ export interface SpellRef {
   sourceClass?: string | null; // display name; join to spellcasting[].class by name
 }
 
+export interface RacialSpellResponse {
+  id: string;
+  name: string;
+  level: number;
+  spellcastingAbilityStatId?: string | null;
+  spellcastingAbility?: string | null;
+  saveDc?: number | null;
+  spellAttackBonus?: number | null;
+}
+
 export interface FeatRef {
   id: string;
   name: string;
@@ -991,6 +1013,9 @@ export interface CharacterResponse extends CharacterDetails {
   // advantage/disadvantage that can't fold. Optional until the backend ships them.
   rollModifiers?: RollModifierResponse[];
   rollAdvantages?: RollAdvantageResponse[];
+  // Racial spells (auto-granted, level-gated): own-ability DC, independent of class
+  // spellcasting. Render as "racial spell" — never recompute DCs client-side.
+  racialSpells: RacialSpellResponse[];
   created: string; // ISO-8601
   modified: string; // ISO-8601
   // Organizer flag — retired characters are hidden in the Vault by default but

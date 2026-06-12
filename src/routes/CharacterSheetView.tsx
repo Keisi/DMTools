@@ -23,6 +23,7 @@ import {
   type CharacterResponse,
   type CharacterStatusEffectResponse,
   type EncumbranceResponse,
+  type RacialSpellResponse,
   type RollAdvantageResponse,
   type RollModifierResponse,
   type SavingThrowResponse,
@@ -74,7 +75,7 @@ function isBlockVisible(key: BlockKey, c: CharacterResponse): boolean {
   switch (key) {
     case "attacks": return c.weaponAttacks.length > 0;
     case "resources": return c.resources.length > 0;
-    case "spellcasting": return c.spellcasting.length > 0 || c.spells.length > 0;
+    case "spellcasting": return c.spellcasting.length > 0 || c.spells.length > 0 || c.racialSpells.length > 0;
     case "features": return c.features.length > 0;
     case "subfeatures":
       return (
@@ -173,6 +174,7 @@ export default function CharacterSheetView({
           <SpellcastingBlock
             spellcasting={c.spellcasting}
             spells={c.spells}
+            racialSpells={c.racialSpells}
             spellsById={spellsByIdMap}
             modByName={modByName}
             prof={prof}
@@ -514,6 +516,7 @@ function spellTip(s: SpellResponse, c: SpellCombat): string {
 function SpellcastingBlock({
   spellcasting,
   spells,
+  racialSpells,
   spellsById,
   modByName,
   prof,
@@ -521,12 +524,13 @@ function SpellcastingBlock({
 }: {
   spellcasting: SpellcastingResponse[];
   spells: SpellRef[];
+  racialSpells: RacialSpellResponse[];
   spellsById: Map<string, SpellResponse>;
   modByName: Map<string, number>;
   prof: number;
   charLevel: number;
 }) {
-  if (spellcasting.length === 0 && spells.length === 0) return null;
+  if (spellcasting.length === 0 && spells.length === 0 && racialSpells.length === 0) return null;
 
   // PHB multiclass combined slots: all non-pact casters share one pool.
   // Their spellSlots arrays are identical — take from the first; don't sum.
@@ -670,6 +674,40 @@ function SpellcastingBlock({
           )}
         </div>
       ))}
+
+      {racialSpells.length > 0 && (
+        <div className="sheet__spell-group">
+          <h4 className="sheet__spell-level">Racial Spells</h4>
+          <ul className="sheet__spells">
+            {racialSpells.map((s) => {
+              const levelLabel = s.level === 0 ? "cantrip" : `level ${s.level}`;
+              const dcLine =
+                s.saveDc !== null && s.saveDc !== undefined
+                  ? `save DC ${s.saveDc} · spell atk ${fmtMod(s.spellAttackBonus ?? 0)}`
+                  : null;
+              const abilityLine = s.spellcastingAbility
+                ? `${s.spellcastingAbility} spellcasting`
+                : null;
+              const tooltip =
+                [abilityLine, dcLine].filter(Boolean).join(" · ") || undefined;
+              return (
+                <li
+                  key={s.id}
+                  className={"sheet__spell-row" + (tooltip ? " tip" : "")}
+                  data-tooltip={tooltip}
+                >
+                  <span className="sheet__spell-name">{s.name}</span>
+                  <span className="sheet__spell-source">racial</span>
+                  <span className="sheet__spell-info">{levelLabel}</span>
+                  {dcLine && (
+                    <span className="sheet__spell-info">{dcLine}</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }

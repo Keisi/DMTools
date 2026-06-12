@@ -2036,3 +2036,86 @@ non-spellbook casters (Cleric/Druid/Paladin) still report `null`.
 The homebrew class-create endpoint does not currently author spellcasting progression rows at all,
 so there is no create-time field for `spellbookSize` yet — if/when progression authoring lands,
 the column is ready for it.
+
+---
+
+# INCOMING #25 — `FRONTEND-REQUEST-subrace-choice-traits.md` DONE — subrace Selections + racial spells (batch-1 Phase 4 — ALL EIGHT 2026-06-12 REQUESTS NOW SHIPPED)
+
+**From:** backend session  **Date:** 2026-06-13
+**Status:** SHIPPED — backend commit `cfe9770` (local `master`, not pushed). **Migration `069` applied to `DMTools_local`** (verified: High Elf cantrip Selection = 14 wizard-cantrip options, extra-language = 17 options, 4 racial-spell grants; re-run touched 0 rows). IIS rebuilt + running. Build clean, **135/135 tests**.
+
+## 1. New enum values (numeric — model like the others)
+
+- `SelectionSourceType.Subrace = 4`
+- `SelectionType.Cantrip = 9`
+
+## 2. `SubraceResponse` gains two arrays (additive, at the end)
+
+```jsonc
+"featureSelections": [   // same SelectionResponse shape as class/background selections
+  { "id": "04690069-0000-0000-0000-000000000001", "name": "High Elf Cantrip",
+    "type": 9, "choose": 1, "level": 1,
+    "options": [ { "optionId": "<spell id>", "name": "Fire Bolt" }, ... ] },   // wizard cantrips
+  { "id": "04690069-0000-0000-0000-000000000002", "name": "High Elf Extra Language",
+    "type": 3, "choose": 1, "level": 1,
+    "options": [ { "optionId": "<language id>", "name": "Draconic" }, ... ] }
+],
+"racialSpells": [        // auto-granted (no choice); catalog view
+  { "id": "<spell id>", "name": "Dancing Lights", "level": 0, "minCharacterLevel": 1,
+    "spellcastingAbilityStatId": "<CHA stat id>", "spellcastingAbility": "Charisma" }
+]
+```
+
+Empty arrays for subraces with no choices/grants. Homebrew authoring: `SubraceCreateRequest` gains
+`featureSelections[]` (type must be Cantrip or Language) + `racialSpells[]`.
+
+## 3. `CharacterResponse` gains `racialSpells[]` — level-gated, own-ability DC
+
+```jsonc
+{ "id": "<spell id>", "name": "Faerie Fire", "level": 1,
+  "spellcastingAbilityStatId": "<CHA stat id>" | null, "spellcastingAbility": "Charisma" | null,
+  "saveDc": 13 | null, "spellAttackBonus": 5 | null }   // 8 + proficiency + mod / proficiency + mod
+```
+
+- A grant appears once **total level ≥ `minCharacterLevel`** (Drow: Dancing Lights L1, Faerie Fire
+  L3, Darkness L5; Forest Gnome: Minor Illusion L1).
+- The DC is the racial ability's own — independent of class spellcasting, so a High-Elf **Fighter**
+  still gets a valid DC. Render these as "racial spell".
+
+## 4. Write paths — the two picks ride EXISTING request fields (nothing new to send)
+
+1. **High Elf cantrip → `spellIds`/`spellPicks` with `sourceClassId: null`** (a subrace is not a
+   class; a non-class source would 400). The backend exempts a subrace-pool cantrip from the
+   class-membership gate and validates it against the subrace's `Type.Cantrip` Selection instead —
+   in BOTH create and `PUT /api/character/{id}/spells`, so later spell edits don't re-reject it.
+   **Attribution rule:** a pool cantrip the character can already cast as a CLASS cantrip counts as
+   a class pick, not the racial pick — so a High Elf **Wizard**'s ordinary cantrips are unaffected
+   (the choose-1 racial budget only meters picks no class can account for).
+2. **High Elf extra language → `languageIds`.** Its pool/budget is the UNION of background +
+   subrace `Language` selections. The chosen language folds into `languages[]` (deduped by id).
+
+## 5. Builder guidance + the one open offer
+
+- Race step: when a subrace has `featureSelections`, render its pickers with the same Selection
+  component as class/background; put the chosen cantrip in `spellIds`/`spellPicks` (null source)
+  and the chosen language in `languageIds`.
+- **Open offer (deliberately deferred):** the *chosen* High Elf cantrip appears in `spells[]` with
+  null source and **no DC** (only auto-grants carry one via `racialSpells[]`). If you want a
+  server-side INT-based DC for the chosen cantrip too, file a follow-up.
+
+---
+
+# INCOMING #26 — dev-environment advisory: local IIS wedges at 3 concurrent SSE connections
+
+**From:** backend session  **Date:** 2026-06-13  **No contract change — environment advisory only.**
+
+The backend box is Windows 11 **Home**, whose IIS serves at most **3 concurrent requests**. Your
+SignalR client's SSE fallback (local IIS has no WebSocket upgrade) holds one request open per hub
+connection — so **3 or more simultaneous hub connections** (multiple tabs, HMR remounts that leak
+connections, overlapping reconnects through the Vite proxy) consume every slot and the entire
+`:3501` API appears hung: requests connect but never get a response, including plain REST calls.
+
+**Please enforce in dev:** at most ONE shared hub connection per browser tab, and make sure
+unmount/HMR paths `stop()` the connection rather than abandoning it. If the API "stops responding"
+locally, suspect leaked hub connections first — closing extra tabs (or the backend recycling the
+pool) clears it instantly. Production (Azure App Service) is unaffected (Server SKU + WebSockets).

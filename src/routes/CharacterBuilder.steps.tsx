@@ -590,6 +590,78 @@ export function SkillsStep({
   );
 }
 
+/**
+ * Renders subrace-specific selection pickers (cantrip + extra language) in the
+ * Race step. Only rendered when the chosen subrace actually has these selections.
+ */
+export function SubraceSelections({
+  cantripSelection,
+  languageSelection,
+  chosenCantrips,
+  chosenLanguages,
+  onToggleCantrip,
+  onToggleLanguage,
+}: {
+  cantripSelection: SelectionResponse | null;
+  languageSelection: SelectionResponse | null;
+  chosenCantrips: string[];
+  chosenLanguages: string[];
+  onToggleCantrip: (id: string) => void;
+  onToggleLanguage: (id: string) => void;
+}) {
+  if (!cantripSelection && !languageSelection) return null;
+  return (
+    <>
+      {cantripSelection && (
+        <div className="builder__bg-langs">
+          <h4 className="builder__equip-title">
+            Cantrip — choose {cantripSelection.choose} ({chosenCantrips.length}/
+            {cantripSelection.choose})
+          </h4>
+          <div className="builder__chips">
+            {cantripSelection.options.map((o) => (
+              <button
+                key={o.optionId}
+                type="button"
+                className={
+                  "builder__chip" +
+                  (chosenCantrips.includes(o.optionId) ? " builder__chip--on" : "")
+                }
+                onClick={() => onToggleCantrip(o.optionId)}
+              >
+                {o.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {languageSelection && (
+        <div className="builder__bg-langs">
+          <h4 className="builder__equip-title">
+            Extra Language — choose {languageSelection.choose} (
+            {chosenLanguages.length}/{languageSelection.choose})
+          </h4>
+          <div className="builder__chips">
+            {languageSelection.options.map((o) => (
+              <button
+                key={o.optionId}
+                type="button"
+                className={
+                  "builder__chip" +
+                  (chosenLanguages.includes(o.optionId) ? " builder__chip--on" : "")
+                }
+                onClick={() => onToggleLanguage(o.optionId)}
+              >
+                {o.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function BackgroundStep({
   backgrounds,
   selectedId,
@@ -1551,6 +1623,8 @@ export function Review({
   improvements,
   cantripNames,
   spellNames,
+  subraceCantripNames,
+  subraceLanguageNames,
   armorName,
   shieldName,
   weaponNames,
@@ -1578,6 +1652,9 @@ export function Review({
   improvements: { name: string; amount: number }[];
   cantripNames: string[];
   spellNames: string[];
+  // Subrace-specific picks (High Elf cantrip + extra language).
+  subraceCantripNames: string[];
+  subraceLanguageNames: string[];
   armorName?: string;
   shieldName?: string;
   weaponNames: string[];
@@ -1656,6 +1733,16 @@ export function Review({
       )}
       {spellNames.length > 0 && (
         <p className="text-muted">Spells: {spellNames.join(", ")}</p>
+      )}
+      {subraceCantripNames.length > 0 && (
+        <p className="text-muted">
+          Subrace cantrip: {subraceCantripNames.join(", ")}
+        </p>
+      )}
+      {subraceLanguageNames.length > 0 && (
+        <p className="text-muted">
+          Subrace language: {subraceLanguageNames.join(", ")}
+        </p>
       )}
       {gear.length > 0 && (
         <p className="text-muted">Equipment: {gear.join(", ")}</p>
