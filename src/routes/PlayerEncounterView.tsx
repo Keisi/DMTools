@@ -19,6 +19,8 @@ import {
   summarizeRiders,
   vitalTips,
 } from "../lib/sheetTips";
+import { useBlockOrder } from "../lib/useBlockOrder";
+import DraggableBlock from "../components/DraggableBlock";
 import "./CharacterSheet.css";
 import "./EncounterView.css";
 import "./PlayerEncounterView.css";
@@ -39,6 +41,16 @@ const DISPOSITION_META: Record<
   [CombatantDisposition.FriendlyNpc]: { label: "Ally", mod: "ally" },
   [CombatantDisposition.Enemy]: { label: "Enemy", mod: "enemy" },
 };
+
+// The four reorderable combat-card boxes (issue #7). Conditions and the Dying
+// panel stay pinned; header/HP/vitals/abilities are never draggable.
+const PENC_BLOCK_KEYS = [
+  "attacks",
+  "saves",
+  "resources",
+  "spellcasting",
+] as const;
+type PencBlockKey = (typeof PENC_BLOCK_KEYS)[number];
 
 export default function PlayerEncounterView({
   encounter,
@@ -439,6 +451,15 @@ function CombatCard({
   const [hpBusy, setHpBusy] = useState(false);
   const [hpError, setHpError] = useState<string | null>(null);
 
+  // Drag-reorder for the four mechanic boxes (Phase 2 of COMBAT-UX-PLAN), keyed
+  // per character so each of the player's characters keeps its own order — same
+  // model as the route sheet's per-char key. Must be before the early returns
+  // (hooks can't be conditional); characterId is always set for an own combatant.
+  const { order, onDragStart, onDrop } = useBlockOrder(
+    `dmtool.penc.order.${combatant.characterId ?? combatant.id}`,
+    PENC_BLOCK_KEYS,
+  );
+
   async function applyHpDelta(heal: boolean) {
     const raw = parseInt(hpDelta, 10);
     if (isNaN(raw) || raw === 0) return;
@@ -517,6 +538,124 @@ function CombatCard({
   const spellLevels = [
     ...new Set([...c.spells.map((s) => s.level), ...slotsByLevel.keys()]),
   ].sort((a, b) => a - b);
+
+  // One renderer per reorderable box. Returns null when the box has nothing to
+  // show (no attacks / no resources / not a caster) — Saving Throws always shows.
+  const renderPencBlock = (key: PencBlockKey) => {
+    switch (key) {
+      case "attacks":
+        return c.weaponAttacks.length > 0 ? (
+          <section className="panel sheet__block">
+            <h3 className="sheet__block-title">Attacks</h3>
+            <hr className="rule" />
+            <ul className="prof-list">
+              {c.weaponAttacks.map((a) => (
+                <li
+                  key={a.weaponId}
+                  className="prof-list__row tip"
+                  data-tooltip={attackTip(a, modByName, prof)}
+                >
+                  <span className={"dot" + (a.isProficient ? " dot--on" : "")} />
+                  <span className="prof-list__name">{a.name}</span>
+                  <span className="prof-list__val">
+                    {fmtMod(a.attackBonus)}
+                    {a.damageDice && (
+                      <span className="text-faint">
+                        {" "}
+                        · {a.damageDice}
+                        {a.damageBonus !== 0 ? fmtMod(a.damageBonus) : ""}
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null;
+      case "saves":
+        return (
+          <section className="panel sheet__block">
+            <h3 className="sheet__block-title">Saving Throws</h3>
+            <hr className="rule" />
+            <ul className="prof-list">
+              {c.savingThrows.map((s) => {
+                const m = modByStatId.get(s.statId) ?? 0;
+                const tip = s.isProficient
+                  ? `ability mod ${fmtMod(m)} + proficiency ${fmtMod(prof)} = ${fmtMod(s.modifier)}`
+                  : `ability mod ${fmtMod(m)} (not proficient) = ${fmtMod(s.modifier)}`;
+                return (
+                  <li key={s.statId} className="prof-list__row tip" data-tooltip={tip}>
+                    <span className={"dot" + (s.isProficient ? " dot--on" : "")} />
+                    <span className="prof-list__name">{s.name}</span>
+                    <span className="prof-list__val">{fmtMod(s.modifier)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        );
+      case "resources":
+        return c.resources.length > 0 ? (
+          <section className="panel sheet__block">
+            <h3 className="sheet__block-title">Resources</h3>
+            <hr className="rule" />
+            <ul className="prof-list">
+              {c.resources.map((r, i) => (
+                <li key={`${r.name}-${i}`} className="prof-list__row">
+                  <span className="prof-list__name">{r.name}</span>
+                  <span className="prof-list__val">{r.max}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null;
+      case "spellcasting":
+        return c.spellcasting.length > 0 || c.spells.length > 0 ? (
+          <section className="panel sheet__block">
+            <h3 className="sheet__block-title">Spellcasting</h3>
+            <hr className="rule" />
+            {c.spellcasting.map((sc, i) => (
+              <p
+                key={`${sc.class}-${i}`}
+                className="text-faint penc__caster tip"
+                data-tooltip={casterTip(sc, modByName, prof)}
+              >
+                {sc.class}
+                {sc.isPactMagic ? " (Pact)" : ""} · {sc.ability} · save DC {sc.saveDc} ·
+                spell atk {fmtMod(sc.spellAttackBonus)}
+              </p>
+            ))}
+            {slotsByLevel.size > 0 && (
+              <p className="penc__slots">
+                {[...slotsByLevel.entries()]
+                  .sort((a, b) => a[0] - b[0])
+                  .map(([lvl, n]) => `L${lvl}: ${n}`)
+                  .join("   ")}
+              </p>
+            )}
+            {spellLevels.map((lvl) => {
+              const at = c.spells
+                .filter((s) => s.level === lvl)
+                .sort((a, b) => a.name.localeCompare(b.name));
+              if (at.length === 0) return null;
+              return (
+                <div key={lvl} className="penc__spell-group">
+                  <h4 className="penc__spell-level">
+                    {lvl === 0 ? "Cantrips" : `Level ${lvl}`}
+                    {slotsByLevel.has(lvl) && (
+                      <span className="text-faint"> · {slotsByLevel.get(lvl)} slots</span>
+                    )}
+                  </h4>
+                  <p className="penc__spell-names">
+                    {at.map((s) => s.name).join(", ")}
+                  </p>
+                </div>
+              );
+            })}
+          </section>
+        ) : null;
+    }
+  };
 
   return (
     <section className="penc__card">
@@ -624,7 +763,8 @@ function CombatCard({
       </section>
 
       <div className="penc__blocks">
-        {/* Conditions first — they change what you can do this turn. */}
+        {/* Conditions first — they change what you can do this turn. Pinned (not
+            draggable), same as the Dying panel above. */}
         {c.statusEffects.length > 0 && (
           <section className="panel sheet__block">
             <h3 className="sheet__block-title">Conditions</h3>
@@ -642,118 +782,15 @@ function CombatCard({
           </section>
         )}
 
-        {/* Attacks */}
-        {c.weaponAttacks.length > 0 && (
-          <section className="panel sheet__block">
-            <h3 className="sheet__block-title">Attacks</h3>
-            <hr className="rule" />
-            <ul className="prof-list">
-              {c.weaponAttacks.map((a) => (
-                <li
-                  key={a.weaponId}
-                  className="prof-list__row tip"
-                  data-tooltip={attackTip(a, modByName, prof)}
-                >
-                  <span className={"dot" + (a.isProficient ? " dot--on" : "")} />
-                  <span className="prof-list__name">{a.name}</span>
-                  <span className="prof-list__val">
-                    {fmtMod(a.attackBonus)}
-                    {a.damageDice && (
-                      <span className="text-faint">
-                        {" "}
-                        · {a.damageDice}
-                        {a.damageBonus !== 0 ? fmtMod(a.damageBonus) : ""}
-                      </span>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {/* Saving throws */}
-        <section className="panel sheet__block">
-          <h3 className="sheet__block-title">Saving Throws</h3>
-          <hr className="rule" />
-          <ul className="prof-list">
-            {c.savingThrows.map((s) => {
-              const m = modByStatId.get(s.statId) ?? 0;
-              const tip = s.isProficient
-                ? `ability mod ${fmtMod(m)} + proficiency ${fmtMod(prof)} = ${fmtMod(s.modifier)}`
-                : `ability mod ${fmtMod(m)} (not proficient) = ${fmtMod(s.modifier)}`;
-              return (
-                <li key={s.statId} className="prof-list__row tip" data-tooltip={tip}>
-                  <span className={"dot" + (s.isProficient ? " dot--on" : "")} />
-                  <span className="prof-list__name">{s.name}</span>
-                  <span className="prof-list__val">{fmtMod(s.modifier)}</span>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-
-        {/* Resources */}
-        {c.resources.length > 0 && (
-          <section className="panel sheet__block">
-            <h3 className="sheet__block-title">Resources</h3>
-            <hr className="rule" />
-            <ul className="prof-list">
-              {c.resources.map((r, i) => (
-                <li key={`${r.name}-${i}`} className="prof-list__row">
-                  <span className="prof-list__name">{r.name}</span>
-                  <span className="prof-list__val">{r.max}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {/* Spellcasting */}
-        {(c.spellcasting.length > 0 || c.spells.length > 0) && (
-          <section className="panel sheet__block">
-            <h3 className="sheet__block-title">Spellcasting</h3>
-            <hr className="rule" />
-            {c.spellcasting.map((sc, i) => (
-              <p
-                key={`${sc.class}-${i}`}
-                className="text-faint penc__caster tip"
-                data-tooltip={casterTip(sc, modByName, prof)}
-              >
-                {sc.class}
-                {sc.isPactMagic ? " (Pact)" : ""} · {sc.ability} · save DC {sc.saveDc} ·
-                spell atk {fmtMod(sc.spellAttackBonus)}
-              </p>
-            ))}
-            {slotsByLevel.size > 0 && (
-              <p className="penc__slots">
-                {[...slotsByLevel.entries()]
-                  .sort((a, b) => a[0] - b[0])
-                  .map(([lvl, n]) => `L${lvl}: ${n}`)
-                  .join("   ")}
-              </p>
-            )}
-            {spellLevels.map((lvl) => {
-              const at = c.spells
-                .filter((s) => s.level === lvl)
-                .sort((a, b) => a.name.localeCompare(b.name));
-              if (at.length === 0) return null;
-              return (
-                <div key={lvl} className="penc__spell-group">
-                  <h4 className="penc__spell-level">
-                    {lvl === 0 ? "Cantrips" : `Level ${lvl}`}
-                    {slotsByLevel.has(lvl) && (
-                      <span className="text-faint"> · {slotsByLevel.get(lvl)} slots</span>
-                    )}
-                  </h4>
-                  <p className="penc__spell-names">
-                    {at.map((s) => s.name).join(", ")}
-                  </p>
-                </div>
-              );
-            })}
-          </section>
-        )}
+        {/* The four reorderable boxes — drag the ⠿ handle to rearrange (per char). */}
+        {order.map((key, idx) => {
+          const block = renderPencBlock(key);
+          return block ? (
+            <DraggableBlock key={key} idx={idx} onDragStart={onDragStart} onDrop={onDrop}>
+              {block}
+            </DraggableBlock>
+          ) : null;
+        })}
       </div>
     </section>
   );
