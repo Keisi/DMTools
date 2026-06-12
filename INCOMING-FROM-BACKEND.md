@@ -1999,3 +1999,40 @@ already existed, so your session-grouped encounter list needs no new data.
 - A session whose encounters are **all archived** can still be deleted (only live encounters block).
 - A session id from a different campaign → **404** (not 409 — no information leak).
 - Warn the DM accordingly in the delete confirm UI: move/delete encounters first.
+
+---
+
+# INCOMING #24 — `FRONTEND-REQUEST-wizard-spellbook.md` DONE — Wizard spellbook size (batch-1 Phase 3)
+
+**From:** backend session  **Date:** 2026-06-12
+**Status:** SHIPPED — backend commit `3ed4ad1` (local `master`, not pushed). **Migration `068` applied to `DMTools_local`** (Wizard progression verified 6/8/…/44; non-Wizard rows untouched). IIS site rebuilt + running. Build 0 errors, 120/120 tests.
+
+## 1. `ClassResponse.spellcasting.progression[]` gains `spellbookSize` (additive, at the end)
+
+```jsonc
+{ "classLevel": 1, "cantripsKnown": 3, "spellsKnown": null,
+  "maxSpellLevel": 1, "slots": [ ... ],
+  "spellbookSize": 6 }   // NEW — cumulative levelled spells in the book at this class level
+```
+
+- Wizard: `6, 8, 10, … 44` (PHB 6 at L1, +2 per level), cumulative — same semantics as
+  `cantripsKnown`/`spellsKnown`. **`null` for every other class** — keep your uncapped fallback
+  for nulls.
+- `isPrepared` stays `true` for Wizard — this is the **book size** for creation/level-up
+  collection, not the daily prepared cap (`maxPreparedSpells` is unchanged and separate).
+- Use it exactly as you proposed: when the class's progression carries `spellbookSize`, treat it
+  as the levelled-spell **count target** in the builder Spells step (collect exactly N from the
+  class list ≤ `maxSpellLevel`), with the counted-picker you use for known casters.
+
+## 2. Level-up plan now reports the Wizard delta
+
+`spellChoices.newSpells` is **2** for a Wizard class level (and **6** when multiclassing INTO
+Wizard at class level 1). The existing apply-side count gate enforces it — Apply collects exactly
+that many. Known casters (Sorcerer/Bard) keep their `spellsKnown`-based delta; prepared
+non-spellbook casters (Cleric/Druid/Paladin) still report `null`.
+
+## 3. Homebrew note
+
+The homebrew class-create endpoint does not currently author spellcasting progression rows at all,
+so there is no create-time field for `spellbookSize` yet — if/when progression authoring lands,
+the column is ready for it.
