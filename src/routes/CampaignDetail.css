@@ -333,6 +333,18 @@
 .camp__enc-status--0 { background: var(--bg-raised); color: var(--c-text-muted, var(--text)); }
 .camp__enc-status--1 { background: var(--action); color: #fff; border-color: var(--action); }
 .camp__enc-status--2 { background: transparent; color: var(--c-text-muted, var(--text)); }
+/* ---- Encounter session groups (issue #6) ---- */
+.camp__enc-group + .camp__enc-group {
+  margin-top: var(--sp-4);
+}
+.camp__enc-group-title {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
 .camp__enc-form {
   display: flex;
   gap: var(--sp-3);
@@ -341,6 +353,11 @@
 .camp__enc-session-sel {
   flex: 1;
   min-width: 160px;
+}
+.camp__enc-hint {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--fs-sm);
 }
 
 /* ---- Join CTA ---- */

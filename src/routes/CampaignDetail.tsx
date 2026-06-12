@@ -283,12 +283,13 @@ export default function CampaignDetail() {
 
   async function handleCreateEncounter(e: React.FormEvent) {
     e.preventDefault();
-    if (!encName.trim()) return;
+    // A session is now required (issue #6) — encounters live inside sessions.
+    if (!encName.trim() || !encSession) return;
     setCreatingEnc(true);
     try {
       const enc = await campaigns.createEncounter(id, {
         name: encName.trim(),
-        sessionId: encSession || null,
+        sessionId: encSession,
       });
       setEncounters((prev) => [enc, ...prev]);
       setEncName("");
@@ -363,6 +364,26 @@ export default function CampaignDetail() {
   }
 
   if (!campaign) return null;
+
+  // Group encounters under their session (issue #6 — "encounters under sessions"
+  // is a hierarchy statement, so the list reads that way). Session order follows
+  // the sessions panel; orphaned encounters (null sessionId, pre-backfill) get a
+  // trailing "No session" group that empties out once the backend backfill lands.
+  const encounterGroups: {
+    key: string;
+    title: string;
+    encounters: EncounterSummaryResponse[];
+  }[] = [];
+  for (const s of sessions) {
+    const inSession = encounters.filter((enc) => enc.sessionId === s.id);
+    if (inSession.length > 0)
+      encounterGroups.push({ key: s.id, title: s.name, encounters: inSession });
+  }
+  const orphans = encounters.filter(
+    (enc) => !enc.sessionId || !sessions.some((s) => s.id === enc.sessionId),
+  );
+  if (orphans.length > 0)
+    encounterGroups.push({ key: "__none", title: "No session", encounters: orphans });
 
   return (
     <div className="container camp">
@@ -703,25 +724,33 @@ export default function CampaignDetail() {
         {encounters.length === 0 ? (
           <p className="text-muted">No encounters yet.</p>
         ) : (
-          <ul className="camp__enc-list">
-            {encounters.map((enc) => (
-              <li key={enc.id} className="camp__enc-item">
-                <Link to={`/campaigns/${id}/encounters/${enc.id}`} className="camp__enc-row">
-                  <span className="camp__enc-name">{enc.name}</span>
-                  <span className={`badge camp__enc-status camp__enc-status--${enc.status}`}>
-                    {enc.status === EncounterStatus.Pending
-                      ? "Pending"
-                      : enc.status === EncounterStatus.Active
-                        ? "Active"
-                        : "Ended"}
-                  </span>
-                  {enc.roundNumber > 0 && (
-                    <span className="text-muted camp__enc-round">Round {enc.roundNumber}</span>
-                  )}
-                </Link>
-              </li>
-            ))}
-          </ul>
+          // Encounters live under sessions — group the list by session name.
+          // Orphans (pre-backfill rows with a null sessionId) fall under a final
+          // "No session" group, which disappears once the backend backfill lands.
+          encounterGroups.map((grp) => (
+            <div key={grp.key} className="camp__enc-group">
+              <h3 className="camp__enc-group-title">{grp.title}</h3>
+              <ul className="camp__enc-list">
+                {grp.encounters.map((enc) => (
+                  <li key={enc.id} className="camp__enc-item">
+                    <Link to={`/campaigns/${id}/encounters/${enc.id}`} className="camp__enc-row">
+                      <span className="camp__enc-name">{enc.name}</span>
+                      <span className={`badge camp__enc-status camp__enc-status--${enc.status}`}>
+                        {enc.status === EncounterStatus.Pending
+                          ? "Pending"
+                          : enc.status === EncounterStatus.Active
+                            ? "Active"
+                            : "Ended"}
+                      </span>
+                      {enc.roundNumber > 0 && (
+                        <span className="text-muted camp__enc-round">Round {enc.roundNumber}</span>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))
         )}
 
         {isDm && (
@@ -737,15 +766,26 @@ export default function CampaignDetail() {
               className="input camp__enc-session-sel"
               value={encSession}
               onChange={(e) => setEncSession(e.target.value)}
+              required
+              disabled={sessions.length === 0}
             >
-              <option value="">— no session —</option>
+              <option value="">— select a session —</option>
               {sessions.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
-            <button className="btn btn--primary" type="submit" disabled={creatingEnc || !encName.trim()}>
+            <button
+              className="btn btn--primary"
+              type="submit"
+              disabled={creatingEnc || !encName.trim() || !encSession}
+            >
               {creatingEnc ? "Creating…" : "+ Encounter"}
             </button>
+            {sessions.length === 0 && (
+              <p className="text-muted camp__enc-hint">
+                Create a session first — encounters live inside sessions.
+              </p>
+            )}
           </form>
         )}
       </section>
