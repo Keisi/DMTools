@@ -1,0 +1,47 @@
+{
+  "date": "2026-06-12",
+  "commits": [
+    "d61afaa docs(plan): combat-ux plan + 4 backend requests",
+    "2b07996 refactor(sheet): shared tooltip/drag extractions",
+    "7a91af3 ui(player-combat): design-system tooltips + breakdowns",
+    "56efdc2 feat(player-combat): drag-reorder for 4 boxes",
+    "523f85c feat(encounter): DM read-only sheet popup (CharacterSheetView)",
+    "96fed93 feat(campaign): session-required encounters + grouped list",
+    "c5f473c docs: chrome-orphan gotcha + INCOMING #19"
+  ],
+  "branch": "main",
+  "scope": "COMBAT-UX-PLAN phases 0-4 (executed by Opus agent, independently reviewed by orchestrator) + docs",
+  "strategy": "PASS",
+  "summary": {
+    "oby_pipeline": {
+      "precheck": "pass", "codescan:critical": "pass", "hindsight": "pass",
+      "health": "fail (repo baseline 35<40 — pre-existing, track-don't-block)",
+      "drift-sentinel": "fail (typecheck evidence — oby cannot spawn npm; documented false negative)"
+    },
+    "authoritative_gates": {
+      "npm_run_build": "GREEN — run per phase by the agent AND re-run independently at HEAD by the orchestrator",
+      "npm_run_lint": "GREEN (same double-run)",
+      "oby_verify_files": "delta 0 per phase (agent) — codescan 0, no cross-module duplicates"
+    },
+    "live_verification": "per-phase spectral screenshots (.claude/shot-cux-phase*.png): phase0 pixel-identical sheet+encounter after extraction; phase1 in-browser assertions titleAttrs=0/dataTips=26 as e2eplayer; phase2 seeded-order vs natural-order proof; phase3 route sheet pixel-identical + modal asserts sheetView=1/innerActions=0/innerDrag=0; phase4 zero-session gating + session-grouped list. Orchestrator independently re-verified gates, screenshots, and spot-greps (0 native title= left; readOnly gating present)."
+  },
+  "findings": { "blocking": [], "serious": [], "recommendations": [], "edge_cases": [
+    "CharacterSheet block-order localStorage key preserved (dmtool.sheet.order.{id}) — saved user orders survive the refactor.",
+    "Phase-4 'No session' group heading self-retires once the backend orphan backfill lands (request filed)."
+  ]},
+  "adversarial_notes": [
+    "Two agent deviations reviewed and accepted: split ROLL_TARGET_LABEL into LONG/SHORT maps (genuinely different wording contexts); new src/lib/sheetBlocks.ts to satisfy react-refresh/only-export-components.",
+    "Net -? lines misleading on diffstat (CharacterSheetView.tsx +1152 is a MOVE of the sheet body, not new logic); CharacterSheet.tsx is now a thin fetch/actions wrapper.",
+    "Environment incident mid-run root-caused (orphaned spectral Chromes holding SignalR connections starved the IIS worker) — fix + prevention documented in CLAUDE.md, not worked around silently."
+  ],
+  "hindsight": { "verdict": "ACCEPT", "rewrite": [], "adjust": [], "accept": [
+    "One sheet renderer for route + modal (no parallel mini-sheet) — the durability call the plan made, executed faithfully.",
+    "Shared libs (sheetTips/useBlockOrder/DraggableBlock) eliminate three duplication sites and are the foundation the resource-tracking work will reuse."
+  ]},
+  "deferred": [
+    "Pipeline health/drift-sentinel fails: documented repo-reality (baseline debt; oby npm-spawn os error 193). Authoritative gates ran green twice."
+  ],
+  "new_pitfalls": [
+    "Orphaned headless Chromes starve the in-process IIS worker via held SignalR connections — kill Chromes before spectral batches (now in CLAUDE.md)."
+  ]
+}
