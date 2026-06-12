@@ -19,6 +19,8 @@ function eventGlyph(eventType: number): string {
       return "■";
     case CombatEventType.TurnChanged:
       return "⏭";
+    case CombatEventType.TurnRewound: // INCOMING #21 — DM undo-turn
+      return "↩";
     case CombatEventType.CombatantAdded:
       return "＋";
     case CombatEventType.CombatantRemoved:
@@ -56,7 +58,8 @@ function eventKind(eventType: number): string {
   if (
     eventType === CombatEventType.EncounterStarted ||
     eventType === CombatEventType.EncounterEnded ||
-    eventType === CombatEventType.TurnChanged
+    eventType === CombatEventType.TurnChanged ||
+    eventType === CombatEventType.TurnRewound
   )
     return "flow";
   return "default";

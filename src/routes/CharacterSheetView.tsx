@@ -543,6 +543,19 @@ function SpellcastingBlock({
 
   const multiclass = standardCasters.length > 1;
 
+  // INCOMING #20: resolve which caster's DC governs a spell. Tagged → that class
+  // (join by name); untagged + single caster → that sole caster; untagged + multiple
+  // → null (we can't guess, so show no class/DC). A tag naming a class that's no
+  // longer a caster falls through to the single/null rule (treated as untagged).
+  const casterByName = new Map(spellcasting.map((sc) => [sc.class, sc]));
+  const resolveCaster = (s: SpellRef): SpellcastingResponse | null => {
+    if (s.sourceClass) {
+      const tagged = casterByName.get(s.sourceClass);
+      if (tagged) return tagged;
+    }
+    return spellcasting.length === 1 ? spellcasting[0] : null;
+  };
+
   return (
     <section className="panel sheet__block">
       <h3 className="sheet__block-title">Spellcasting</h3>
@@ -621,12 +634,22 @@ function SpellcastingBlock({
                 const cat = spellsById.get(s.id);
                 const combat = cat ? spellCombat(cat, charLevel) : null;
                 const inline = combat ? spellInline(combat, s.level) : "";
+                // Multiclass: attribute the spell to its governing caster so the
+                // reader sees WHICH class's DC applies (the point of INCOMING #20).
+                // Single-caster sheets stay clean (the one header DC is unambiguous).
+                const caster = multiclass ? resolveCaster(s) : null;
+                const sourceLine = caster
+                  ? `${caster.class}: save DC ${caster.saveDc} · spell atk ${fmtMod(caster.spellAttackBonus)}`
+                  : null;
                 // Combat spells get the mechanics summary on hover; utility spells
-                // (no dice/save) fall back to the spell's description.
-                const tooltip =
+                // (no dice/save) fall back to the spell's description. Prepend the
+                // governing-class line when multiclass.
+                const base =
                   inline && cat
                     ? spellTip(cat, combat!)
-                    : (cat?.description ?? undefined);
+                    : (cat?.description ?? "");
+                const tooltip =
+                  [sourceLine, base].filter(Boolean).join("\n") || undefined;
                 return (
                   <li
                     key={s.id}
@@ -634,6 +657,9 @@ function SpellcastingBlock({
                     data-tooltip={tooltip}
                   >
                     <span className="sheet__spell-name">{s.name}</span>
+                    {caster && (
+                      <span className="sheet__spell-source">{caster.class}</span>
+                    )}
                     {inline && (
                       <span className="sheet__spell-info">{inline}</span>
                     )}

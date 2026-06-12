@@ -621,6 +621,9 @@ export interface CharacterRequest extends CharacterDetails {
   // STR/DEX/CON checks + initiative. Optional, defaults false (backend mig. 044).
   hasRemarkableAthlete?: boolean;
   spellIds?: string[] | null;
+  // When present (non-null), supersedes spellIds and tags each spell with its caster
+  // class (INCOMING #20). Omit to keep bare spellIds (tags come back null).
+  spellPicks?: SpellPickRequest[] | null;
   featIds?: string[] | null;
   backgroundId?: string | null;
   editionId?: string | null; // locked after creation
@@ -657,9 +660,20 @@ export interface CharacterRequest extends CharacterDetails {
 // (DM escape hatch — only send true behind an explicit homebrew toggle). Returns
 // 200 + the updated CharacterResponse. Safer than a whole-character PUT for
 // spell edits — it touches only the spell list.
+// A spell pick that also tags the caster class it's cast as (INCOMING #20). The
+// sourceClassId must be one of the character's own CASTER classes or null — a bogus
+// class is a 400 (not relaxed by allowHomebrewSelections). A spell's `level` still
+// marks it a cantrip, so cantrips and levelled spells go in one spellPicks list.
+export interface SpellPickRequest {
+  spellId: string;
+  sourceClassId?: string | null;
+}
 export interface UpdateSpellsRequest {
   cantripIds?: string[] | null;
   spellIds?: string[] | null;
+  // When present (non-null) this SUPERSEDES cantripIds + spellIds entirely (put both
+  // cantrips and levelled spells here). Omit to keep the bare-id behavior (tags null).
+  spellPicks?: SpellPickRequest[] | null;
   allowHomebrewSelections?: boolean;
 }
 
@@ -786,6 +800,11 @@ export interface SpellRef {
   name: string;
   level: number;
   school: SpellSchool;
+  // Caster class this spell is cast as (INCOMING #20). null = untagged: join to the
+  // sole spellcasting[] entry for single-class casters; show no DC when multiple and
+  // untagged. A tag naming a class the character no longer casts is treated as null.
+  sourceClassId?: string | null;
+  sourceClass?: string | null; // display name; join to spellcasting[].class by name
 }
 
 export interface FeatRef {
@@ -1391,6 +1410,7 @@ export const CombatEventType = {
   EncounterStarted: 1,
   EncounterEnded: 2,
   TurnChanged: 3,
+  TurnRewound: 4, // INCOMING #21 — DM undo-turn; prev-turn writes this, not a forward TurnChanged
   CombatantAdded: 10,
   CombatantRemoved: 11,
   InitiativeSet: 12,
