@@ -18,7 +18,9 @@
 
 .vault__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  /* 300px floor: level box + the retire lane cost ~150px, so anything narrower
+     squeezes the name/meta column too hard. */
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: var(--sp-4);
 }
 
@@ -35,7 +37,9 @@
     box-shadow var(--dur-base) var(--ease-out),
     border-color var(--dur-base) var(--ease-out);
 }
-.vault__card:hover {
+/* Lift keys off the WRAP so hovering the retire pill (a sibling overlaying the
+   card) doesn't un-hover the card and drop it mid-interaction. */
+.vault__card-wrap:hover .vault__card {
   transform: translateY(-3px);
   border-color: var(--accent);
   box-shadow: var(--shadow-lg);
@@ -56,6 +60,13 @@
   border-radius: var(--radius-md);
 }
 
+/* Flex item: min-width 0 lets the text column shrink inside the retire lane
+   (default min-content sizing made long names push text under the button);
+   break-word covers names longer than the column. */
+.vault__card-body {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
 .vault__card-name {
   margin: 0;
   font-size: var(--fs-lg);
@@ -75,24 +86,46 @@
 }
 
 /* ---- Card wrapper (retire action) ---- */
+/* Flex so the card link fills the wrapper's grid-stretched height — cards in a
+   row stay equal-height even when one name wraps to a second line. */
 .vault__card-wrap {
   position: relative;
+  display: flex;
+}
+.vault__card-wrap > .vault__card {
+  flex: 1;
 }
 .vault__card-wrap--retired .vault__card {
   opacity: 0.45;
 }
+/* The card reserves a right lane for the action ("Unretire" is the widest),
+   so the button never overlaps the name/meta text. */
+.vault__card {
+  padding-right: 5.25rem;
+}
+/* Ghost pill, vertically centered in the reserved lane. Always visible (muted)
+   so it works without hover (touch); accent on hover/focus. */
 .vault__card-retire {
   position: absolute;
-  bottom: var(--sp-2);
-  right: var(--sp-2);
+  top: 50%;
+  right: var(--sp-3);
+  /* Center via `translate`, NOT transform — .btn:hover sets its own transform
+     (1px lift) which would otherwise REPLACE the -50% centering and make the
+     pill jump on hover. The two properties compose. */
+  translate: 0 -50%;
   font-size: var(--fs-xs);
-  padding: var(--sp-1) var(--sp-3);
-  opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease-out);
-  pointer-events: none;
+  padding: var(--sp-1) var(--sp-2);
+  color: var(--text-muted);
+  border-color: transparent;
+  transition: color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
 .vault__card-wrap:hover .vault__card-retire,
+.vault__card-retire:focus-visible,
 .vault__card-wrap--retired .vault__card-retire {
-  opacity: 1;
-  pointer-events: auto;
+  color: var(--accent);
+  border-color: var(--border);
+}
+.vault__card-retire:hover:not(:disabled) {
+  border-color: var(--accent);
 }
