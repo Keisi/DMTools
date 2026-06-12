@@ -866,7 +866,17 @@ export function ImprovementsPanel({
               <span className="builder__ability-name">
                 {s.code ?? s.name}
                 {primaryStats.has(s.id) && <PrimaryTag />}
+                {inc > 0 && (
+                  <span
+                    className="builder__ability-delta"
+                    title={`Base ${b} + ${inc} improvement`}
+                  >
+                    +{inc}
+                  </span>
+                )}
               </span>
+              {/* The stepper shows the EFFECTIVE score (base + improvement) — the
+                  number being built toward; the +N chip above carries the split. */}
               <div className="builder__stepper">
                 <button
                   type="button"
@@ -876,7 +886,12 @@ export function ImprovementsPanel({
                 >
                   −
                 </button>
-                <span className="builder__stepper-val">{b}</span>
+                <span
+                  className={`builder__stepper-val${inc > 0 ? " builder__stepper-val--up" : ""}`}
+                  title={inc > 0 ? `Base ${b} + ${inc} improvement` : undefined}
+                >
+                  {b + inc}
+                </span>
                 <button
                   type="button"
                   className="btn"
@@ -886,14 +901,6 @@ export function ImprovementsPanel({
                   +
                 </button>
               </div>
-              {/* Annotation on its own line so the stepper row stays aligned with
-                  the untouched stats across the grid (instead of wrapping inside
-                  the value and spreading the buttons). */}
-              {inc > 0 && (
-                <span className="builder__ability-delta">
-                  +{inc} = {b + inc}
-                </span>
-              )}
             </div>
           );
         })}

@@ -325,11 +325,17 @@
   font-family: var(--font-mono);
   font-size: var(--fs-lg);
 }
-/* ASI improvement annotation — sits on its own line under the stepper so cells
-   with points allocated don't push their +/- buttons out of line with the rest. */
+/* ASI: the stepper value shows the effective (boosted) score in accent… */
+.builder__stepper-val--up {
+  color: var(--accent);
+  font-weight: var(--fw-semibold);
+}
+/* …and the allocation rides as a compact chip at the right end of the stat-name
+   row, so allocated cells stay the same height as untouched ones. */
 .builder__ability-delta {
+  margin-left: auto;
   font-family: var(--font-mono);
-  font-size: var(--fs-base);
+  font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
   color: var(--accent);
   white-space: nowrap;
