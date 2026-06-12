@@ -6,7 +6,6 @@ import type {
   CampaignCharacterResponse,
   CampaignMemberResponse,
   CombatantResponse,
-  StatusEffectRollModifierResponse,
   StatusEffectResponse,
   UpdateCombatantRequest,
 } from "../api/types";
@@ -14,13 +13,12 @@ import {
   CampaignMemberStatus,
   CombatantDisposition,
   EncounterStatus,
-  RollModifierKind,
-  RollTarget,
 } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
 import { useEncounterHub, HubStatus } from "../hooks/useEncounterHub";
 import { useCombatLog } from "../hooks/useCombatLog";
+import { summarizeRiders } from "../lib/sheetTips";
 import PlayerEncounterView from "./PlayerEncounterView";
 import EncounterLogPanel from "./EncounterLogPanel";
 import DeathSaveTrack from "../components/DeathSaveTrack";
@@ -53,35 +51,6 @@ function loadSides(encounterId: string): Record<string, Side> {
 
 function saveSides(encounterId: string, map: Record<string, Side>) {
   localStorage.setItem(SIDES_KEY(encounterId), JSON.stringify(map));
-}
-
-// A short human label for a status effect's roll riders, for badge tooltips. Flat
-// riders are excluded — they're already folded into the sheet's derived numbers and
-// shouldn't read as a separate "apply this" instruction.
-const ROLL_TARGET_LABEL: Record<RollTarget, string> = {
-  [RollTarget.AttackRoll]: "attack",
-  [RollTarget.SavingThrow]: "save",
-  [RollTarget.AbilityCheck]: "check",
-  [RollTarget.IncomingAttackRoll]: "attacks vs it",
-};
-function summarizeRiders(
-  mods: StatusEffectRollModifierResponse[] | undefined,
-): string | null {
-  if (!mods || mods.length === 0) return null;
-  const parts = mods
-    .filter((m) => m.kind !== RollModifierKind.Flat)
-    .map((m) => {
-      const tgt = ROLL_TARGET_LABEL[m.target] ?? "roll";
-      if (m.kind === RollModifierKind.Dice && m.diceCount && m.dieSize) {
-        const sign = m.diceCount < 0 ? "−" : "+";
-        return `${sign}${Math.abs(m.diceCount)}d${m.dieSize} ${tgt}`;
-      }
-      if (m.kind === RollModifierKind.Advantage) return `adv ${tgt}`;
-      if (m.kind === RollModifierKind.Disadvantage) return `dis ${tgt}`;
-      return null;
-    })
-    .filter((p): p is string => p !== null);
-  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 export default function EncounterView() {

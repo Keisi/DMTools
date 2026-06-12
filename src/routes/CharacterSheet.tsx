@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useParams } from "react-router-dom";
 import { characters, reference } from "../api/endpoints";
 import {
@@ -7,9 +7,7 @@ import {
   ResistanceKind,
   ResourceRecharge,
   RollModifierKind,
-  RollTarget,
   SkillProficiencyLevel,
-  type AbilityScoreResponse,
   type CharacterFeatureResponse,
   type CharacterResourceResponse,
   type CharacterResponse,
@@ -28,21 +26,22 @@ import {
   type WeaponAttackResponse,
 } from "../api/types";
 import { ApiError } from "../api/client";
+import {
+  abilityBreakdown,
+  advantageLine,
+  attackTip,
+  casterTip,
+  fmtMod,
+  riderLine,
+  vitalTips,
+} from "../lib/sheetTips";
+import { useBlockOrder } from "../lib/useBlockOrder";
+import DraggableBlock from "../components/DraggableBlock";
 import LevelUpDialog from "./LevelUpDialog";
 import ManageSpellsDialog from "./ManageSpellsDialog";
 import EditHpDialog from "./EditHpDialog";
 import { MAX_TOTAL_LEVEL } from "./CharacterBuilder.steps";
 import "./CharacterSheet.css";
-
-const fmtMod = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
-// Exact composition of an effective ability score (all parts — including the
-// modifier, since backend c03001f — are in the response; nothing is recomputed).
-const abilityBreakdown = (a: AbilityScoreResponse) => {
-  const parts = [`Base ${a.base}`, `racial ${fmtMod(a.racialModifier)}`];
-  if (a.subraceModifier !== 0) parts.push(`subrace ${fmtMod(a.subraceModifier)}`);
-  parts.push(`feat ${fmtMod(a.featModifier)}`, `ASI ${fmtMod(a.improvementModifier)}`);
-  return `${parts.join(" · ")}  =  ${a.effective} (mod ${fmtMod(a.modifier)})`;
-};
 
 const rechargeLabel = (r: ResourceRecharge) =>
   r === ResourceRecharge.ShortRest
@@ -71,81 +70,6 @@ const BLOCK_KEYS = [
   "traits", "encumbrance", "status",
 ] as const;
 type BlockKey = (typeof BLOCK_KEYS)[number];
-
-function useSheetOrder(charId: string) {
-  const storageKey = `dmtool.sheet.order.${charId}`;
-  const [order, setOrder] = useState<BlockKey[]>(() => {
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) {
-        const saved = JSON.parse(raw) as string[];
-        const known = new Set<string>(BLOCK_KEYS);
-        const filtered = saved.filter((k): k is BlockKey => known.has(k));
-        const added = BLOCK_KEYS.filter((k) => !filtered.includes(k));
-        return [...filtered, ...added];
-      }
-    } catch { /* corrupt localStorage — ignore */ }
-    return [...BLOCK_KEYS];
-  });
-  const dragIdx = useRef<number | null>(null);
-  function onDragStart(idx: number) {
-    dragIdx.current = idx;
-  }
-  function onDrop(toIdx: number) {
-    const from = dragIdx.current;
-    dragIdx.current = null;
-    if (from === null || from === toIdx) return;
-    setOrder((prev) => {
-      const next = [...prev];
-      const [item] = next.splice(from, 1);
-      next.splice(toIdx, 0, item);
-      try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* storage full — ignore */ }
-      return next;
-    });
-  }
-  return { order, onDragStart, onDrop };
-}
-
-function DraggableBlock({
-  idx,
-  onDragStart,
-  onDrop,
-  children,
-}: {
-  idx: number;
-  onDragStart: (idx: number) => void;
-  onDrop: (toIdx: number) => void;
-  children: ReactNode;
-}) {
-  const [over, setOver] = useState(false);
-  return (
-    <div
-      className={"sheet__draggable" + (over ? " sheet__draggable--over" : "")}
-      draggable
-      onDragStart={(e) => {
-        onDragStart(idx);
-        e.dataTransfer.effectAllowed = "move";
-      }}
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        setOver(true);
-      }}
-      onDragLeave={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false);
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        setOver(false);
-        onDrop(idx);
-      }}
-      onDragEnd={() => setOver(false)}
-    >
-      <span className="sheet__drag-handle" aria-hidden="true">⠿</span>
-      {children}
-    </div>
-  );
-}
 
 function isBlockVisible(key: BlockKey, c: CharacterResponse): boolean {
   switch (key) {
@@ -214,7 +138,11 @@ export default function CharacterSheet() {
     [spellCatalog],
   );
   // Must be before early returns — id is stable and equals c.id once loaded.
-  const { order, onDragStart, onDrop } = useSheetOrder(id ?? "");
+  // Keeps the per-character storage key so users' saved orders survive the refactor.
+  const { order, onDragStart, onDrop } = useBlockOrder(
+    `dmtool.sheet.order.${id ?? ""}`,
+    BLOCK_KEYS,
+  );
 
   async function handleCopy(e: React.FormEvent) {
     e.preventDefault();
@@ -258,44 +186,7 @@ export default function CharacterSheet() {
     .join(" / ");
 
   // Vital breakdown tooltips (from data already in the response).
-  const dex = c.abilityScores.find((a) => a.name === "Dexterity");
-  const perception = c.skills.find((s) => s.name === "Perception");
-  // Component math from the server-supplied breakdowns (always the DERIVED
-  // components, independent of any override — so the tooltip can show "derived
-  // would be X" even when an override is set).
-  const hb = c.hitPointBreakdown;
-  const hpDerivedLine = `Hit dice ${hb.fromHitDice} + CON ${fmtMod(
-    hb.fromConstitution,
-  )}${hb.other !== 0 ? ` + other ${fmtMod(hb.other)}` : ""} = ${hb.total}`;
-  const hpTip =
-    typeof c.hitPointsOverride === "number"
-      ? `Custom override ${c.maxHitPoints} (derived ${c.derivedMaxHitPoints}: ${hpDerivedLine})`
-      : hpDerivedLine;
-  const ab = c.armorClassBreakdown;
-  const acDerivedLine = `${ab.source}: base ${ab.base} + DEX ${fmtMod(
-    ab.dexterity,
-  )}${ab.shield !== 0 ? ` + shield ${fmtMod(ab.shield)}` : ""}${
-    ab.other !== 0 ? ` + other ${fmtMod(ab.other)}` : ""
-  } = ${ab.total}`;
-  const acTip =
-    typeof c.armorClassOverride === "number"
-      ? `Custom override ${c.armorClass} (derived ${c.derivedArmorClass}: ${acDerivedLine})`
-      : acDerivedLine;
-  const initTip = dex
-    ? `Initiative = Dexterity modifier (${fmtMod(dex.modifier)})`
-    : "Initiative = your Dexterity modifier";
-  const speedTip = [
-    `walk ${c.walkingSpeed}ft`,
-    c.swimSpeed > 0 ? `swim ${c.swimSpeed}ft` : null,
-    c.climbSpeed > 0 ? `climb ${c.climbSpeed}ft` : null,
-    c.flySpeed > 0 ? `fly ${c.flySpeed}ft` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const profTip = `Proficiency bonus for character level ${c.level}`;
-  const percTip = perception
-    ? `10 + ${perception.bonus} Perception bonus`
-    : "10 + your Perception bonus";
+  const { hpTip, acTip, initTip, speedTip, profTip, percTip } = vitalTips(c);
 
   // Ability-modifier lookups for derived-number breakdowns (saves/skills/attacks/spells).
   const prof = c.proficiencyBonus;
@@ -583,16 +474,6 @@ function AttacksBlock({
 }) {
   if (attacks.length === 0) return null;
   const anyNonProf = attacks.some((a) => !a.isProficient);
-  const attackTip = (a: WeaponAttackResponse) => {
-    const m = modByName.get(a.ability) ?? 0;
-    const hit = a.isProficient
-      ? `${a.ability} mod ${fmtMod(m)} + proficiency ${fmtMod(prof)}`
-      : `${a.ability} mod ${fmtMod(m)} (not proficient)`;
-    const dmg = a.damageDice
-      ? ` · damage ${a.damageDice}${a.damageBonus !== 0 ? fmtMod(a.damageBonus) : ""}`
-      : "";
-    return `${hit} = ${fmtMod(a.attackBonus)} to hit${dmg}`;
-  };
   return (
     <section className="panel sheet__block">
       <h3 className="sheet__block-title">Attacks</h3>
@@ -602,7 +483,7 @@ function AttacksBlock({
           <li
             key={a.weaponId}
             className="prof-list__row tip"
-            data-tooltip={attackTip(a)}
+            data-tooltip={attackTip(a, modByName, prof)}
           >
             <span className={"dot" + (a.isProficient ? " dot--on" : "")} />
             <span className="prof-list__name">
@@ -827,11 +708,6 @@ function SpellcastingBlock({
     for (const slot of sc.spellSlots)
       slotsByLevel.set(slot.level, (slotsByLevel.get(slot.level) ?? 0) + slot.count);
 
-  const casterTip = (sc: SpellcastingResponse) => {
-    const m = modByName.get(sc.ability) ?? 0;
-    return `Save DC = 8 + proficiency ${fmtMod(prof)} + ${sc.ability} mod ${fmtMod(m)} = ${sc.saveDc}\nSpell attack = proficiency + ability mod = ${fmtMod(sc.spellAttackBonus)}`;
-  };
-
   const multiclass = standardCasters.length > 1;
 
   return (
@@ -854,7 +730,7 @@ function SpellcastingBlock({
         <div
           key={`${sc.class}-${i}`}
           className="sheet__caster tip"
-          data-tooltip={casterTip(sc)}
+          data-tooltip={casterTip(sc, modByName, prof)}
         >
           <p className="prof-list__name">{sc.class}</p>
           <p className="text-faint">
@@ -871,7 +747,7 @@ function SpellcastingBlock({
         <div
           key={`pact-${sc.class}-${i}`}
           className="sheet__caster tip"
-          data-tooltip={casterTip(sc)}
+          data-tooltip={casterTip(sc, modByName, prof)}
         >
           <p className="prof-list__name">
             {sc.class}{" "}
@@ -1286,34 +1162,6 @@ function InventoryBlock({
       )}
     </section>
   );
-}
-
-// Roll-target labels for the "at roll time" riders. Flat modifiers are NOT shown —
-// they're already folded into the saves/skills/attack numbers above (the backend's
-// no-double-counting invariant); only dice + advantage/disadvantage ride here.
-const ROLL_TARGET_LABEL: Record<number, string> = {
-  [RollTarget.AttackRoll]: "attack rolls",
-  [RollTarget.SavingThrow]: "saving throws",
-  [RollTarget.AbilityCheck]: "ability checks",
-  [RollTarget.IncomingAttackRoll]: "attacks against you",
-};
-
-function riderLine(m: RollModifierResponse, statName: string | null): string {
-  const sign = m.diceCount < 0 ? "−" : "+";
-  const dice = `${sign}${Math.abs(m.diceCount)}d${m.dieSize}`;
-  const scope = statName ? `${statName} ` : "";
-  return `${dice} to ${scope}${ROLL_TARGET_LABEL[m.target] ?? "rolls"}`;
-}
-
-function advantageLine(a: RollAdvantageResponse, statName: string | null): string {
-  const word =
-    a.state === AdvantageState.Advantage
-      ? "Advantage"
-      : a.state === AdvantageState.Disadvantage
-        ? "Disadvantage"
-        : "Straight roll (adv + disadv cancel)";
-  const scope = statName ? `${statName} ` : "";
-  return `${word} on ${scope}${ROLL_TARGET_LABEL[a.target] ?? "rolls"}`;
 }
 
 function StatusEffectsBlock({
