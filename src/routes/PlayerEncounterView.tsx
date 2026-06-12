@@ -11,11 +11,17 @@ import { CombatantDisposition, EncounterStatus } from "../api/types";
 import { ApiError } from "../api/client";
 import { HubStatus } from "../hooks/useEncounterHub";
 import DeathSaveTrack from "../components/DeathSaveTrack";
+import {
+  abilityBreakdown,
+  attackTip,
+  casterTip,
+  fmtMod,
+  summarizeRiders,
+  vitalTips,
+} from "../lib/sheetTips";
 import "./CharacterSheet.css";
 import "./EncounterView.css";
 import "./PlayerEncounterView.css";
-
-const fmtMod = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
 
 // Friend/foe shown to players. Falls back to the link when the DM hasn't set a
 // disposition: character-linked ⇒ Player Character, unlinked ⇒ Enemy.
@@ -153,8 +159,8 @@ export default function PlayerEncounterView({
               <span className="enc__round">Round {encounter.roundNumber}</span>
             )}
             <span
-              className={`enc__hub enc__hub--${hubStatus}`}
-              title={`Live updates: ${hubLabel}`}
+              className={`enc__hub tip enc__hub--${hubStatus}`}
+              data-tooltip={`Live updates: ${hubLabel}`}
             >
               <span className="enc__hub-dot" aria-hidden="true" />
               {hubLabel}
@@ -250,6 +256,7 @@ export default function PlayerEncounterView({
                 rank={i + 1}
                 isActive={c.id === encounter.activeCombatantId}
                 isMine={myCombatants.some((m) => m.id === c.id)}
+                allCombatants={encounter.combatants}
               />
             ))}
             {visibleOrder.length === 0 && (
@@ -267,11 +274,14 @@ function TrackerRow({
   rank,
   isActive,
   isMine,
+  allCombatants,
 }: {
   combatant: CombatantResponse;
   rank: number;
   isActive: boolean;
   isMine: boolean;
+  // Used to resolve a concentration source's name for the badge tooltip.
+  allCombatants: CombatantResponse[];
 }) {
   // Everyone shows exact HP + a bar and AC; the DM can hide an individual enemy's
   // HP and/or AC (per-item flags).
@@ -293,8 +303,8 @@ function TrackerRow({
     >
       <div className="penc__track-top">
         <span
-          className={"penc__rank" + (isActive ? " penc__rank--active" : "")}
-          title={isActive ? "Acting now" : `Turn order #${rank}`}
+          className={"penc__rank tip" + (isActive ? " penc__rank--active" : "")}
+          data-tooltip={isActive ? "Acting now" : `Turn order #${rank}`}
         >
           {isActive ? "▶" : rank}
         </span>
@@ -303,8 +313,8 @@ function TrackerRow({
           {isMine && <span className="penc__you-tag"> you</span>}
         </span>
         <span
-          className={`penc__disp penc__disp--${disp.mod}`}
-          title={`${disp.label} — ${
+          className={`penc__disp tip penc__disp--${disp.mod}`}
+          data-tooltip={`${disp.label} — ${
             disp.mod === "pc"
               ? "player character"
               : disp.mod === "ally"
@@ -314,7 +324,7 @@ function TrackerRow({
         >
           {disp.label}
         </span>
-        <span className="penc__track-stat" title="Initiative">
+        <span className="penc__track-stat tip" data-tooltip="Initiative">
           <span className="penc__stat-label">Init</span>
           <span className="penc__stat-val">{c.initiative ?? "—"}</span>
         </span>
@@ -322,7 +332,7 @@ function TrackerRow({
 
       <div className="penc__track-bottom">
         {c.hpHiddenFromPlayers ? (
-          <span className="penc__track-hp penc__hidden" title="HP hidden by the DM">
+          <span className="penc__track-hp penc__hidden tip" data-tooltip="HP hidden by the DM">
             HP hidden
           </span>
         ) : dying ? (
@@ -342,8 +352,8 @@ function TrackerRow({
         ) : (
           <>
             <div
-              className="enc__hp-bar penc__track-hpbar"
-              title={`${c.currentHp} of ${c.maxHp} hit points${c.tempHp > 0 ? ` (+${c.tempHp} temp)` : ""}`}
+              className="enc__hp-bar penc__track-hpbar tip"
+              data-tooltip={`${c.currentHp} of ${c.maxHp} hit points${c.tempHp > 0 ? ` (+${c.tempHp} temp)` : ""}`}
             >
               <div className="enc__hp-fill" style={{ width: `${hpPct}%` }} />
               {c.tempHp > 0 && (
@@ -362,10 +372,10 @@ function TrackerRow({
         {/* AC — shown for every combatant; the DM can hide an enemy's AC. */}
         <span
           className={
-            "penc__track-stat penc__track-ac" +
+            "penc__track-stat penc__track-ac tip" +
             (c.acHiddenFromPlayers ? " penc__hidden" : "")
           }
-          title={c.acHiddenFromPlayers ? "AC hidden by the DM" : "Armor Class"}
+          data-tooltip={c.acHiddenFromPlayers ? "AC hidden by the DM" : "Armor Class"}
         >
           <span className="penc__stat-label">AC</span>
           <span className="penc__stat-val">
@@ -374,18 +384,33 @@ function TrackerRow({
         </span>
       </div>
 
-      {/* DM-applied condition badges (read-only for players). */}
+      {/* DM-applied condition badges (read-only for players). Same hover detail the
+          DM sees — description + roll riders + concentration source; buffs are
+          table-public knowledge (Phase 1 of COMBAT-UX-PLAN). */}
       {c.statusEffects.length > 0 && (
         <ul className="enc__badges penc__track-badges">
-          {c.statusEffects.map((s) => (
-            <li
-              key={s.statusEffectId}
-              className={`enc__badge enc__badge--${s.isBeneficial ? "buff" : "debuff"}`}
-              title={s.description ?? undefined}
-            >
-              <span className="enc__badge-name">{s.name}</span>
-            </li>
-          ))}
+          {c.statusEffects.map((s) => {
+            const riders = summarizeRiders(s.rollModifiers);
+            const sourceName = s.sourceCombatantId
+              ? (allCombatants.find((o) => o.id === s.sourceCombatantId)?.name ?? null)
+              : null;
+            const tip = [
+              s.description,
+              riders && `Riders: ${riders}`,
+              sourceName && `Concentration by ${sourceName}`,
+            ]
+              .filter(Boolean)
+              .join("\n");
+            return (
+              <li
+                key={s.statusEffectId}
+                className={`enc__badge tip enc__badge--${s.isBeneficial ? "buff" : "debuff"}`}
+                data-tooltip={tip || undefined}
+              >
+                <span className="enc__badge-name">{s.name}</span>
+              </li>
+            );
+          })}
         </ul>
       )}
     </li>
@@ -469,6 +494,13 @@ function CombatCard({
   }
 
   const c = sheet;
+  // Sheet-grade tooltip inputs: the vital breakdowns + the ability-mod lookups
+  // and proficiency bonus that attack/caster tips compose from (Phase 1b of
+  // COMBAT-UX-PLAN — players get the same hover detail as the route sheet).
+  const { acTip, initTip, speedTip, profTip, percTip } = vitalTips(c);
+  const prof = c.proficiencyBonus;
+  const modByName = new Map(c.abilityScores.map((a) => [a.name, a.modifier]));
+  const modByStatId = new Map(c.abilityScores.map((a) => [a.statId, a.modifier]));
   // Scale by maxHp + tempHp so current/temp segments are proportional in one bar.
   const hpScale = combatant.maxHp + combatant.tempHp;
   const hpPct = hpScale > 0 ? Math.max(0, (combatant.currentHp / hpScale) * 100) : 0;
@@ -564,20 +596,26 @@ function CombatCard({
       )}
 
       <div className="sheet__vitals penc__vitals">
-        <Vital label="AC" value={c.armorClass} />
+        <Vital label="AC" value={c.armorClass} tooltip={acTip} />
         <Vital
           label="Init"
           value={combatant.initiative != null ? combatant.initiative : fmtMod(c.initiative)}
+          tooltip={initTip}
         />
-        <Vital label="Speed" value={`${c.walkingSpeed}ft`} />
-        <Vital label="Prof" value={fmtMod(c.proficiencyBonus)} />
-        <Vital label="Pass. Perc" value={c.passivePerception} />
+        <Vital label="Speed" value={`${c.walkingSpeed}ft`} tooltip={speedTip} />
+        <Vital label="Prof" value={fmtMod(c.proficiencyBonus)} tooltip={profTip} />
+        <Vital label="Pass. Perc" value={c.passivePerception} tooltip={percTip} />
       </div>
 
-      {/* Abilities */}
+      {/* Abilities — same effective-score breakdown hover as the route sheet. */}
       <section className="sheet__abilities penc__abilities">
         {c.abilityScores.map((a) => (
-          <div key={a.statId} className="ability panel">
+          <div
+            key={a.statId}
+            className="ability panel ability--help tip"
+            data-tooltip={abilityBreakdown(a)}
+            tabIndex={0}
+          >
             <div className="ability__code">{a.name}</div>
             <div className="ability__mod">{fmtMod(a.modifier)}</div>
             <div className="ability__score">{a.effective}</div>
@@ -611,7 +649,11 @@ function CombatCard({
             <hr className="rule" />
             <ul className="prof-list">
               {c.weaponAttacks.map((a) => (
-                <li key={a.weaponId} className="prof-list__row">
+                <li
+                  key={a.weaponId}
+                  className="prof-list__row tip"
+                  data-tooltip={attackTip(a, modByName, prof)}
+                >
                   <span className={"dot" + (a.isProficient ? " dot--on" : "")} />
                   <span className="prof-list__name">{a.name}</span>
                   <span className="prof-list__val">
@@ -635,13 +677,19 @@ function CombatCard({
           <h3 className="sheet__block-title">Saving Throws</h3>
           <hr className="rule" />
           <ul className="prof-list">
-            {c.savingThrows.map((s) => (
-              <li key={s.statId} className="prof-list__row">
-                <span className={"dot" + (s.isProficient ? " dot--on" : "")} />
-                <span className="prof-list__name">{s.name}</span>
-                <span className="prof-list__val">{fmtMod(s.modifier)}</span>
-              </li>
-            ))}
+            {c.savingThrows.map((s) => {
+              const m = modByStatId.get(s.statId) ?? 0;
+              const tip = s.isProficient
+                ? `ability mod ${fmtMod(m)} + proficiency ${fmtMod(prof)} = ${fmtMod(s.modifier)}`
+                : `ability mod ${fmtMod(m)} (not proficient) = ${fmtMod(s.modifier)}`;
+              return (
+                <li key={s.statId} className="prof-list__row tip" data-tooltip={tip}>
+                  <span className={"dot" + (s.isProficient ? " dot--on" : "")} />
+                  <span className="prof-list__name">{s.name}</span>
+                  <span className="prof-list__val">{fmtMod(s.modifier)}</span>
+                </li>
+              );
+            })}
           </ul>
         </section>
 
@@ -667,7 +715,11 @@ function CombatCard({
             <h3 className="sheet__block-title">Spellcasting</h3>
             <hr className="rule" />
             {c.spellcasting.map((sc, i) => (
-              <p key={`${sc.class}-${i}`} className="text-faint penc__caster">
+              <p
+                key={`${sc.class}-${i}`}
+                className="text-faint penc__caster tip"
+                data-tooltip={casterTip(sc, modByName, prof)}
+              >
                 {sc.class}
                 {sc.isPactMagic ? " (Pact)" : ""} · {sc.ability} · save DC {sc.saveDc} ·
                 spell atk {fmtMod(sc.spellAttackBonus)}
@@ -707,9 +759,21 @@ function CombatCard({
   );
 }
 
-function Vital({ label, value }: { label: string; value: string | number }) {
+function Vital({
+  label,
+  value,
+  tooltip,
+}: {
+  label: string;
+  value: string | number;
+  tooltip?: string;
+}) {
   return (
-    <div className="vital">
+    <div
+      className={"vital" + (tooltip ? " tip ability--help" : "")}
+      data-tooltip={tooltip}
+      tabIndex={tooltip ? 0 : undefined}
+    >
       <div className="vital__value">{value}</div>
       <div className="vital__label">{label}</div>
     </div>
