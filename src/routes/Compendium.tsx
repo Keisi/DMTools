@@ -5,21 +5,44 @@ import {
   Size,
   SpellSchool,
   type ClassResponse,
+  type EldritchInvocationResponse,
+  type FightingStyleResponse,
   type ItemResponse,
+  type MetamagicResponse,
   type RaceResponse,
   type SpellResponse,
   type SubraceResponse,
 } from "../api/types";
 import "./Compendium.css";
 
-type Tab = "spells" | "items" | "races" | "classes";
-type Row = SpellResponse | ItemResponse | RaceResponse | ClassResponse;
+type Tab =
+  | "spells"
+  | "items"
+  | "races"
+  | "classes"
+  | "fightingstyles"
+  | "metamagics"
+  | "invocations";
+// The three sub-feature catalogs share the { id, name, description } shape.
+type NamedCatalogRow =
+  | FightingStyleResponse
+  | MetamagicResponse
+  | EldritchInvocationResponse;
+type Row =
+  | SpellResponse
+  | ItemResponse
+  | RaceResponse
+  | ClassResponse
+  | NamedCatalogRow;
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "spells", label: "Spells" },
   { key: "items", label: "Items" },
   { key: "races", label: "Races" },
   { key: "classes", label: "Classes" },
+  { key: "fightingstyles", label: "Fighting Styles" },
+  { key: "metamagics", label: "Metamagic" },
+  { key: "invocations", label: "Invocations" },
 ];
 
 const LOADERS: Record<Tab, () => Promise<Row[]>> = {
@@ -27,6 +50,9 @@ const LOADERS: Record<Tab, () => Promise<Row[]>> = {
   items: reference.items,
   races: reference.races,
   classes: reference.classes,
+  fightingstyles: reference.fightingStyles,
+  metamagics: reference.metamagics,
+  invocations: reference.eldritchInvocations,
 };
 
 const SPELL_SCHOOL_LABEL: Record<number, string> = {
@@ -156,7 +182,7 @@ export default function Compendium() {
 
       <input
         className="input compendium__search"
-        placeholder={`Search ${tab}...`}
+        placeholder={`Search ${TABS.find((t) => t.key === tab)?.label ?? tab}...`}
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
       />
@@ -223,7 +249,22 @@ function Entry({ tab, row }: { tab: Tab; row: Row }) {
       return <RaceEntry r={row as RaceResponse} />;
     case "classes":
       return <ClassEntry c={row as ClassResponse} />;
+    case "fightingstyles":
+    case "metamagics":
+    case "invocations":
+      return <SimpleEntry row={row as NamedCatalogRow} />;
   }
+}
+
+// Fighting Style / Metamagic / Eldritch Invocation — all { name, description }.
+// Description-only catalogs (prerequisites live in the text); name + collapsible body.
+function SimpleEntry({ row }: { row: NamedCatalogRow }) {
+  return (
+    <EntryShell
+      summary={<Header name={row.name} tags={[]} />}
+      body={row.description ? <Desc text={row.description} /> : null}
+    />
+  );
 }
 
 function Header({ name, tags }: { name: string; tags: ReactNode[] }) {
