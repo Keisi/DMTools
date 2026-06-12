@@ -6,10 +6,17 @@ import type {
   CampaignCharacterResponse,
   CampaignMemberResponse,
   CombatantResponse,
+  StatusEffectRollModifierResponse,
   StatusEffectResponse,
   UpdateCombatantRequest,
 } from "../api/types";
-import { CampaignMemberStatus, CombatantDisposition, EncounterStatus } from "../api/types";
+import {
+  CampaignMemberStatus,
+  CombatantDisposition,
+  EncounterStatus,
+  RollModifierKind,
+  RollTarget,
+} from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
 import { useEncounterHub, HubStatus } from "../hooks/useEncounterHub";
@@ -46,6 +53,35 @@ function loadSides(encounterId: string): Record<string, Side> {
 
 function saveSides(encounterId: string, map: Record<string, Side>) {
   localStorage.setItem(SIDES_KEY(encounterId), JSON.stringify(map));
+}
+
+// A short human label for a status effect's roll riders, for badge tooltips. Flat
+// riders are excluded — they're already folded into the sheet's derived numbers and
+// shouldn't read as a separate "apply this" instruction.
+const ROLL_TARGET_LABEL: Record<RollTarget, string> = {
+  [RollTarget.AttackRoll]: "attack",
+  [RollTarget.SavingThrow]: "save",
+  [RollTarget.AbilityCheck]: "check",
+  [RollTarget.IncomingAttackRoll]: "attacks vs it",
+};
+function summarizeRiders(
+  mods: StatusEffectRollModifierResponse[] | undefined,
+): string | null {
+  if (!mods || mods.length === 0) return null;
+  const parts = mods
+    .filter((m) => m.kind !== RollModifierKind.Flat)
+    .map((m) => {
+      const tgt = ROLL_TARGET_LABEL[m.target] ?? "roll";
+      if (m.kind === RollModifierKind.Dice && m.diceCount && m.dieSize) {
+        const sign = m.diceCount < 0 ? "−" : "+";
+        return `${sign}${Math.abs(m.diceCount)}d${m.dieSize} ${tgt}`;
+      }
+      if (m.kind === RollModifierKind.Advantage) return `adv ${tgt}`;
+      if (m.kind === RollModifierKind.Disadvantage) return `dis ${tgt}`;
+      return null;
+    })
+    .filter((p): p is string => p !== null);
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 export default function EncounterView() {
@@ -107,6 +143,11 @@ export default function EncounterView() {
   // combatant whose apply-popover is currently open (null = closed).
   const [statusCatalog, setStatusCatalog] = useState<StatusEffectResponse[]>([]);
   const [paletteFor, setPaletteFor] = useState<string | null>(null);
+  // Buffs system: optional duration override (empty = use each effect's
+  // defaultDurationRounds) and concentration source (combatant id, "" = none) for
+  // the NEXT chip applied from the open palette. Reset when the palette opens.
+  const [paletteRounds, setPaletteRounds] = useState("");
+  const [paletteSource, setPaletteSource] = useState("");
 
   const isDm = dmUserId === userId;
   const activeMemberIds = new Set(
@@ -534,20 +575,40 @@ export default function EncounterView() {
     }
   }
 
-  async function handleAddStatusEffect(c: CombatantResponse, statusEffectId: string) {
+  async function handleAddStatusEffect(c: CombatantResponse, effect: StatusEffectResponse) {
     setBusyCombatant(c.id);
     setPaletteFor(null);
+    // Duration: palette override if set, else the effect's catalog default (null = untimed).
+    const overrideRounds = paletteRounds.trim() === "" ? null : parseInt(paletteRounds, 10);
+    const remainingRounds =
+      overrideRounds !== null && !isNaN(overrideRounds)
+        ? overrideRounds
+        : (effect.defaultDurationRounds ?? null);
     try {
       applyUpdate(
-        await campaigns.addCombatantStatusEffect(
-          campaignId,
-          encounterId,
-          c.id,
-          { statusEffectId },
-        ),
+        await campaigns.addCombatantStatusEffect(campaignId, encounterId, c.id, {
+          statusEffectId: effect.id,
+          remainingRounds,
+          sourceCombatantId: paletteSource || null,
+        }),
       );
+      setPaletteRounds("");
+      setPaletteSource("");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to apply condition.");
+    } finally {
+      setBusyCombatant(null);
+    }
+  }
+
+  async function handleBreakConcentration(c: CombatantResponse) {
+    setBusyCombatant(c.id);
+    try {
+      applyUpdate(await campaigns.breakConcentration(campaignId, encounterId, c.id));
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Failed to break concentration.",
+      );
     } finally {
       setBusyCombatant(null);
     }
@@ -579,6 +640,8 @@ export default function EncounterView() {
     const sorted = [...statusCatalog].sort((a, b) => a.name.localeCompare(b.name));
     const harmful = sorted.filter((s) => !s.isBeneficial);
     const beneficial = sorted.filter((s) => s.isBeneficial);
+    // Concentration source options: every other combatant in the encounter.
+    const sourceOptions = (encounter?.combatants ?? []).filter((o) => o.id !== c.id);
     const group = (title: string, items: StatusEffectResponse[], mod: string) =>
       items.length > 0 ? (
         <div className="enc__cond-group">
@@ -586,17 +649,24 @@ export default function EncounterView() {
           <div className="enc__cond-chips">
             {items.map((s) => {
               const on = applied.has(s.id);
+              const riders = summarizeRiders(s.rollModifiers);
+              const tip = [s.description, riders && `Riders: ${riders}`]
+                .filter(Boolean)
+                .join("\n");
               return (
                 <button
                   key={s.id}
                   type="button"
                   className={`enc__cond-chip enc__cond-chip--${mod}${on ? " enc__cond-chip--on" : ""}`}
                   disabled={on || busyCombatant === c.id}
-                  title={s.description ?? undefined}
-                  onClick={() => handleAddStatusEffect(c, s.id)}
+                  title={tip || undefined}
+                  onClick={() => handleAddStatusEffect(c, s)}
                 >
                   {on ? "✓ " : ""}
                   {s.name}
+                  {s.defaultDurationRounds ? (
+                    <span className="enc__cond-chip-dur"> {s.defaultDurationRounds}r</span>
+                  ) : null}
                 </button>
               );
             })}
@@ -605,6 +675,38 @@ export default function EncounterView() {
       ) : null;
     return (
       <>
+        {/* Optional duration + concentration link applied to the next chip picked.
+            Duration defaults per-effect (the "Nr" on the chip); this overrides it. */}
+        <div className="enc__cond-opts">
+          <label className="enc__cond-opt">
+            <span className="enc__cond-opt-label">Rounds</span>
+            <input
+              type="number"
+              className="input enc__cond-rounds"
+              value={paletteRounds}
+              onChange={(e) => setPaletteRounds(e.target.value)}
+              placeholder="auto"
+              min="1"
+            />
+          </label>
+          {sourceOptions.length > 0 && (
+            <label className="enc__cond-opt">
+              <span className="enc__cond-opt-label">Concentration</span>
+              <select
+                className="input enc__cond-source"
+                value={paletteSource}
+                onChange={(e) => setPaletteSource(e.target.value)}
+              >
+                <option value="">none</option>
+                {sourceOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    by {o.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
         {group("Conditions & Debuffs", harmful, "debuff")}
         {group("Buffs", beneficial, "buff")}
       </>
@@ -624,6 +726,11 @@ export default function EncounterView() {
     //  - combatActive: running the fight (active, not editing) — only HP actions.
     const editing = isPending || editMode;
     const combatActive = isActive && !editMode;
+    // This combatant is concentrating on (sourcing) at least one effect elsewhere —
+    // offer a Break Concentration control that drops all of them at once.
+    const isConcentrationSource = encounter!.combatants.some((o) =>
+      o.statusEffects.some((s) => s.sourceCombatantId === c.id),
+    );
     // HP bar scaled by (maxHp + tempHp) so current HP, missing HP, and temp HP
     // segments are all proportional within one bar.
     const hpScale = c.maxHp + c.tempHp;
@@ -670,26 +777,68 @@ export default function EncounterView() {
           </div>
           {c.statusEffects.length > 0 && (
             <ul className="enc__badges">
-              {c.statusEffects.map((s) => (
-                <li
-                  key={s.statusEffectId}
-                  className={`enc__badge enc__badge--${s.isBeneficial ? "buff" : "debuff"}`}
-                  title={s.description ?? undefined}
-                >
-                  <span className="enc__badge-name">{s.name}</span>
-                  {isDm && !isEnded && (
-                    <button
-                      type="button"
-                      className="enc__badge-x"
-                      disabled={isBusy}
-                      onClick={() => handleRemoveStatusEffect(c, s.statusEffectId)}
-                      aria-label={`Remove ${s.name}`}
-                    >
-                      ✕
-                    </button>
-                  )}
-                </li>
-              ))}
+              {c.statusEffects.map((s) => {
+                const riders = summarizeRiders(s.rollModifiers);
+                const sourceName = s.sourceCombatantId
+                  ? (encounter!.combatants.find((o) => o.id === s.sourceCombatantId)
+                      ?.name ?? null)
+                  : null;
+                const tip = [
+                  s.description,
+                  riders && `Riders: ${riders}`,
+                  sourceName && `Concentration by ${sourceName}`,
+                ]
+                  .filter(Boolean)
+                  .join("\n");
+                return (
+                  <li
+                    key={s.statusEffectId}
+                    className={`enc__badge enc__badge--${s.isBeneficial ? "buff" : "debuff"}`}
+                    title={tip || undefined}
+                  >
+                    <span className="enc__badge-name">{s.name}</span>
+                    {typeof s.remainingRounds === "number" && (
+                      <span
+                        className="enc__badge-dur"
+                        title={`${s.remainingRounds} round${s.remainingRounds === 1 ? "" : "s"} left`}
+                      >
+                        {s.remainingRounds}r
+                      </span>
+                    )}
+                    {sourceName && (
+                      <span
+                        className="enc__badge-conc"
+                        aria-hidden="true"
+                        title={`Concentration by ${sourceName}`}
+                      >
+                        ◈
+                      </span>
+                    )}
+                    {isDm && !isEnded && s.consumedOnUse && (
+                      <button
+                        type="button"
+                        className="enc__badge-use"
+                        disabled={isBusy}
+                        onClick={() => handleRemoveStatusEffect(c, s.statusEffectId)}
+                        title="Use — consumes this effect"
+                      >
+                        use
+                      </button>
+                    )}
+                    {isDm && !isEnded && (
+                      <button
+                        type="button"
+                        className="enc__badge-x"
+                        disabled={isBusy}
+                        onClick={() => handleRemoveStatusEffect(c, s.statusEffectId)}
+                        aria-label={`Remove ${s.name}`}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -1018,7 +1167,14 @@ export default function EncounterView() {
                   disabled={isBusy}
                   aria-expanded={paletteFor === c.id}
                   onClick={() =>
-                    setPaletteFor((prev) => (prev === c.id ? null : c.id))
+                    setPaletteFor((prev) => {
+                      const next = prev === c.id ? null : c.id;
+                      if (next) {
+                        setPaletteRounds("");
+                        setPaletteSource("");
+                      }
+                      return next;
+                    })
                   }
                 >
                   + Condition
@@ -1044,6 +1200,23 @@ export default function EncounterView() {
                 )}
               </div>
             </div>
+
+            {/* Concentration — drops every effect this combatant is sustaining.
+                Shown only while it actually sources one (the link is sourceCombatantId). */}
+            {isConcentrationSource && (
+              <div className="enc__ctrl-grp">
+                <div className="enc__ctrl-row">
+                  <button
+                    className="btn tip enc__conc-btn"
+                    disabled={isBusy}
+                    onClick={() => handleBreakConcentration(c)}
+                    data-tooltip="Drop every effect this combatant is concentrating on"
+                  >
+                    ◈ Break Concentration
+                  </button>
+                </div>
+              </div>
+            )}
 
           </div>
         )}

@@ -697,6 +697,43 @@
 .enc__badge-name {
   white-space: nowrap;
 }
+/* Rounds-remaining counter — a small pill inside the badge (buffs system). */
+.enc__badge-dur {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+  opacity: 0.8;
+  padding: 0 var(--sp-1);
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+}
+/* Concentration link marker (the badge ends with the caster's turn / death). */
+.enc__badge-conc {
+  font-size: 0.9em;
+  opacity: 0.85;
+}
+/* Consumed-on-use "use" action (Guidance / Bardic Inspiration) — spends the effect. */
+.enc__badge-use {
+  padding: 0 var(--sp-1);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+.enc__badge-use:hover:not(:disabled) {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+.enc__badge-use:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
 .enc__badge-x {
   display: inline-flex;
   align-items: center;
@@ -797,6 +834,50 @@
 .enc__cond-chip--on {
   opacity: 0.5;
   cursor: default;
+}
+/* Default-duration hint on a chip (buffs system). */
+.enc__cond-chip-dur {
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Palette options row: optional duration + concentration link for the next apply. */
+.enc__cond-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border);
+}
+.enc__cond-opt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.enc__cond-opt-label {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+.enc__cond-rounds {
+  width: 4.5rem;
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-sm);
+}
+.enc__cond-source {
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-sm);
+}
+
+/* Break-concentration toolbar button. */
+.enc__conc-btn {
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-xs);
+}
+.enc__conc-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* Player tracker: badges sit on their own line below the HP/AC row. */

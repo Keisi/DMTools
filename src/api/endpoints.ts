@@ -323,6 +323,17 @@ export const campaigns = {
     api.del<EncounterResponse>(
       `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}/status-effects/${statusEffectId}`,
     ),
+  // Drop every effect this combatant is concentrating on (voluntary / failed save).
+  // Same DM-or-owner authz; idempotent; returns the full EncounterResponse.
+  breakConcentration: (
+    campaignId: string,
+    encounterId: string,
+    combatantId: string,
+  ) =>
+    api.post<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}/break-concentration`,
+      {},
+    ),
 
   // Combat log (DM-only, Phase 1). Newest-first page; pass the previous page's
   // `nextBefore` as `before` to page backwards. `take` clamps 1–100 server-side.

@@ -2,9 +2,12 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import { Link, useParams } from "react-router-dom";
 import { characters, reference } from "../api/endpoints";
 import {
+  AdvantageState,
   EncumbranceLevel,
   ResistanceKind,
   ResourceRecharge,
+  RollModifierKind,
+  RollTarget,
   SkillProficiencyLevel,
   type AbilityScoreResponse,
   type CharacterFeatureResponse,
@@ -13,6 +16,8 @@ import {
   type CharacterStatusEffectResponse,
   type ClassResponse,
   type EncumbranceResponse,
+  type RollAdvantageResponse,
+  type RollModifierResponse,
   type SavingThrowResponse,
   type SkillBonusResponse,
   type ItemResponse,
@@ -355,7 +360,16 @@ export default function CharacterSheet() {
       case "encumbrance":
         return <EncumbranceBlock encumbrance={c.encumbrance} />;
       case "status":
-        return <StatusEffectsBlock effects={c.statusEffects} />;
+        return (
+          <StatusEffectsBlock
+            effects={c.statusEffects}
+            rollModifiers={c.rollModifiers ?? []}
+            rollAdvantages={c.rollAdvantages ?? []}
+            statNameById={
+              new Map(c.savingThrows.map((s) => [s.statId, s.name]))
+            }
+          />
+        );
     }
   };
 
@@ -1274,12 +1288,49 @@ function InventoryBlock({
   );
 }
 
+// Roll-target labels for the "at roll time" riders. Flat modifiers are NOT shown —
+// they're already folded into the saves/skills/attack numbers above (the backend's
+// no-double-counting invariant); only dice + advantage/disadvantage ride here.
+const ROLL_TARGET_LABEL: Record<number, string> = {
+  [RollTarget.AttackRoll]: "attack rolls",
+  [RollTarget.SavingThrow]: "saving throws",
+  [RollTarget.AbilityCheck]: "ability checks",
+  [RollTarget.IncomingAttackRoll]: "attacks against you",
+};
+
+function riderLine(m: RollModifierResponse, statName: string | null): string {
+  const sign = m.diceCount < 0 ? "−" : "+";
+  const dice = `${sign}${Math.abs(m.diceCount)}d${m.dieSize}`;
+  const scope = statName ? `${statName} ` : "";
+  return `${dice} to ${scope}${ROLL_TARGET_LABEL[m.target] ?? "rolls"}`;
+}
+
+function advantageLine(a: RollAdvantageResponse, statName: string | null): string {
+  const word =
+    a.state === AdvantageState.Advantage
+      ? "Advantage"
+      : a.state === AdvantageState.Disadvantage
+        ? "Disadvantage"
+        : "Straight roll (adv + disadv cancel)";
+  const scope = statName ? `${statName} ` : "";
+  return `${word} on ${scope}${ROLL_TARGET_LABEL[a.target] ?? "rolls"}`;
+}
+
 function StatusEffectsBlock({
   effects,
+  rollModifiers,
+  rollAdvantages,
+  statNameById,
 }: {
   effects: CharacterStatusEffectResponse[];
+  rollModifiers: RollModifierResponse[];
+  rollAdvantages: RollAdvantageResponse[];
+  statNameById: Map<string, string>;
 }) {
   if (effects.length === 0) return null;
+  // Dice riders only (advantage/disadvantage are surfaced in their own list below).
+  const diceRiders = rollModifiers.filter((m) => m.kind === RollModifierKind.Dice);
+  const hasRollTime = diceRiders.length > 0 || rollAdvantages.length > 0;
   return (
     <section className="panel sheet__block">
       <h3 className="sheet__block-title">Status Effects</h3>
@@ -1298,6 +1349,37 @@ function StatusEffectsBlock({
           </li>
         ))}
       </ul>
+      {hasRollTime && (
+        <div className="sheet__roll-riders">
+          {/* Roll-time riders: apply these when you roll (they can't be folded into
+              the static bonuses, unlike flat modifiers — which already are). */}
+          <h4 className="sheet__roll-riders-title">At roll time</h4>
+          <ul className="sheet__roll-riders-list">
+            {diceRiders.map((m, i) => (
+              <li key={`d${i}`}>
+                <span className="sheet__rider-dice">
+                  {riderLine(m, m.appliesToStatId ? (statNameById.get(m.appliesToStatId) ?? null) : null)}
+                </span>
+                <span className="text-faint"> · {m.source}</span>
+              </li>
+            ))}
+            {rollAdvantages.map((a, i) => (
+              <li
+                key={`a${i}`}
+                className={
+                  a.state === AdvantageState.Disadvantage
+                    ? "sheet__rider-disadv"
+                    : a.state === AdvantageState.Cancelled
+                      ? "text-faint"
+                      : "sheet__rider-adv"
+                }
+              >
+                {advantageLine(a, a.appliesToStatId ? (statNameById.get(a.appliesToStatId) ?? null) : null)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }

@@ -126,6 +126,40 @@ export const EffectScaling = {
 } as const;
 export type EffectScaling = (typeof EffectScaling)[keyof typeof EffectScaling];
 
+// ---- Buffs / roll modifiers (backend migrations 061–063) ----
+// A status effect can modify ROLLS, not just the four flat sheet values. Two
+// channels, never both (the no-double-counting invariant): FLAT roll modifiers are
+// already folded into the derived numbers the API returns (savingThrows[].modifier,
+// skills[].bonus, weaponAttacks[].attackBonus, spellcasting[].spellAttackBonus,
+// passivePerception) — render those as-is, NEVER re-apply. DICE riders and
+// ADVANTAGE/DISADVANTAGE can't fold, so they arrive as data (CharacterResponse
+// .rollModifiers / .rollAdvantages) for the client to show at roll time.
+export const RollTarget = {
+  AttackRoll: 0,
+  SavingThrow: 1,
+  AbilityCheck: 2,
+  IncomingAttackRoll: 3, // attacks made AGAINST this creature (e.g. Restrained)
+} as const;
+export type RollTarget = (typeof RollTarget)[keyof typeof RollTarget];
+
+export const RollModifierKind = {
+  Flat: 0, // folded into derived numbers — never appears in rollModifiers[]
+  Dice: 1, // signed diceCount (Bane = -1) + dieSize
+  Advantage: 2,
+  Disadvantage: 3,
+} as const;
+export type RollModifierKind =
+  (typeof RollModifierKind)[keyof typeof RollModifierKind];
+
+// Net advantage per (target, stat) slice — already 5e-cancelled server-side
+// (any advantage + any disadvantage on one slice → Cancelled = straight roll).
+export const AdvantageState = {
+  Advantage: 1,
+  Disadvantage: 2,
+  Cancelled: 3,
+} as const;
+export type AdvantageState = (typeof AdvantageState)[keyof typeof AdvantageState];
+
 export const LevelUpHitPointMode = {
   Average: 0,
   Roll: 1,
@@ -401,12 +435,28 @@ export interface StatusEffectEffectResponse {
   amount: number;
   scaling: EffectScaling;
 }
+// A roll-affecting rider on a status effect's catalog definition. `amount` is the
+// flat bonus (Flat kind only); `diceCount`/`dieSize` the dice (Dice kind; diceCount
+// signed — Bane = -1); advantage/disadvantage kinds carry neither. `appliesToStatId`
+// scopes a SavingThrow/AbilityCheck rider to one ability (null = all).
+export interface StatusEffectRollModifierResponse {
+  target: RollTarget;
+  kind: RollModifierKind;
+  amount: number;
+  diceCount?: number | null;
+  dieSize?: number | null;
+  appliesToStatId?: string | null;
+}
 export interface StatusEffectResponse {
   id: string;
   name: string;
   description?: string | null;
   isBeneficial: boolean;
   effects: StatusEffectEffectResponse[];
+  // Buffs system (backend 061–063); optional until consumed everywhere.
+  consumedOnUse?: boolean; // Guidance/Bardic Inspiration: spent on one roll
+  defaultDurationRounds?: number | null; // client pre-fill for combat duration (Bless = 10)
+  rollModifiers?: StatusEffectRollModifierResponse[];
 }
 
 export interface WeaponCategoryResponse {
@@ -767,6 +817,26 @@ export interface CharacterStatusEffectResponse {
   isBeneficial: boolean;
   source?: string | null;
   effects: StatusEffectEffectResponse[];
+  // The catalog definition's riders, for explaining the effect (optional until consumed).
+  consumedOnUse?: boolean;
+  rollModifiers?: StatusEffectRollModifierResponse[];
+}
+
+// Non-flat roll riders the character carries (Dice + Advantage/Disadvantage only —
+// flat is already folded into derived numbers). For roll-time display, never re-applied.
+export interface RollModifierResponse {
+  target: RollTarget;
+  kind: RollModifierKind;
+  diceCount: number; // signed (Bane = -1)
+  dieSize: number;
+  appliesToStatId?: string | null;
+  source: string; // owning status effect's name, e.g. "Bless"
+}
+// Net advantage/disadvantage per (target, stat) slice — already 5e-cancelled server-side.
+export interface RollAdvantageResponse {
+  target: RollTarget;
+  appliesToStatId?: string | null; // null = whole target; set = that ability only
+  state: AdvantageState;
 }
 
 export interface EncumbranceResponse {
@@ -889,6 +959,11 @@ export interface CharacterResponse extends CharacterDetails {
   attunedItemCount: number;
   encumbrance: EncumbranceResponse;
   statusEffects: CharacterStatusEffectResponse[];
+  // Roll-time riders from active status effects (buffs system). Flat riders are
+  // already folded into the derived numbers above — these are ONLY the dice +
+  // advantage/disadvantage that can't fold. Optional until the backend ships them.
+  rollModifiers?: RollModifierResponse[];
+  rollAdvantages?: RollAdvantageResponse[];
   created: string; // ISO-8601
   modified: string; // ISO-8601
   // Organizer flag — retired characters are hidden in the Vault by default but
@@ -1147,13 +1222,18 @@ export interface CombatantResponse {
   statusEffects: CombatantStatusEffectResponse[];
 }
 
-// One visual status badge on a combatant (name/flavor hydrated from the catalog;
-// no numeric effects — see CombatantResponse.statusEffects).
+// A status badge on a combatant. Now mechanically annotated (buffs system): carries
+// the catalog's riders for display, a combat duration, and a concentration link.
 export interface CombatantStatusEffectResponse {
   statusEffectId: string;
   name: string;
   description?: string | null;
   isBeneficial: boolean;
+  // Buffs system (backend mig. 063); optional until consumed.
+  consumedOnUse?: boolean; // render a "use" action → existing DELETE
+  remainingRounds?: number | null; // ticks down on round wrap, auto-removed at 0; null = untimed
+  sourceCombatantId?: string | null; // concentration link — swept when the source dies/leaves
+  rollModifiers?: StatusEffectRollModifierResponse[];
 }
 
 /** Full encounter — returned by every mutation and GET /{encounterId}. */
@@ -1247,10 +1327,13 @@ export interface RecordDeathSavesRequest {
   failures: number;
 }
 
-// Apply a catalog status effect to a combatant (POST .../status-effects). Idempotent
-// server-side; returns the full EncounterResponse.
+// Apply a catalog status effect to a combatant (POST .../status-effects). Re-applying
+// upserts (refreshes duration/source) server-side; returns the full EncounterResponse.
 export interface AddStatusEffectRequest {
   statusEffectId: string;
+  // Buffs system (backend mig. 063), both optional.
+  remainingRounds?: number | null; // pre-fill from the catalog's defaultDurationRounds
+  sourceCombatantId?: string | null; // set for concentration effects (ends with the caster)
 }
 
 export interface UpdateCombatantRequest {

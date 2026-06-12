@@ -378,3 +378,39 @@
 .prof-list__row--equip .prof-list__val {
   justify-self: end;
 }
+
+/* ---- Roll-time riders (buffs system) ---- */
+/* The dice + advantage/disadvantage that CANNOT fold into the static bonuses above
+   (flat riders already are folded). Shown under the Status Effects list. */
+.sheet__roll-riders {
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+.sheet__roll-riders-title {
+  margin: 0 0 var(--sp-2);
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+.sheet__roll-riders-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+}
+.sheet__rider-dice {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.sheet__rider-adv {
+  color: var(--accent);
+}
+.sheet__rider-disadv {
+  color: var(--c-crimson-400);
+}
