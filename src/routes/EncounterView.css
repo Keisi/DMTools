@@ -421,6 +421,13 @@
   color: var(--accent);
 }
 
+/* Resource/slot pools sub-row — full-width like the controls toolbar, sits
+   between the identity row and enc__comb-controls. */
+.enc__pools-row {
+  flex: 1 1 100%;
+  padding-top: var(--sp-2);
+}
+
 /* Controls toolbar — one compact label-less row below the identity row, same in
    both views. Self-describing controls carry tooltips; only ambiguous inputs keep
    a small inline label (--inline). Hairline separators divide the clusters. */

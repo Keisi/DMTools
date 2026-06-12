@@ -7,10 +7,11 @@ import type {
   CombatantResponse,
   EncounterResponse,
 } from "../api/types";
-import { CombatantDisposition, EncounterStatus } from "../api/types";
+import { CombatantDisposition, EncounterStatus, RestKind } from "../api/types";
 import { ApiError } from "../api/client";
 import { HubStatus } from "../hooks/useEncounterHub";
 import DeathSaveTrack from "../components/DeathSaveTrack";
+import CombatantPools from "../components/CombatantPools";
 import {
   abilityBreakdown,
   attackTip,
@@ -251,6 +252,7 @@ export default function PlayerEncounterView({
               error={sheetError}
               campaignId={campaignId}
               encounterId={encounter.id}
+              isEnded={isEnded}
               onUpdate={onUpdate}
             />
           )}
@@ -435,6 +437,7 @@ function CombatCard({
   error,
   campaignId,
   encounterId,
+  isEnded,
   onUpdate,
 }: {
   combatant: CombatantResponse;
@@ -442,6 +445,7 @@ function CombatCard({
   error: string | null;
   campaignId: string;
   encounterId: string;
+  isEnded: boolean;
   onUpdate: (enc: EncounterResponse) => void;
 }) {
   // Players may damage/heal their OWN combatant any time (backend authorizes by
@@ -450,6 +454,11 @@ function CombatCard({
   const [hpDelta, setHpDelta] = useState("");
   const [hpBusy, setHpBusy] = useState(false);
   const [hpError, setHpError] = useState<string | null>(null);
+
+  // Pool mutation busy/error — separate from HP so a pool click doesn't block
+  // the HP controls and vice versa.
+  const [poolBusy, setPoolBusy] = useState(false);
+  const [poolError, setPoolError] = useState<string | null>(null);
 
   // Drag-reorder for the four mechanic boxes (Phase 2 of COMBAT-UX-PLAN), keyed
   // per character so each of the player's characters keeps its own order — same
@@ -495,6 +504,71 @@ function CombatCard({
         err instanceof ApiError ? err.message : "Failed to record death saves.",
       );
     }
+  }
+
+  // Resource & spell-slot pool handlers (INCOMING #19) — owner-scoped, same
+  // authz as HP (backend AuthorizeCombatantWriteAsync). Mirror DM handlers.
+  async function handleSetResource(key: string, remaining: number) {
+    setPoolBusy(true);
+    setPoolError(null);
+    try {
+      onUpdate(
+        await campaigns.updateCombatantResource(
+          campaignId,
+          encounterId,
+          combatant.id,
+          key,
+          { remaining },
+        ),
+      );
+    } catch (err) {
+      setPoolError(
+        err instanceof ApiError ? err.message : "Failed to update resource.",
+      );
+    }
+    setPoolBusy(false);
+  }
+
+  async function handleSetSlot(
+    level: number,
+    isPact: boolean,
+    remaining: number,
+  ) {
+    setPoolBusy(true);
+    setPoolError(null);
+    try {
+      onUpdate(
+        await campaigns.updateCombatantSpellSlot(
+          campaignId,
+          encounterId,
+          combatant.id,
+          level,
+          { remaining, isPact },
+        ),
+      );
+    } catch (err) {
+      setPoolError(
+        err instanceof ApiError ? err.message : "Failed to update spell slot.",
+      );
+    }
+    setPoolBusy(false);
+  }
+
+  async function handleRest(kind: RestKind) {
+    setPoolBusy(true);
+    setPoolError(null);
+    try {
+      onUpdate(
+        await campaigns.restCombatant(campaignId, encounterId, combatant.id, {
+          kind,
+        }),
+      );
+    } catch (err) {
+      setPoolError(
+        err instanceof ApiError ? err.message : "Failed to rest.",
+      );
+    }
+    setPoolBusy(false);
   }
 
   if (error) {
@@ -594,7 +668,28 @@ function CombatCard({
             </ul>
           </section>
         );
-      case "resources":
+      case "resources": {
+        const hasPools =
+          combatant.resources?.length ||
+          combatant.spellSlots?.length ||
+          combatant.pactSlot;
+        if (hasPools) {
+          return (
+            <section className="panel sheet__block">
+              <h3 className="sheet__block-title">Resources</h3>
+              <hr className="rule" />
+              {poolError && <p className="enc__error">{poolError}</p>}
+              <CombatantPools
+                combatant={combatant}
+                disabled={poolBusy}
+                interactive={!isEnded}
+                onSetResource={handleSetResource}
+                onSetSlot={handleSetSlot}
+                onRest={handleRest}
+              />
+            </section>
+          );
+        }
         return c.resources.length > 0 ? (
           <section className="panel sheet__block">
             <h3 className="sheet__block-title">Resources</h3>
@@ -609,6 +704,7 @@ function CombatCard({
             </ul>
           </section>
         ) : null;
+      }
       case "spellcasting":
         return c.spellcasting.length > 0 || c.spells.length > 0 ? (
           <section className="panel sheet__block">

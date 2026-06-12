@@ -14,6 +14,7 @@ import {
   CampaignMemberStatus,
   CombatantDisposition,
   EncounterStatus,
+  RestKind,
 } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
@@ -24,6 +25,7 @@ import PlayerEncounterView from "./PlayerEncounterView";
 import CharacterSheetView from "./CharacterSheetView";
 import EncounterLogPanel from "./EncounterLogPanel";
 import DeathSaveTrack from "../components/DeathSaveTrack";
+import CombatantPools from "../components/CombatantPools";
 import Modal from "../components/Modal";
 import "./EncounterView.css";
 
@@ -424,6 +426,69 @@ export default function EncounterView() {
       setSetHpInputs((prev) => ({ ...prev, [c.id]: "" }));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to set temp HP.");
+    }
+    setBusyCombatant(null);
+  }
+
+  // Resource & spell-slot pool handlers (INCOMING #19). Same shape as handleSetHp:
+  // set busyCombatant, await endpoint, applyUpdate, ApiError → setError, clear busy.
+  async function handleSetResource(
+    c: CombatantResponse,
+    key: string,
+    remaining: number,
+  ) {
+    setBusyCombatant(c.id);
+    try {
+      applyUpdate(
+        await campaigns.updateCombatantResource(
+          campaignId,
+          encounterId,
+          c.id,
+          key,
+          { remaining },
+        ),
+      );
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Failed to update resource.",
+      );
+    }
+    setBusyCombatant(null);
+  }
+
+  async function handleSetSlot(
+    c: CombatantResponse,
+    level: number,
+    isPact: boolean,
+    remaining: number,
+  ) {
+    setBusyCombatant(c.id);
+    try {
+      applyUpdate(
+        await campaigns.updateCombatantSpellSlot(
+          campaignId,
+          encounterId,
+          c.id,
+          level,
+          { remaining, isPact },
+        ),
+      );
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Failed to update spell slot.",
+      );
+    }
+    setBusyCombatant(null);
+  }
+
+  async function handleRest(c: CombatantResponse, kind: RestKind) {
+    setBusyCombatant(c.id);
+    try {
+      applyUpdate(
+        await campaigns.restCombatant(campaignId, encounterId, c.id, { kind }),
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to rest.");
     }
     setBusyCombatant(null);
   }
@@ -878,6 +943,25 @@ export default function EncounterView() {
             ✕
           </button>
         )}
+
+        {/* Pool pips — full-width sub-row between identity and controls toolbar.
+            interactive only when DM and encounter is not ended. */}
+        {(c.resources?.length || c.spellSlots?.length || c.pactSlot) ? (
+          <div className="enc__pools-row">
+            <CombatantPools
+              combatant={c}
+              disabled={isBusy}
+              interactive={isDm && !isEnded}
+              onSetResource={(key, remaining) =>
+                handleSetResource(c, key, remaining)
+              }
+              onSetSlot={(level, isPact, remaining) =>
+                handleSetSlot(c, level, isPact, remaining)
+              }
+              onRest={(kind) => handleRest(c, kind)}
+            />
+          </div>
+        ) : null}
 
         {isDm && !isEnded && (
           <div className="enc__comb-controls">

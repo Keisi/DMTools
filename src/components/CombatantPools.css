@@ -1,0 +1,139 @@
+/* CombatantPools — pip-track spend/restore rows for resource pools, spell slots,
+   and pact slots on combatant cards (INCOMING #19). Tokens only; no hardcoded
+   colors or sizes. Reads secondary to HP via --fs-xs / --fs-sm sizing. */
+
+.cpools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-4);
+  padding: var(--sp-2) 0;
+}
+
+/* ---- Shared row layout ---- */
+.cpools__res-row,
+.cpools__slot-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+}
+
+/* ---- Label chip ---- */
+.cpools__label {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 2.5rem;
+}
+
+/* Pact label: accent-bordered chip to visually distinguish it */
+.cpools__label--pact {
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--sp-1);
+  min-width: unset;
+}
+
+/* ---- Pip group (pips + − / + buttons) ---- */
+.cpools__pip-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+/* ---- Pip track ---- */
+.cpools__pips {
+  display: inline-flex;
+  gap: var(--sp-1);
+}
+
+.cpools__pip {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  flex-shrink: 0;
+  transition: background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.cpools__pip--on {
+  background: var(--text-muted);
+  border-color: var(--text-muted);
+}
+
+/* Pact row pips: gold accent to match the label */
+.cpools__slot-row--pact .cpools__pip--on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.cpools__slot-row--pact .cpools__pip {
+  border-color: var(--accent);
+  opacity: 0.5;
+}
+.cpools__slot-row--pact .cpools__pip--on {
+  opacity: 1;
+}
+
+/* ---- Numeric fallback (max > 8) ---- */
+.cpools__count {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- − / + adjust buttons ---- */
+.cpools__adj {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.cpools__adj:not(:disabled):hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.cpools__adj:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* ---- Rest buttons row ---- */
+.cpools__rest-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: auto;
+}
+
+.cpools__rest-btn {
+  font-size: var(--fs-xs);
+  padding: 0 var(--sp-2);
+  height: 22px;
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+.cpools__rest-btn:not(:disabled):hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
