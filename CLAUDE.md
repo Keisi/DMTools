@@ -125,6 +125,14 @@ launch* mechanics from it. What's relevant for this app:
     CDP-driver note in HANDOVER-NEXT.md.)
   - **First page load after a pool restart can exceed 8s** — use `wait` ≥ 8000ms after
     navigate, and re-run rather than trust a skeleton screenshot.
+  - **Orphaned Chrome processes can wedge the BACKEND (2026-06-12):** spectral's
+    `browser close --force` doesn't reliably reap its Chromes; dozens of orphans
+    accumulate across batches, each holding a live `/hubs/encounter` SignalR
+    connection, until the IIS worker starves and stops answering new requests
+    (looks like a backend hang, but the app "started successfully" in the event
+    log). Fix: kill all Chrome processes (PowerShell `Stop-Process -Name chrome
+    -Force`), recycle the pool, re-check `/api/health`. Prevention: kill orphan
+    Chromes before each spectral batch, not just `browser close --force`.
 
 ## TypeScript constraints (will fail the build if violated)
 

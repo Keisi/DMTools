@@ -1719,3 +1719,111 @@ duration tick 2→1→expired; concentration sweep + log). Files: `Entities/Enum
 `Entities/Characters/Character.cs`, `Entities/Encounters/CombatantStatusEffect.cs`,
 `{Reference,Character,Encounter}Contracts.cs`, `StatusEffectsController.cs`, `EncountersController.cs`,
 `{StatusEffectReference,Combat}Repository.cs`, migrations `061`/`062`/`063`.
+
+
+---
+
+# INCOMING #19 — `FRONTEND-REQUEST-combat-resource-tracking.md` DONE — per-combatant resource & spell-slot pools
+
+**From:** backend session  **Date:** 2026-06-12
+**Status:** SHIPPED — backend commit `25f2746` (local `master`, not pushed). **Migration `064` is applied to `DMTools_local`** and the IIS site (`:3501`) is rebuilt + running. Build 0 errors, 112/112 tests.
+
+> All changes are **additive** — no existing wire shape changed. **Enums stay numeric on the wire.**
+> This doc is the full contract — you don't need to read backend source.
+
+## 1. What got built
+
+A character-linked combatant now snapshots its **class resource pools** and **spell-slot table** at
+add time (and again at `start` for any linked combatant that has none yet). Snapshot semantics match
+`maxHp`: frozen at add/start, never retroactively rewritten by a mid-fight character edit. Freeform
+NPCs (`characterId == null`) get empty arrays / null pact slot. Three new mutation endpoints set the
+mutable `remaining` (clamped `0..max` server-side) and a rest restores pools by recharge. Every
+endpoint returns the **full `EncounterResponse`** and broadcasts `EncounterUpdated`, so they flow
+through your single `applyUpdate` exactly like HP/death-saves.
+
+## 2. New on `CombatantResponse` (additive)
+
+```jsonc
+{
+  // ...all existing combatant fields unchanged...
+  "resources": [
+    {
+      "resourceKey": "barbarian:rage",  // stable per-combatant slug; the key the PUT below takes
+      "name": "Rage",
+      "max": 3,
+      "remaining": 2,
+      "recharge": 2,                    // ResourceRecharge: 1 = ShortRest, 2 = LongRest (0 = None)
+      "source": "Barbarian"
+    }
+  ],
+  "spellSlots": [                       // STANDARD (non-pact) slots only; pact is separate below
+    { "level": 1, "max": 4, "remaining": 3 },
+    { "level": 2, "max": 3, "remaining": 1 }
+  ],
+  "pactSlot": { "level": 3, "max": 2, "remaining": 0 }  // Warlock pact pool, or null otherwise
+}
+```
+
+- `pactSlot` is a **single nullable object** (not an array) — SRD Warlock has exactly one pact slot
+  level. `null` for every non-Warlock and every freeform NPC.
+- `resourceKey` is a deterministic slug `slug(source):slug(name)` (e.g. `barbarian:rage`,
+  `cleric:channel-divinity`), de-duplicated with a `-2`, `-3`, … suffix on the rare collision. Treat
+  it as an opaque stable id — address pools by it, don't reconstruct it client-side.
+- Multiclass note: multiple **standard** casters share ONE combined PHB slot table (snapshotted
+  once — `spellSlots` is the combined pool, not doubled per class). A Warlock's pact pool is always
+  separate (`pactSlot`).
+- All pools start `remaining == max` at snapshot.
+
+## 3. New endpoints (DM **or** the owner of the linked character — same authz as HP/death-saves)
+
+```
+PUT  /api/campaigns/{campaignId}/encounters/{encounterId}/combatants/{combatantId}/resources/{resourceKey}
+     body: { "remaining": 1 }
+
+PUT  /api/campaigns/{campaignId}/encounters/{encounterId}/combatants/{combatantId}/spell-slots/{level}
+     body: { "remaining": 2, "isPact": false }     // isPact optional, defaults false
+
+POST /api/campaigns/{campaignId}/encounters/{encounterId}/combatants/{combatantId}/rest
+     body: { "kind": 2 }                            // RestKind: 1 = Short, 2 = Long  (NUMERIC, not a string)
+```
+
+- All three return the full `EncounterResponse` + broadcast `EncounterUpdated`.
+- `remaining` is **set** (not delta), clamped to `0..max` server-side.
+- `spell-slots/{level}` with `isPact: true` targets the Warlock pact pool at that level; `false`
+  (default) targets the standard pool. The same level can exist in both pools.
+- **Errors:** missing campaign/encounter/combatant ⇒ `404`. Found-but-not-authorized ⇒ `400`
+  (`ValidationProblem`, same as the HP endpoints — not a 404). Unknown `resourceKey` / unknown
+  `(level, isPact)` pool on that combatant ⇒ `400`. A `kind` other than 1 or 2 (including a missing
+  `kind` binding to 0) ⇒ `400`.
+- **Rest semantics:** `Short` (1) restores resources whose `recharge` is ShortRest **plus** the pact
+  spell slots; `Long` (2) restores **every** resource and **every** spell slot to max.
+
+> **Heads-up vs. your request doc:** you proposed `kind: "short" | "long"` (a string). We ship it as
+> a **numeric `RestKind` enum** (`1 = Short`, `2 = Long`) for consistency with every other API enum.
+> Send the number.
+
+## 4. New enum to model in `types.ts`
+
+```ts
+export type RestKind = 1 | 2; // 1 = Short, 2 = Long
+// resources[].recharge carries the existing ResourceRecharge (0 = None, 1 = ShortRest, 2 = LongRest).
+```
+
+## 5. Edge cases / guarantees
+
+- Freeform NPCs: `resources: []`, `spellSlots: []`, `pactSlot: null`. Nothing to mutate.
+- Mid-fight character edits never rewrite an in-progress combatant's pools (snapshot-once, like `maxHp`).
+- Removing a combatant cascades its pool rows; re-adding re-snapshots fresh from the current character.
+- `max` is frozen at snapshot — a character that levels up mid-encounter keeps the old `max` until
+  re-added (consistent with `maxHp`).
+
+## 6. Combat log
+
+Pool changes append best-effort combat-log entries (new numeric `CombatEventType` values, additive):
+`40 = ResourceChanged`, `41 = SpellSlotChanged`, `42 = Rested`. Existing log shape unchanged.
+
+## 7. Verification notes
+
+- The load-bearing snapshot rule ("standard casters share one slot table, pact separate") is covered
+  by pure unit tests (6 cases). The clamp and authz are SQL/controller-side — no API integration
+  harness exists, so those were verified by review, not automated tests.
