@@ -12,6 +12,7 @@ import type {
 import { CampaignMemberStatus, EncounterStatus } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
+import CampaignCharacterPanel from "../components/CampaignCharacterPanel";
 import "./CampaignDetail.css";
 
 export default function CampaignDetail() {
@@ -51,6 +52,8 @@ export default function CampaignDetail() {
   const [encName, setEncName] = useState("");
   const [encSession, setEncSession] = useState("");
   const [creatingEnc, setCreatingEnc] = useState(false);
+  const [statePanelChar, setStatePanelChar] =
+    useState<{ id: string; name: string; ownerId: string } | null>(null);
 
   const isDm = !!campaign && campaign.dmUserId === userId;
   const ownMembership = members.find((m) => m.userId === userId);
@@ -566,6 +569,20 @@ export default function CampaignDetail() {
                   )}
                   {(isDm || cc.ownerId === userId) && (
                     <button
+                      className="btn"
+                      onClick={() =>
+                        setStatePanelChar({
+                          id: cc.characterId,
+                          name: cc.characterName,
+                          ownerId: cc.ownerId,
+                        })
+                      }
+                    >
+                      Sheet
+                    </button>
+                  )}
+                  {(isDm || cc.ownerId === userId) && (
+                    <button
                       className="btn camp__char-remove"
                       onClick={() => handleUnregister(cc.characterId)}
                     >
@@ -808,6 +825,17 @@ export default function CampaignDetail() {
           </form>
         )}
       </section>
+
+      {statePanelChar && (
+        <CampaignCharacterPanel
+          campaignId={id}
+          characterId={statePanelChar.id}
+          characterName={statePanelChar.name}
+          isDm={isDm}
+          canManage={isDm || statePanelChar.ownerId === userId}
+          onClose={() => setStatePanelChar(null)}
+        />
+      )}
     </div>
   );
 }

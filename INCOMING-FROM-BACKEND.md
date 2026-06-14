@@ -2274,3 +2274,139 @@ players only on their own linked character).
 
 **Status:** build 0 errors, 426 xUnit tests green (42 new ExtraAttack tests added), migrations
 072 + 073 applied to `DMTools_local`. IIS pool restarted.
+---
+
+## INCOMING #31 -- Per-campaign character state + DM inspiration (2026-06-14)
+
+New endpoints under `api/campaigns/{campaignId}/characters/{characterId}/...`.
+Migration 074 applied to the local DB (4 new tables: CampaignCharacterState,
+CampaignCharacterSpellSlots, CampaignCharacterResources, CampaignCharacterStatusEffects).
+
+### Persistence semantics
+
+Each (campaign, character) pair has exactly one state row. The row is lazy-created on the
+first call to any endpoint in this group. Max values are derived live from the character
+(level-up raises the ceiling automatically); the DB stores only remaining counts.
+
+When an encounter ends or is archived, the server writes each character-linked combatant's
+current remaining pools and HP back to that character's campaign state. Mid-combat the
+combatant is the live view; the campaign sheet reflects the post-encounter outcome.
+
+### GET state
+
+```
+GET api/campaigns/{campaignId}/characters/{characterId}/state
+```
+
+Auth: DM or character owner. Returns `CampaignCharacterSheetResponse`.
+
+### CampaignCharacterSheetResponse shape
+
+```ts
+{
+  character: CharacterResponse,   // full derived sheet, status effects from campaign context
+  currentHp: number,              // current HP (defaults to maxHp until first set)
+  maxHp: number,                  // derived max HP (same as character.maxHitPoints)
+  tempHp: number,                 // temporary HP
+  inspiration: number,            // inspiration token count (RAW cap 1)
+  exhaustionLevel: number,        // 5e exhaustion 0-6
+
+  spellSlots: {
+    level: number,
+    isPact: boolean,
+    remaining: number,
+    max: number
+  }[],
+
+  resources: {
+    key: string,                  // stable slug key (same as combatant resourceKey)
+    name: string,
+    remaining: number,
+    max: number,
+    recharge: number              // ResourceRecharge: 1=ShortRest, 2=LongRest
+  }[],
+
+  statusEffects: {
+    statusEffectId: string,       // catalog id (use for DELETE)
+    name: string,
+    isBeneficial: boolean,
+    remainingRounds: number | null,
+    source: string | null
+  }[]
+}
+```
+
+`character` is built with the per-campaign status effects applied, so derived AC and roll
+modifiers already reflect active conditions. Do not add them a second time from `statusEffects[]`.
+
+### PATCH hp
+
+```
+PATCH api/campaigns/{campaignId}/characters/{characterId}/hp
+{ currentHp: number | null, tempHp: number }
+```
+
+`currentHp` null resets to "at derived max". Returns `CampaignCharacterSheetResponse`.
+
+### PATCH spell-slots
+
+```
+PATCH api/campaigns/{campaignId}/characters/{characterId}/spell-slots
+{ slotLevel: number, isPact: boolean, remaining: number }
+```
+
+The server clamps `remaining` to [0, derived max]. Returns `CampaignCharacterSheetResponse`.
+
+### POST / DELETE status-effects
+
+```
+POST   api/campaigns/{campaignId}/characters/{characterId}/status-effects
+{ statusEffectId: string, remainingRounds?: number, source?: string }
+
+DELETE api/campaigns/{campaignId}/characters/{characterId}/status-effects/{statusEffectId}
+```
+
+Both return `CampaignCharacterSheetResponse`. DELETE is idempotent.
+
+### POST long-rest / short-rest
+
+```
+POST api/campaigns/{campaignId}/characters/{characterId}/long-rest
+POST api/campaigns/{campaignId}/characters/{characterId}/short-rest
+```
+
+Long rest: all slots + LongRest resources -> max, HP -> derived max, tempHp -> 0,
+exhaustionLevel decremented by 1 (min 0). Returns `CampaignCharacterSheetResponse`.
+
+Short rest: pact slots + ShortRest resources -> max, HP unchanged.
+Note: hit-dice spending is deferred (v2). For now, apply short-rest healing via PATCH hp.
+Returns `CampaignCharacterSheetResponse`.
+
+### POST inspiration/grant (DM-only)
+
+```
+POST api/campaigns/{campaignId}/characters/{characterId}/inspiration/grant
+```
+
+Increments inspiration by 1 up to cap (default 1, RAW). Returns `CampaignCharacterSheetResponse`.
+
+### POST inspiration/spend (DM or owner)
+
+```
+POST api/campaigns/{campaignId}/characters/{characterId}/inspiration/spend
+```
+
+Decrements inspiration by 1. Returns 400 if inspiration is already 0.
+Returns `CampaignCharacterSheetResponse`.
+
+### Encounter integration
+
+When a character-linked combatant is added to an encounter (or the encounter starts), the
+combatant's pool Remaining values are seeded from the campaign state instead of defaulting
+to Max. This means an injured character who joins a fight carries over their current HP and
+spent resources from their campaign sheet.
+
+On encounter End or Archive, each character-linked combatant's current Remaining + HP are
+written back to the campaign state, so the campaign sheet reflects the encounter outcome.
+
+**Status:** build 0 errors, xUnit suite green, migration 074 applied to DMTools_local.

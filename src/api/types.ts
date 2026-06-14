@@ -1507,3 +1507,71 @@ export interface CombatLogPageResponse {
 export interface AddCombatLogNoteRequest {
   message: string; // 1–400 chars (server-validated)
 }
+
+// ---- Scope B: Per-campaign character state (INCOMING #31, migration 074) ----
+// A character carries SEPARATE runtime state per campaign (current/temp HP, spell-slot
+// + class-resource remaining, exhaustion, inspiration, active status effects). The
+// campaign pool is the source of truth: encounters seed combatant snapshots from it,
+// and on encounter End/Archive the combatant's HP + remaining pools write back to it.
+// All endpoints return the full sheet (state-replace). No SignalR — plain REST.
+
+export interface CampaignSpellSlotState {
+  level: number;
+  isPact: boolean;
+  remaining: number;
+  max: number; // derived live from the character; remaining is clamped to it on read
+}
+
+export interface CampaignResourceState {
+  key: string; // stable slug (same value as a combatant's resourceKey)
+  name: string;
+  remaining: number;
+  max: number;
+  recharge: ResourceRecharge; // 0 None / 1 ShortRest / 2 LongRest
+}
+
+export interface CampaignStatusEffectState {
+  statusEffectId: string; // catalog id — use for DELETE
+  name: string;
+  isBeneficial: boolean;
+  remainingRounds: number | null; // null = untimed
+  source: string | null;
+}
+
+export interface CampaignCharacterSheetResponse {
+  character: CharacterResponse; // full derived sheet WITH per-campaign status effects
+                                // already applied (AC / roll advantages reflect them) —
+                                // never re-apply statusEffects[] on top of it.
+  currentHp: number;            // always concrete (stored, or derived max if unset)
+  maxHp: number;                // derived (== character.maxHitPoints)
+  tempHp: number;
+  inspiration: number;          // token count; RAW cap 1 (backend GameRules:InspirationMax)
+  exhaustionLevel: number;      // 0–6; no direct setter — only long-rest decrements it
+  spellSlots: CampaignSpellSlotState[];
+  resources: CampaignResourceState[];
+  statusEffects: CampaignStatusEffectState[];
+}
+
+// ---- Request bodies ----
+
+// PATCH hp — currentHp null resets to derived max; tempHp floor 0. Note this is a
+// RAW SET (unlike the combatant HP endpoint's delta semantics): the client computes the
+// new absolute values for heal/damage UX (see panel §4).
+export interface UpdateCampaignCharacterHpRequest {
+  currentHp: number | null;
+  tempHp: number;
+}
+
+// PATCH spell-slots — server clamps remaining to [0, derived max].
+export interface UpdateCampaignSpellSlotRequest {
+  slotLevel: number; // 1–9
+  isPact: boolean;
+  remaining: number;
+}
+
+// POST status-effects — apply a catalog effect to the campaign sheet.
+export interface AddCampaignStatusEffectRequest {
+  statusEffectId: string;
+  remainingRounds?: number | null;
+  source?: string | null;
+}

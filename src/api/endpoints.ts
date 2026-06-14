@@ -11,6 +11,7 @@ import type {
   AuthResponse,
   BackgroundResponse,
   CampaignCharacterResponse,
+  CampaignCharacterSheetResponse,
   CampaignMemberResponse,
   CampaignResponse,
   CharacterRequest,
@@ -52,6 +53,9 @@ import type {
   CombatLogEntryResponse,
   CombatLogPageResponse,
   RecordDeathSavesRequest,
+  UpdateCampaignCharacterHpRequest,
+  UpdateCampaignSpellSlotRequest,
+  AddCampaignStatusEffectRequest,
   UpdateCombatantHpRequest,
   UpdateCombatantRequest,
   UpdateCombatantResourceRequest,
@@ -429,5 +433,71 @@ export const campaigns = {
   deleteLogEntry: (campaignId: string, encounterId: string, seq: number) =>
     api.del<void>(
       `/api/campaigns/${campaignId}/encounters/${encounterId}/log/${seq}`,
+    ),
+};
+
+// ---- Scope B: Per-campaign character state (INCOMING #31) ----
+// All under /api/campaigns/{campaignId}/characters/{characterId}. Auth: DM (campaign
+// owner) OR the character's owner — a non-owner non-DM gets 404 (no existence leak).
+// inspiration/grant is DM-ONLY. Every call returns the full CampaignCharacterSheetResponse.
+export const campaignCharacterState = {
+  get: (campaignId: string, characterId: string) =>
+    api.get<CampaignCharacterSheetResponse>(
+      `/api/campaigns/${campaignId}/characters/${characterId}/state`,
+    ),
+  updateHp: (
+    campaignId: string,
+    characterId: string,
+    body: UpdateCampaignCharacterHpRequest,
+  ) =>
+    api.patch<CampaignCharacterSheetResponse>(
+      `/api/campaigns/${campaignId}/characters/${characterId}/hp`,
+      body,
+    ),
+  updateSpellSlot: (
+    campaignId: string,
+    characterId: string,
+    body: UpdateCampaignSpellSlotRequest,
+  ) =>
+    api.patch<CampaignCharacterSheetResponse>(
+      `/api/campaigns/${campaignId}/characters/${characterId}/spell-slots`,
+      body,
+    ),
+  addStatusEffect: (
+    campaignId: string,
+    characterId: string,
+    body: AddCampaignStatusEffectRequest,
+  ) =>
+    api.post<CampaignCharacterSheetResponse>(
+      `/api/campaigns/${campaignId}/characters/${characterId}/status-effects`,
+      body,
+    ),
+  removeStatusEffect: (
+    campaignId: string,
+    characterId: string,
+    statusEffectId: string,
+  ) =>
+    api.del<CampaignCharacterSheetResponse>(
+      `/api/campaigns/${campaignId}/characters/${characterId}/status-effects/${statusEffectId}`,
+    ),
+  longRest: (campaignId: string, characterId: string) =>
+    api.post<CampaignCharacterSheetResponse>(
+      `/api/campaigns/${campaignId}/characters/${characterId}/long-rest`,
+      {},
+    ),
+  shortRest: (campaignId: string, characterId: string) =>
+    api.post<CampaignCharacterSheetResponse>(
+      `/api/campaigns/${campaignId}/characters/${characterId}/short-rest`,
+      {},
+    ),
+  grantInspiration: (campaignId: string, characterId: string) => // DM ONLY
+    api.post<CampaignCharacterSheetResponse>(
+      `/api/campaigns/${campaignId}/characters/${characterId}/inspiration/grant`,
+      {},
+    ),
+  spendInspiration: (campaignId: string, characterId: string) =>
+    api.post<CampaignCharacterSheetResponse>(
+      `/api/campaigns/${campaignId}/characters/${characterId}/inspiration/spend`,
+      {},
     ),
 };
