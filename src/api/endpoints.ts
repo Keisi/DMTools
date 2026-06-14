@@ -56,6 +56,8 @@ import type {
   UpdateCampaignCharacterHpRequest,
   UpdateCampaignSpellSlotRequest,
   AddCampaignStatusEffectRequest,
+  UpdateCampaignResourceRequest,
+  UpdateCampaignExhaustionRequest,
   UpdateCombatantHpRequest,
   UpdateCombatantRequest,
   UpdateCombatantResourceRequest,
@@ -499,5 +501,24 @@ export const campaignCharacterState = {
     api.post<CampaignCharacterSheetResponse>(
       `/api/campaigns/${campaignId}/characters/${characterId}/inspiration/spend`,
       {},
+    ),
+  updateResource: (
+    campaignId: string,
+    characterId: string,
+    key: string,
+    body: UpdateCampaignResourceRequest,
+  ) =>
+    api.patch<CampaignCharacterSheetResponse>(
+      `/api/campaigns/${campaignId}/characters/${characterId}/resources/${encodeURIComponent(key)}`,
+      body,
+    ),
+  updateExhaustion: (
+    campaignId: string,
+    characterId: string,
+    body: UpdateCampaignExhaustionRequest,
+  ) =>
+    api.patch<CampaignCharacterSheetResponse>(
+      `/api/campaigns/${campaignId}/characters/${characterId}/exhaustion`,
+      body,
     ),
 };

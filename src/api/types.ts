@@ -1575,3 +1575,16 @@ export interface AddCampaignStatusEffectRequest {
   remainingRounds?: number | null;
   source?: string | null;
 }
+
+// PATCH resources/{key} — set a class resource's remaining (INCOMING #32). Server-clamps
+// to [0, derived max]; send the absolute target, not a delta. Unknown key for the character → 400.
+export interface UpdateCampaignResourceRequest {
+  remaining: number;
+}
+
+// PATCH exhaustion — set the 5e exhaustion level (INCOMING #32). Validated [0, 6]; direct set.
+// Store-only: the backend does NOT derive mechanical penalties, so the embedded `character`
+// block is unaffected — render the level as a stepper/badge only.
+export interface UpdateCampaignExhaustionRequest {
+  level: number;
+}

@@ -227,6 +227,25 @@ export default function CampaignCharacterPanel({
     );
   }
 
+  // ---- Class resource actions (INCOMING #32) ----
+  function handleResourceChange(r: CampaignResourceState, delta: number) {
+    void mutate(() =>
+      campaignCharacterState.updateResource(campaignId, characterId, r.key, {
+        remaining: r.remaining + delta,
+      }),
+    );
+  }
+
+  // ---- Exhaustion actions (INCOMING #32) ----
+  function handleExhaustionChange(delta: number) {
+    if (!sheet) return;
+    const level = Math.max(0, Math.min(6, sheet.exhaustionLevel + delta));
+    if (level === sheet.exhaustionLevel) return; // no-op at the clamp edges
+    void mutate(() =>
+      campaignCharacterState.updateExhaustion(campaignId, characterId, { level }),
+    );
+  }
+
   // ---- Inspiration actions ----
   function handleGrantInspiration() {
     void mutate(() => campaignCharacterState.grantInspiration(campaignId, characterId));
@@ -463,19 +482,36 @@ export default function CampaignCharacterPanel({
             </div>
           </div>
 
-          {/* ---- Exhaustion ---- */}
+          {/* ---- Exhaustion (INCOMING #32: canManage-gated stepper) ---- */}
           <div className="ccp__section">
             <p className="ccp__section-title">Exhaustion</p>
             <div className="ccp__exhaustion-row">
-              <span className="ccp__exhaustion-val">{sheet.exhaustionLevel} / 6</span>
-              {sheet.exhaustionLevel === 0 && (
-                <span className="ccp__exhaustion-hint">None</span>
+              {canManage && (
+                <button
+                  type="button"
+                  className="ccp__adj"
+                  disabled={busy || sheet.exhaustionLevel <= 0}
+                  onClick={() => handleExhaustionChange(-1)}
+                  aria-label="Reduce exhaustion"
+                >
+                  −
+                </button>
               )}
-              <span
-                className="ccp__exhaustion-hint"
-                title="Exhaustion level is reduced by 1 on a Long Rest. There is no manual setter."
-              >
-                (reduced by Long Rest)
+              <span className="ccp__exhaustion-val">{sheet.exhaustionLevel} / 6</span>
+              {canManage && (
+                <button
+                  type="button"
+                  className="ccp__adj"
+                  disabled={busy || sheet.exhaustionLevel >= 6}
+                  onClick={() => handleExhaustionChange(1)}
+                  aria-label="Increase exhaustion"
+                >
+                  +
+                </button>
+              )}
+              {sheet.exhaustionLevel === 0 && <span className="ccp__exhaustion-hint">None</span>}
+              <span className="ccp__exhaustion-hint" title="Also reduced by 1 on a Long Rest.">
+                (also reduced by Long Rest)
               </span>
             </div>
           </div>
@@ -506,7 +542,7 @@ export default function CampaignCharacterPanel({
             </div>
           )}
 
-          {/* ---- Class resources (display-only — no resource-set endpoint in #31) ---- */}
+          {/* ---- Class resources (interactive for DM/owner — INCOMING #32) ---- */}
           {sheet.resources.length > 0 && (
             <div className="ccp__section">
               <p className="ccp__section-title">Class Resources</p>
@@ -523,9 +559,9 @@ export default function CampaignCharacterPanel({
                       remaining={r.remaining}
                       max={r.max}
                       disabled={busy}
-                      interactive={false}
-                      onMinus={() => { /* display-only */ }}
-                      onPlus={() => { /* display-only */ }}
+                      interactive={canManage}
+                      onMinus={() => handleResourceChange(r, -1)}
+                      onPlus={() => handleResourceChange(r, 1)}
                     />
                     {hint && <span className="ccp__pool-hint">{hint}</span>}
                   </div>
