@@ -2119,3 +2119,158 @@ connections, overlapping reconnects through the Vite proxy) consume every slot a
 unmount/HMR paths `stop()` the connection rather than abandoning it. If the API "stops responding"
 locally, suspect leaked hub connections first — closing extra tabs (or the backend recycling the
 pool) clears it instantly. Production (Azure App Service) is unaffected (Server SKU + WebSockets).
+
+---
+
+# INCOMING #27 — Bardic Inspiration recharge is now level-correct (value change, no shape change)
+
+**From:** backend session  **Date:** 2026-06-14  **No shape change — value change only.**
+
+`CharacterResourceResponse.Recharge` for Bardic Inspiration now returns the correct level-dependent
+value per the 5e Font of Inspiration feature (Bard L5):
+
+- **Bard L1–4:** `recharge: 2` (LongRest) — unchanged from before.
+- **Bard L5+:** `recharge: 1` (ShortRest) — **was incorrectly 2 (LongRest) before this fix.**
+
+This affects both `GET /api/character/{id}` (`resources[].recharge`) and the level-up plan's
+`gainedResources[].recharge`. The combatant snapshot (`CombatantResources.Recharge`) is also
+correct now — the backend's short-rest pool-reset logic already gates on `Recharge == ShortRest`,
+so a L5+ Bard's Bardic pool will now correctly restore on a short rest in combat. No DTO field
+added or removed; only the integer value changes for L5+ Bards.
+---
+
+# INCOMING #28 - Wizard spellbook cap reconciled with the prepared-spell cap (validation fix)
+
+**From:** backend session  **Date:** 2026-06-14  **One additive optional field; otherwise value/behavior only.**
+
+Closes your `FRONTEND-REQUEST-wizard-spellbook-prepared-cap.md`. The prepared-spell cap no longer
+gates a spellbook caster by `maxPreparedSpells`; for the stored levelled list it now uses
+`spellbookSize`. Per-class term in the aggregate storage budget:
+
+- spellbook caster (Wizard)                      -> spellbookSize(classLevel)   (NEW)
+- prepared caster (Cleric/Druid/Paladin)         -> maxPrepared(classLevel)     (unchanged)
+- known caster (Bard/Sorcerer/Ranger/Warlock)    -> spellsKnown(classLevel)     (unchanged)
+
+Effect:
+- Single-class Wizard now accepts exactly spellbookSize(level) levelled spells with NO
+  allowHomebrewSelections (L1=6, L5=14, L20=44); one over -> 400. Walking a Wizard 1->20 via
+  levelup/plan + levelup/apply (taking each plan's newSpells delta) no longer needs the homebrew
+  flag - drop the harness workaround.
+- maxPreparedSpells is unchanged and still returned as the daily-preparation display number.
+- Multiclass: aggregate cap = spellbookSize(WizardLevel) + maxPrepared(ClericLevel), etc.
+- Non-Wizard caps unchanged (verified - no regression).
+
+Additive contract: SpellcastingResponse (on CharacterResponse.spellcasting[]) gains
+`spellbookSize: number | null` (per-class stored-spell cap; null for non-spellbook casters).
+Model it as optional. Enforced on create, PUT /api/character/{id}/spells, and levelup/apply.
+
+Status: build 0-err, full xUnit suite green (incl. new Wizard cap tests). No migration
+(spellbookSize already existed from INCOMING #24).
+## INCOMING #29 — Chosen High Elf cantrip now returns server-computed DC/attack (migration 071, 2026-06-14)
+
+**What changed:** The chosen High Elf racial cantrip (the one the player picks from the wizard spell list
+via the subrace's Type.Cantrip selection) now returns a non-null `saveDc` and `spellAttack` in the
+`spells[]` array (the `SpellsWithSource` response). Previously both were null because the spell had no
+caster class (High Elf Fighter has no Wizard class). They are now server-computed as:
+
+  saveDc = 8 + proficiencyBonus + intModifier
+  spellAttack = proficiencyBonus + intModifier
+
+The casting ability (Intelligence for High Elf) is stored on the `CharacterSpell` row via a new
+`SpellcastingAbilityStatId` column, set by the controller on both the create and update-spells paths.
+
+**Shape change:** None. The `spells[]` entries are the same `ResolvedSpell` shape; only the values of
+`saveDc` and `spellAttack` change from null to integers for racial cantrips.
+
+**Frontend action:** Drop any client-side DC fallback logic for null-source cantrips on a High Elf.
+The values are now authoritative from the server. Class-attributed spells are unaffected.
+
+**Closes:** the deferral noted in INCOMING #25 ("deliberately carries no DC, a deferred product call").
+
+## INCOMING #30 — attacksPerAction, 6 advantage/disadvantage buffs, POST /advantage endpoint (2026-06-14)
+
+Three features shipped together. No migration required on your side; DB is now through migration 073.
+
+---
+
+### A. `attacksPerAction` on CharacterResponse (Feature B — Extra Attack)
+
+**New field** on `CharacterResponse` (placed between `equippedWeapons` and `weaponAttacks`):
+
+```ts
+attacksPerAction: number   // integer, default 1
+```
+
+This is the total number of attacks per Attack action. Rule encoded server-side:
+- Fighter: 1 at L1–4, **2 at L5**, **3 at L11**, **4 at L20**.
+- Barbarian, Paladin, Ranger, Monk: **2 at L5** (1 otherwise).
+- All other classes (casters, Rogue, etc.): always **1**.
+- Multiclass: **MAX across classes, never a sum** (RAW: Extra Attack does not stack).
+  - Fighter 11 / Barbarian 5 → **3** (not 5).
+  - Fighter 11 / Wizard 5 → **3** (not 4).
+
+**Important distinction:** `attacksPerAction` is specifically the Attack action count.
+Two-Weapon Fighting (bonus-action offhand), Action Surge (extra action), and Monk's
+bonus-action unarmed strike are **separate** mechanics — do not conflate them.
+
+**Typical UI use:** show `attacksPerAction` on the combat tab next to `weaponAttacks[]`.
+If `attacksPerAction > 1`, the player makes that many attacks per Attack action.
+
+**Enum values:** numeric, no change (this is a plain integer, not an enum).
+
+---
+
+### E. 6 generic advantage/disadvantage StatusEffects seeded (Feature E — situational advantage)
+
+Six new entries now exist in the `GET /api/statuseffects` catalog (stable GUIDs):
+
+| Name | Target (RollTarget) | Kind (RollModifierKind) | IsBeneficial | DefaultDurationRounds |
+|---|---|---|---|---|
+| Advantage: Attack | AttackRoll = **0** | Advantage = **2** | true | 1 |
+| Advantage: Saving Throw | SavingThrow = **1** | Advantage = **2** | true | 1 |
+| Advantage: Ability Check | AbilityCheck = **2** | Advantage = **2** | true | 1 |
+| Disadvantage: Attack | AttackRoll = **0** | Disadvantage = **3** | false | 1 |
+| Disadvantage: Saving Throw | SavingThrow = **1** | Disadvantage = **3** | false | 1 |
+| Disadvantage: Ability Check | AbilityCheck = **2** | Disadvantage = **3** | false | 1 |
+
+These are the generic "situational advantage" tokens the DM grants at the table (e.g. high ground,
+flanking, enemy is prone). They auto-expire on the next round wrap (`RemainingRounds = 1`).
+
+The existing `POST /api/campaigns/{cid}/encounters/{eid}/combatants/{combid}/status-effects`
+endpoint already handles them. They appear in `combatant.statusEffects[]` and feed the existing
+`rollAdvantages[]` derivation on the character/combatant response — no new response shape needed.
+
+---
+
+### E (cont.). New convenience endpoint: POST /advantage (Feature E)
+
+Endpoint keeps rule knowledge server-side — the DM does not need to know the catalog GUIDs.
+
+```
+POST /api/campaigns/{campaignId}/encounters/{encounterId}/combatants/{combatantId}/advantage
+```
+
+**Request body:**
+
+```ts
+{
+  target: RollTarget,       // 0=AttackRoll, 1=SavingThrow, 2=AbilityCheck (IncomingAttackRoll not supported here)
+  state: AdvantageState,    // 1=Advantage, 2=Disadvantage (Cancelled=3 is invalid)
+  rounds?: number           // default 1; 1–1000
+}
+```
+
+**Response:** full `EncounterResponse` (same shape as every other encounter mutation endpoint).
+Also broadcasts `EncounterUpdated` on SignalR exactly like the existing status-effect endpoint.
+
+**Auth:** same DM/owner authz as other combatant-write endpoints (DM can act on any combatant;
+players only on their own linked character).
+
+**Typical UI use:** a "Grant Advantage" button on the DM's initiative tracker that sends
+`{ target: 0, state: 1, rounds: 1 }` for advantage on the next attack. The combatant's
+`rollAdvantages[]` will immediately reflect it, and it clears on the round wrap.
+
+---
+
+**Status:** build 0 errors, 426 xUnit tests green (42 new ExtraAttack tests added), migrations
+072 + 073 applied to `DMTools_local`. IIS pool restarted.

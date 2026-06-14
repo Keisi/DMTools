@@ -42,8 +42,13 @@ npm run preview  # serve the production build
 npm run lint     # eslint .
 ```
 
-There is **no test runner configured** — do not invent `npm test`. The build's
-`tsc -b` typecheck is the correctness gate.
+There is **no unit-test runner configured** — do not invent `npm test`. The build's
+`tsc -b` typecheck is the correctness gate. There **is** an out-of-build **API
+end-to-end harness** at `tests/api-e2e/` (pure-HTTP, plain Node ESM, zero deps, NOT
+wired into `npm` and NOT in the `tsc -b`/vite path): `node tests/api-e2e/run.mjs`
+against a live backend walks level-up 1→20 for every class, above-L1 creation +
+convergence, and full encounter scenarios. See `tests/api-e2e/README.md` and the
+plan + per-class/per-level reference in `projectnotes/api-e2e-test-plan.md`.
 
 ### Quality gates (oby-first; playbook-derived, trimmed for this personal project)
 
@@ -305,10 +310,10 @@ anything but a single int. (Subraces ARE modeled — picker in the builder race
 step, modifiers in the ability tooltip, plus subrace choice-Selections — High Elf
 cantrip + extra language — and auto-granted racial spells; see INCOMING #25.)
 
-## Backend context you can't see from this repo (synced 2026-06-13)
+## Backend context you can't see from this repo (synced 2026-06-14)
 
-- **Backend request queue is FULLY DRAINED + consumed (DB through migration 069).**
-  INCOMING #19–#25 are all DONE and wired into the client (pushed to `origin/main`):
+- **Backend request queue is FULLY DRAINED + consumed (DB through migration 073).**
+  INCOMING #19–#30 are all DONE and wired into the client (pushed to `origin/main`):
   - **#19 resource tracking** (mig 064) — per-combatant `resources`/`spellSlots`/`pactSlot`
     pools; `components/CombatantPools.tsx` renders pip tracks + set-semantics steppers +
     Short/Long Rest on DM + player cards. Endpoints `…/resources/{key}`,
@@ -330,14 +335,27 @@ cantrip + extra language — and auto-granted racial spells; see INCOMING #25.)
     `CharacterResponse.racialSpells[]` (auto-grants, level-gated, own-ability DC). Builder
     Race step renders the two pickers (`SubraceSelections` in `CharacterBuilder.steps.tsx`),
     merges the cantrip into bare `spellIds` (null source) + the language into `languageIds`;
-    sheet shows a "Racial Spells" subsection (visible even for non-casters). Open offer NOT
-    taken: server-side INT DC for the *chosen* High Elf cantrip (it shows no DC, by design).
+    sheet shows a "Racial Spells" subsection (visible even for non-casters).
+  - **#27 Bardic Inspiration recharge** — value-only fix: a Bard L5+ Bardic die recharges on a
+    **Short** rest (was Long); flows through `resources[].recharge` — no client change needed.
+  - **#28 Wizard spellbook cap** (no migration) — the prepared-spell cap now uses `spellbookSize`
+    (not `maxPrepared`) as the **stored**-spell budget for spellbook casters;
+    `SpellcastingResponse.spellbookSize` modeled (optional). Harness homebrew workaround dropped.
+    Closed `FRONTEND-REQUEST-wizard-spellbook-prepared-cap.md`.
+  - **#29 High Elf cantrip DC** (mig 071) — the *chosen* racial cantrip now returns server-computed
+    `saveDc`/`spellAttack` (INT-based; was null). Sheet already renders them conditionally — no
+    client change (closes the #25 deferral).
+  - **#30 Extra Attack + situational advantage** (migs 072/073) — `CharacterResponse.attacksPerAction`
+    (MAX across classes, never a sum; shown in the sheet Attacks block, defensive `?? 1` guard); 6
+    generic advantage/disadvantage StatusEffects (flow through the existing `rollAdvantages` path,
+    no new shape); `POST …/combatants/{id}/advantage` (`campaigns.grantAdvantage` +
+    `GrantAdvantageRequest`) wired to DM Adv/Dis-(attack/save) quick-grant buttons in `EncounterView`.
   - **The buffs-system rule still holds:** **flat** roll modifiers are pre-folded into the
     derived numbers — render-only, NEVER re-apply; only **dice** + **advantage/disadvantage**
     surface via `CharacterResponse.rollModifiers`/`rollAdvantages` (the no-double-counting
     invariant). Badges carry `remainingRounds`/`sourceCombatantId`/`consumedOnUse`.
 - **No outstanding backend requests — the queue is empty.** The last one
-  (`FRONTEND-REQUEST-subrace-choice-traits.md`) shipped as INCOMING #25 and is consumed (above).
+  (`FRONTEND-REQUEST-wizard-spellbook-prepared-cap.md`) shipped as INCOMING #28 and is consumed (above).
 
 - **The backend has a real xUnit suite now** (`DMTool.Tests`, run with
   `dotnet test DMTool.slnx` in the backend repo) covering the domain rules in
@@ -346,11 +364,13 @@ cantrip + extra language — and auto-granted racial spells; see INCOMING #25.)
   unarmed/unarmored). When you file a `FRONTEND-REQUEST-*.md` for rule
   enforcement, the rule + tests land there — asking is cheap; don't work around
   missing rules client-side.
-- **DB baseline fold is at migration 057** (2026-06-11); migrations 058–069
+- **DB baseline fold is at migration 057** (2026-06-11); migrations 058–073
   (buffs 061–063, resource pools 064, hide-turn-order 065, session-enforce 066,
-  spell source-class 067, wizard spellbook 068, subrace selections 069) sit on top of it.
-  **Production note:** the Azure App Service backend + its DB are NOT yet migrated to 069 —
-  #25 works locally only until that deploy + migration runs in prod.
+  spell source-class 067, wizard spellbook 068, subrace selections 069, High Elf cantrip
+  DC 071, Extra Attack table 072, advantage buffs seed 073) sit on top of it.
+  **Production note:** the Azure App Service backend + its DB are NOT yet migrated past 069 —
+  #25 and #29/#30 (and the #28 validation change) work locally only until that deploy +
+  migrations 071/072/073 run in prod.
 - **Hub auth is enforced server-side** (backend commit 2026-06-11):
   `JoinEncounter` verifies encounter access before the group join, and DM-only
   pushes go to a separate `encounter-{id}-dm` group. If live updates stop for a

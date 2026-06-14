@@ -1,5 +1,78 @@
 # Handover — DMTool-FrontEnd (for the next session)
 
+> ## ✅ SESSION 2026-06-14 (later) — INCOMING #27–#30 consumed + PUSHED (HEAD `1eb0f13` on `origin/main`)
+>
+> Backend shipped INCOMING #27–#30; all consumed, committed, and **pushed to production**
+> (GitHub Pages deploy triggered). The e2e-harness commit `a8eb1f6` rode along in the same push.
+>
+> - **#28 Wizard spellbook cap** — `SpellcastingResponse.spellbookSize` (optional) added; the
+>   prepared-cap collision is fixed backend-side, so the harness homebrew workaround was removed
+>   (Suite A Wizard 1→20 clean; Suite B 14-accept / 15-reject). Closed the
+>   `FRONTEND-REQUEST-wizard-spellbook-prepared-cap.md` request.
+> - **#29 High Elf cantrip DC** — server-computed now; the sheet already rendered `saveDc` → no code change.
+> - **#30 Extra Attack + advantage** — `CharacterResponse.attacksPerAction` shown in the Attacks
+>   block (defensive `?? 1` guard); `campaigns.grantAdvantage` + `GrantAdvantageRequest` + DM
+>   Adv/Dis-(attack/save) quick-grant buttons in `EncounterView`. The 6 advantage StatusEffects
+>   flow through the existing `rollAdvantages` path (no change).
+> - **#27 Bardic recharge** — value-only (L5+ Short rest); no code change.
+>
+> **Gates:** npm build + lint green, oby precheck delta 0, e2e 2041 PASS / 0 FAIL, live spectral
+> confirmed the Extra Attack line. Critical review PASS (report in `projectnotes/critical-review/2026-06-14/`).
+>
+> **Prod caveat:** the Azure backend is NOT yet on migrations 071/072/073, so #29/#30 (and the #28
+> validation change) are live only against a local backend until that deploy runs. The frontend
+> changes are additive/defensive and safe ahead of it.
+>
+> **Open (optional, product calls — not backend-blocked):** advantage quick-grant buttons cover
+> Attack + Saving Throw only, not Ability Check; harness findings #2/#3 (creation doesn't enforce
+> earned-ASI / min-spell counts) remain — file requests only if the product wants creation to enforce them.
+>
+> **This supersedes the "next steps" in the harness block below** (request delivered + closed, harness pushed).
+>
+> ---
+>
+> ## 🧪 SESSION 2026-06-14 — API e2e test harness (committed `a8eb1f6` on `main`, now PUSHED)
+>
+> Built a pure-HTTP end-to-end test harness for the DMTool API (no browser, no
+> spectral). **Committed but not pushed** — push = prod deploy, awaiting Kevin's word.
+>
+> **What's there:**
+> - `tests/api-e2e/` — standalone Node ESM (zero deps, off the `tsc -b` / vite path,
+>   not wired into `npm`). Run: `node tests/api-e2e/run.mjs` (env `SUITES=A,B,C` /
+>   `ONLY=Wizard,Fighter` / `QUIET=1` / `BASE=`). Backend must be live (`:3501` IIS
+>   or `:5157` Kestrel). Report → `tests/api-e2e/last-run.json` (gitignored). Full
+>   docs in `tests/api-e2e/README.md`.
+>   - **Suite A** — level-up 1→20 for all 12 classes (plan→apply, asserted vs each
+>     class's own progression data + RAW spot-checks).
+>   - **Suite B** — above-L1 creation + the **build-at-20 == levelup-1→20 convergence
+>     invariant** + spell-gate negatives + multiclass/prereq.
+>   - **Suite C** — encounter lifecycle / HP+death / status+concentration /
+>     resources+rest / buffs / DM visibility / combat log / authz guards.
+>   - **Last full run: 2040 PASS / 0 FAIL / 4 FINDING.**
+> - `projectnotes/api-e2e-test-plan.md` — the plan **+ a per-class/per-level reference
+>   table** (all 12 classes × L1–20, generated from live seed data) so a future agent
+>   need not re-query `/api/classes`.
+>
+> **4 findings (FINDING ≠ bug — see README §Notes):**
+> 1. **Wizard spellbook vs prepared-spell cap** — the spellbook (6→44) is validated
+>    against the prepared cap (INT mod + level), so creating/advancing a Wizard needs
+>    `allowHomebrewSelections`. **Draft filed:**
+>    `FRONTEND-REQUEST-wizard-spellbook-prepared-cap.md` (frontend repo only — **NOT
+>    yet copied to the backend root**; copy it there on Kevin's go to hand it off).
+> 2. Creation doesn't enforce earned-ASI completeness (Fighter L8 ok with 1 of 3 ASIs).
+> 3. Creation doesn't enforce minimum spell counts (Wizard L11 ok with 0 spells).
+>    (#2/#3 may be by design — only `levelup/apply` forces counts; file requests only
+>    if the product wants creation to enforce them.)
+> 4. No flat-modifier status effect in the catalog → the "flat folds-in, not
+>    double-counted" buffs half can't be asserted directly (dice + adv/disadv IS).
+>
+> **Next steps:** (a) on Kevin's go — `git push` the harness + copy the
+> wizard-spellbook FRONTEND-REQUEST to the backend root; (b) optionally turn findings
+> #2/#3 into requests. NOTE: subrace #25 already shipped (`0942095`), so the
+> "ONLY OUTSTANDING = subrace-choice-traits" note in the block below is **superseded**.
+>
+> ---
+>
 > ## ✅ SESSION 2026-06-12/13 — all shipped + pushed (HEAD `16dd4b3` on `origin/main`)
 >
 > A long session; **everything below is committed AND pushed to production** (GitHub
