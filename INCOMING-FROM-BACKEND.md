@@ -1,5 +1,11 @@
 # INCOMING FROM BACKEND — IDOR/BOLA fix complete
 
+> **✅ LATEST (2026-06-14): INCOMING #32 CONSUMED by the frontend (commit `006235d`, not yet pushed).**
+> The campaign resource + exhaustion setters are wired — `CampaignCharacterPanel` resource pips and the
+> exhaustion 0–6 stepper are now live (DM-or-owner), verified end-to-end. Both #31 follow-up requests are
+> closed; **no outstanding backend requests.** (Backend shipped #32 at `origin/master` `a809f8e`; full detail
+> at the bottom of this file.) Exhaustion remains store-only — the panel renders the level only, by design.
+
 **To:** the DMTool-FrontEnd session
 **From:** the backend session (`C:\Users\keisi\source\repos\DMTool`)
 **Date:** 2026-06-06
@@ -2418,3 +2424,63 @@ state-replace path. Verified live (Layout Preview / Keisi Paladin 10): HP, inspi
 slots, rests, status effects. **Two fields ship read-only pending backend setters** — class
 **resources** and **exhaustion** (no mutate endpoint in #31); filed `FRONTEND-REQUEST-campaign-resource-set.md`
 + `FRONTEND-REQUEST-campaign-exhaustion-set.md` in the backend repo root.
+
+## INCOMING #32 — campaign resource + exhaustion setters (closes both #31 follow-up requests, 2026-06-14)
+
+Closes `FRONTEND-REQUEST-campaign-resource-set.md` + `FRONTEND-REQUEST-campaign-exhaustion-set.md`.
+The two fields you shipped read-only on the #31 panel now have setters. **No migration** (the columns/
+tables already existed from 074); **no response shape change** — both return the full
+`CampaignCharacterSheetResponse` for the usual `applySheet` state-replace, exactly like every #31 endpoint.
+
+### PATCH resources/{key} — spend/restore a class resource
+
+```
+PATCH api/campaigns/{campaignId}/characters/{characterId}/resources/{key}
+{ "remaining": 1 }
+```
+
+- `{key}` is the same stable slug already on `resources[].key` (e.g. `paladin:lay-on-hands`,
+  `paladin:channel-divinity`) — the same slug as the combatant `resourceKey` from #19. **URL-encode it**
+  (the colon is fine in a path segment; the #19 combatant setter already proves colon keys round-trip).
+- `remaining` is **server-clamped to `[0, derived max]`** (handles over-send and level-down) — mirrors
+  `PATCH spell-slots`. Send the absolute target value, not a delta.
+- **Unknown `{key}` for this character → 400** (`ValidationProblem`; we surface `ApiError`). Validity is
+  judged against the character's derived pools, so a key that isn't one of this character's resources is rejected.
+- **Auth: DM (campaign owner) OR character owner** — non-owner non-DM → **404** (no existence leak),
+  identical to the rest of #31.
+
+This is the #19 combatant-pool setter applied to the campaign pool. Flip the resource pip tracks in
+`CampaignCharacterPanel` from no-op to live; spend/restore flows through `applySheet`.
+
+### PATCH exhaustion — set the 5e exhaustion level
+
+```
+PATCH api/campaigns/{campaignId}/characters/{characterId}/exhaustion
+{ "level": 3 }
+```
+
+- `level` is validated to **`[0, 6]`**; out of range → **400**. It's a direct **set** (idempotent, no
+  read-modify-write race), not a delta. Long Rest's −1 continues to work unchanged.
+- **Auth: DM (campaign owner) OR character owner** — non-owner non-DM → **404**. (We picked DM-or-owner
+  for consistency with the rest of #31; gate your stepper accordingly — both DM and the character's owner
+  can set it.)
+- **Store-only in v1: the mechanical penalties are NOT derived.** The level is persisted and returned on
+  `exhaustionLevel`, but the embedded `character`'s derived numbers (speed, AC, advantage, max HP, roll
+  bonuses) **do not change** with exhaustion level. This matches the existing behavior (Long Rest only
+  decremented the scalar; nothing ever derived from it). **Do not expect the character block to reflect
+  exhaustion penalties** — render the level as a badge/stepper only. Modeling the penalty table is a
+  separate, deferred feature; file a request if/when you want it.
+
+### Status
+
+Build 0 errors; full xUnit suite **440 green, 0 regressions** (no new unit tests — the setters reuse the
+already-tested `CampaignPoolState.ResourceMax`/`ClampRemaining` and the existing repo plumbing). New repo
+method `SetResourceRemainingAsync` (MERGE upsert on `(StateId, ResourceKey)`); exhaustion reuses the
+existing `SetExhaustionAsync`. IIS pool restarted. Backend committed + pushed to `origin/master`.
+
+**FRONTEND CONSUMED (2026-06-14, commit `006235d`, not yet pushed):** `campaignCharacterState.updateResource`
+(PATCH `resources/{key}`, key URL-encoded) + `.updateExhaustion` (PATCH `exhaustion`) + the two request DTOs.
+`CampaignCharacterPanel` now renders the class-resource pips and a 0–6 exhaustion stepper as interactive
+(DM-or-owner), both through the existing `applySheet` state-replace path. Verified live (Layout Preview /
+Keisi): exhaustion 0→1 and Channel Divinity spend persisted; reset to defaults afterward. Both #31 follow-up
+requests closed — **no outstanding frontend→backend requests.**

@@ -320,9 +320,9 @@ cantrip + extra language — and auto-granted racial spells; see INCOMING #25.)
 
 ## Backend context you can't see from this repo (synced 2026-06-14)
 
-- **INCOMING #19–#31 are all DONE and wired into the client (DB through migration 074).**
-  #19–#30 are pushed to `origin/main`; **#31 is committed to `main` locally (`0793aae`) but NOT
-  yet pushed** (push = prod deploy — Kevin's call):
+- **INCOMING #19–#32 are all DONE and wired into the client (DB through migration 074).**
+  #19–#30 are pushed to `origin/main`; **#31 + #32 are committed to `main` locally (`0793aae`,
+  `006235d`) but NOT yet pushed** (push = prod deploy — Kevin's call):
   - **#19 resource tracking** (mig 064) — per-combatant `resources`/`spellSlots`/`pactSlot`
     pools; `components/CombatantPools.tsx` renders pip tracks + set-semantics steppers +
     Short/Long Rest on DM + player cards. Endpoints `…/resources/{key}`,
@@ -368,22 +368,21 @@ cantrip + extra language — and auto-granted racial spells; see INCOMING #25.)
     `inspiration/grant` + `/spend`); **every op returns the full `CampaignCharacterSheetResponse`**
     (state-replace). Surfaced as `components/CampaignCharacterPanel.tsx` (modal off the CampaignDetail
     Characters list). Auth: DM **or** character owner (404 otherwise); `inspiration/grant` is **DM-only**.
-    **No campaign SignalR — plain REST refetch.** Two #31 fields ship **read-only** pending backend
-    setters (see outstanding requests below): class **resources** and **exhaustion**.
+    **No campaign SignalR — plain REST refetch.**
+  - **#32 campaign resource + exhaustion setters** (no migration — #074 columns reused) — the two #31
+    fields that first shipped read-only are now interactive: `campaignCharacterState.updateResource`
+    (`PATCH resources/{key}`, key URL-encoded for the colon slug; ±1 pip/numeric like the #19 combatant
+    tracker) and `.updateExhaustion` (`PATCH exhaustion`, 0–6 stepper). Both DM-or-owner, both return the
+    full sheet (`applySheet`). **Exhaustion is store-only server-side** — the derived `character` block does
+    NOT reflect exhaustion penalties (render the level only; modeling the penalty table is a deferred ask).
   - **The buffs-system rule still holds:** **flat** roll modifiers are pre-folded into the
     derived numbers — render-only, NEVER re-apply; only **dice** + **advantage/disadvantage**
     surface via `CharacterResponse.rollModifiers`/`rollAdvantages` (the no-double-counting
     invariant). Badges carry `remainingRounds`/`sourceCombatantId`/`consumedOnUse`.
-- **Two outstanding backend requests** (filed 2026-06-14, both in the **backend repo root**,
-  awaiting the backend session) — both are #31 follow-ups for fields that ship read-only:
-  - `FRONTEND-REQUEST-campaign-resource-set.md` — a `PATCH …/characters/{cid}/resources/{key}`
-    setter (the campaign analog of #19's combatant `resources/{resourceKey}`). The #31 sheet has
-    **no per-resource mutate**, so class resources render display-only (reset only via rests). When
-    it lands, flip the panel's resource pips to interactive (the −/+ wiring is already in place).
-  - `FRONTEND-REQUEST-campaign-exhaustion-set.md` — a `PATCH …/characters/{cid}/exhaustion` setter.
-    Exhaustion currently only drops via long-rest; DMs can't apply it. Panel renders it read-only until then.
-  - Both are additive and return the full `CampaignCharacterSheetResponse`. (The prior item,
-    #28's `FRONTEND-REQUEST-wizard-spellbook-prepared-cap.md`, shipped + is consumed.)
+- **No outstanding backend requests — the queue is empty.** The last two
+  (`FRONTEND-REQUEST-campaign-resource-set.md` + `FRONTEND-REQUEST-campaign-exhaustion-set.md`, the #31
+  read-only follow-ups) shipped as INCOMING #32 and are consumed (above). Exhaustion **penalty derivation**
+  is a known deferred ask — file a fresh request if/when DMs want the mechanical penalty table applied.
 
 - **The backend has a real xUnit suite now** (`DMTool.Tests`, run with
   `dotnet test DMTool.slnx` in the backend repo) covering the domain rules in
