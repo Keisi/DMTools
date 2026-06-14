@@ -37,12 +37,24 @@ backend lives at `C:\Users\keisi\source\repos\DMTool` — read its `CLAUDE.md`,
   (Azure DevOps, branch `master`); it's on IIS `:3501` (pool `DMTool`). The
   backend↔frontend contract is exchanged via `INCOMING-FROM-BACKEND.md`
   (backend→us, in THIS repo) and `FRONTEND-REQUEST-*.md` files (us→backend, in
-  the BACKEND repo). DB through **migration 073** as of 2026-06-14 (INCOMING
-  #19–#30 all shipped + consumed — #27 Bardic recharge, #28 Wizard spellbook cap,
-  #29 High Elf cantrip DC, #30 Extra Attack + advantage; trust the newest INCOMING
-  entry over this line). Prod Azure backend not yet past mig 069 → #29/#30 local-only until deploy.
+  the BACKEND repo). DB through **migration 074** as of 2026-06-14 (INCOMING
+  #19–#31 all shipped + consumed — #28 Wizard spellbook cap, #29 High Elf cantrip
+  DC, #30 Extra Attack + advantage, **#31 per-campaign character state + DM
+  inspiration** → `campaignCharacterState` + `components/CampaignCharacterPanel.tsx`,
+  committed `0793aae` **not yet pushed**; trust the newest INCOMING entry + `CLAUDE.md`
+  over this line). Prod Azure backend not yet past mig 069 → #29/#30/#31 local-only until deploy.
 
 ### Backend requests outstanding (filed in the backend repo)
+> The live, authoritative outstanding list is in `CLAUDE.md` ("Backend context")
+> — this section lags. Current as of 2026-06-14: the two #31 follow-ups below.
+- **`FRONTEND-REQUEST-campaign-resource-set.md`** (2026-06-14, NEW) — a
+  `PATCH …/campaigns/{cid}/characters/{chid}/resources/{key}` setter (campaign analog of
+  #19's combatant `resources/{resourceKey}`). #31 has no per-resource mutate → class
+  resources render **display-only** in `CampaignCharacterPanel` (reset only via rests).
+  When it lands, flip the resource pips interactive (−/+ wiring already in place).
+- **`FRONTEND-REQUEST-campaign-exhaustion-set.md`** (2026-06-14, NEW) — a
+  `PATCH …/campaigns/{cid}/characters/{chid}/exhaustion` setter. Exhaustion currently only
+  drops via long-rest; the panel renders it read-only until a setter exists.
 - **`FRONTEND-REQUEST-scope-b-invitation-discovery.md`** (2026-06-10, NEW) — **invited
   players can't discover their invitations.** `GET /api/campaigns` excludes Invited
   (status 1) members (returns `[]`) and `GET /{id}` 404s for them, so the only path is

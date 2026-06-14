@@ -287,6 +287,14 @@ counts beyond toggling.
   conditional: membership (invite/join/accept/reject/remove, DM transfer),
   registered characters (+ DM "Copy" via `POST /api/character/{id}/copy`),
   sessions + rosters, encounter list/create. Non-members get a 404 → Join CTA.
+  A per-character **"Sheet"** button (gated DM-or-owner) opens
+  `components/CampaignCharacterPanel.tsx` — a modal of the character's
+  **per-campaign runtime state** (INCOMING #31): HP (heal/damage/set/temp), DM
+  inspiration grant + spend, read-only exhaustion, interactive spell-slot pips,
+  display-only class resources, status-effect add/remove, short/long rest. Sourced
+  from `GET …/characters/{id}/state` via the `campaignCharacterState` endpoint
+  group; every mutation state-replaces on the returned `CampaignCharacterSheetResponse`
+  — **plain REST, no campaign SignalR** (refetch via the response).
 - `/campaigns/:id/encounters/:encounterId` (`EncounterView.tsx`) — the live combat
   tracker (Pending → Active → Ended; start/next-turn/end, combatant add/remove,
   initiative, HP delta/set/temp; ally-vs-enemy split persisted per-encounter in
@@ -312,8 +320,9 @@ cantrip + extra language — and auto-granted racial spells; see INCOMING #25.)
 
 ## Backend context you can't see from this repo (synced 2026-06-14)
 
-- **Backend request queue is FULLY DRAINED + consumed (DB through migration 073).**
-  INCOMING #19–#30 are all DONE and wired into the client (pushed to `origin/main`):
+- **INCOMING #19–#31 are all DONE and wired into the client (DB through migration 074).**
+  #19–#30 are pushed to `origin/main`; **#31 is committed to `main` locally (`0793aae`) but NOT
+  yet pushed** (push = prod deploy — Kevin's call):
   - **#19 resource tracking** (mig 064) — per-combatant `resources`/`spellSlots`/`pactSlot`
     pools; `components/CombatantPools.tsx` renders pip tracks + set-semantics steppers +
     Short/Long Rest on DM + player cards. Endpoints `…/resources/{key}`,
@@ -350,12 +359,31 @@ cantrip + extra language — and auto-granted racial spells; see INCOMING #25.)
     generic advantage/disadvantage StatusEffects (flow through the existing `rollAdvantages` path,
     no new shape); `POST …/combatants/{id}/advantage` (`campaigns.grantAdvantage` +
     `GrantAdvantageRequest`) wired to DM Adv/Dis-(attack/save) quick-grant buttons in `EncounterView`.
+  - **#31 per-campaign character state + DM inspiration** (mig 074) — a character carries SEPARATE
+    runtime state per campaign (current/temp HP, spell-slot + class-resource remaining, exhaustion,
+    inspiration, active status effects); the **campaign pool is the source of truth** (encounters seed
+    combatant snapshots from it; on encounter End/Archive the combatant's HP + remaining write back).
+    New `campaignCharacterState` endpoint group — 9 ops under `…/campaigns/{id}/characters/{cid}`
+    (`state` / `hp` / `spell-slots` / `status-effects` ×2 / `long-rest` / `short-rest` /
+    `inspiration/grant` + `/spend`); **every op returns the full `CampaignCharacterSheetResponse`**
+    (state-replace). Surfaced as `components/CampaignCharacterPanel.tsx` (modal off the CampaignDetail
+    Characters list). Auth: DM **or** character owner (404 otherwise); `inspiration/grant` is **DM-only**.
+    **No campaign SignalR — plain REST refetch.** Two #31 fields ship **read-only** pending backend
+    setters (see outstanding requests below): class **resources** and **exhaustion**.
   - **The buffs-system rule still holds:** **flat** roll modifiers are pre-folded into the
     derived numbers — render-only, NEVER re-apply; only **dice** + **advantage/disadvantage**
     surface via `CharacterResponse.rollModifiers`/`rollAdvantages` (the no-double-counting
     invariant). Badges carry `remainingRounds`/`sourceCombatantId`/`consumedOnUse`.
-- **No outstanding backend requests — the queue is empty.** The last one
-  (`FRONTEND-REQUEST-wizard-spellbook-prepared-cap.md`) shipped as INCOMING #28 and is consumed (above).
+- **Two outstanding backend requests** (filed 2026-06-14, both in the **backend repo root**,
+  awaiting the backend session) — both are #31 follow-ups for fields that ship read-only:
+  - `FRONTEND-REQUEST-campaign-resource-set.md` — a `PATCH …/characters/{cid}/resources/{key}`
+    setter (the campaign analog of #19's combatant `resources/{resourceKey}`). The #31 sheet has
+    **no per-resource mutate**, so class resources render display-only (reset only via rests). When
+    it lands, flip the panel's resource pips to interactive (the −/+ wiring is already in place).
+  - `FRONTEND-REQUEST-campaign-exhaustion-set.md` — a `PATCH …/characters/{cid}/exhaustion` setter.
+    Exhaustion currently only drops via long-rest; DMs can't apply it. Panel renders it read-only until then.
+  - Both are additive and return the full `CampaignCharacterSheetResponse`. (The prior item,
+    #28's `FRONTEND-REQUEST-wizard-spellbook-prepared-cap.md`, shipped + is consumed.)
 
 - **The backend has a real xUnit suite now** (`DMTool.Tests`, run with
   `dotnet test DMTool.slnx` in the backend repo) covering the domain rules in
@@ -364,13 +392,15 @@ cantrip + extra language — and auto-granted racial spells; see INCOMING #25.)
   unarmed/unarmored). When you file a `FRONTEND-REQUEST-*.md` for rule
   enforcement, the rule + tests land there — asking is cheap; don't work around
   missing rules client-side.
-- **DB baseline fold is at migration 057** (2026-06-11); migrations 058–073
+- **DB baseline fold is at migration 057** (2026-06-11); migrations 058–074
   (buffs 061–063, resource pools 064, hide-turn-order 065, session-enforce 066,
   spell source-class 067, wizard spellbook 068, subrace selections 069, High Elf cantrip
-  DC 071, Extra Attack table 072, advantage buffs seed 073) sit on top of it.
+  DC 071, Extra Attack table 072, advantage buffs seed 073, per-campaign character state 074)
+  sit on top of it.
   **Production note:** the Azure App Service backend + its DB are NOT yet migrated past 069 —
-  #25 and #29/#30 (and the #28 validation change) work locally only until that deploy +
-  migrations 071/072/073 run in prod.
+  #25, #29/#30, #31 (and the #28 validation change) work locally only until that deploy +
+  migrations 071/072/073/074 run in prod. The frontend `0793aae` (#31) is likewise unpushed,
+  so prod is unaffected until both the push and the prod migrations happen.
 - **Hub auth is enforced server-side** (backend commit 2026-06-11):
   `JoinEncounter` verifies encounter access before the group join, and DM-only
   pushes go to a separate `encounter-{id}-dm` group. If live updates stop for a

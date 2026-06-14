@@ -2410,3 +2410,11 @@ On encounter End or Archive, each character-linked combatant's current Remaining
 written back to the campaign state, so the campaign sheet reflects the encounter outcome.
 
 **Status:** build 0 errors, xUnit suite green, migration 074 applied to DMTools_local.
+
+**FRONTEND CONSUMED (2026-06-14, commit `0793aae`, not yet pushed):** `campaignCharacterState`
+endpoint group + DTOs in `types.ts`; `components/CampaignCharacterPanel.tsx` (modal off the
+CampaignDetail Characters list, DM-or-owner). All 9 ops wired via the single `applySheet`
+state-replace path. Verified live (Layout Preview / Keisi Paladin 10): HP, inspiration, spell
+slots, rests, status effects. **Two fields ship read-only pending backend setters** — class
+**resources** and **exhaustion** (no mutate endpoint in #31); filed `FRONTEND-REQUEST-campaign-resource-set.md`
++ `FRONTEND-REQUEST-campaign-exhaustion-set.md` in the backend repo root.
