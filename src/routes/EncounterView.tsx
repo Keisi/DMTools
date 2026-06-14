@@ -9,12 +9,15 @@ import type {
   CombatantResponse,
   StatusEffectResponse,
   UpdateCombatantRequest,
+  GrantAdvantageRequest,
 } from "../api/types";
 import {
   CampaignMemberStatus,
   CombatantDisposition,
   EncounterStatus,
   RestKind,
+  RollTarget,
+  AdvantageState,
 } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
@@ -659,6 +662,24 @@ export default function EncounterView() {
       setPaletteSource("");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to apply condition.");
+    } finally {
+      setBusyCombatant(null);
+    }
+  }
+
+  async function handleGrantAdvantage(
+    c: CombatantResponse,
+    target: GrantAdvantageRequest["target"],
+    state: GrantAdvantageRequest["state"],
+    rounds?: number,
+  ) {
+    setBusyCombatant(c.id);
+    try {
+      applyUpdate(
+        await campaigns.grantAdvantage(campaignId, encounterId, c.id, { target, state, rounds }),
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to grant advantage/disadvantage.");
     } finally {
       setBusyCombatant(null);
     }
@@ -1323,6 +1344,45 @@ export default function EncounterView() {
                     </div>
                   </>
                 )}
+              </div>
+            </div>
+
+            {/* Advantage / Disadvantage — quick-grant without needing a catalog GUID.
+                Attack rolls, saving throws, or ability checks; 1 round by default. */}
+            <div className="enc__ctrl-grp">
+              <div className="enc__ctrl-row">
+                <button
+                  className="btn tip"
+                  disabled={isBusy}
+                  data-tooltip="Grant advantage on the next attack roll"
+                  onClick={() => handleGrantAdvantage(c, RollTarget.AttackRoll, AdvantageState.Advantage)}
+                >
+                  Adv: Atk
+                </button>
+                <button
+                  className="btn tip"
+                  disabled={isBusy}
+                  data-tooltip="Grant advantage on the next saving throw"
+                  onClick={() => handleGrantAdvantage(c, RollTarget.SavingThrow, AdvantageState.Advantage)}
+                >
+                  Adv: Save
+                </button>
+                <button
+                  className="btn tip"
+                  disabled={isBusy}
+                  data-tooltip="Grant disadvantage on the next attack roll"
+                  onClick={() => handleGrantAdvantage(c, RollTarget.AttackRoll, AdvantageState.Disadvantage)}
+                >
+                  Dis: Atk
+                </button>
+                <button
+                  className="btn tip"
+                  disabled={isBusy}
+                  data-tooltip="Grant disadvantage on the next saving throw"
+                  onClick={() => handleGrantAdvantage(c, RollTarget.SavingThrow, AdvantageState.Disadvantage)}
+                >
+                  Dis: Save
+                </button>
               </div>
             </div>
 

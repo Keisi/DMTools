@@ -169,16 +169,38 @@ async function requiredChoices(client, ctx, t) {
 async function spellGateNegatives(client, ctx, t) {
   t.startSection("spell gate negatives + minimum behavior");
   const wizard = ctx.classByName["Wizard"];
-  const wizL1 = ctx.spells.filter((s) => s.level === 1 && (s.classes || []).includes("Wizard"));
   const wizCantrips = ctx.spells.filter((s) => s.level === 0 && (s.classes || []).includes("Wizard"));
   const nonWizSpell = ctx.spells.find((s) => s.level === 1 && !(s.classes || []).includes("Wizard"));
   const highLevel = ctx.spells.find((s) => s.level >= 3 && (s.classes || []).includes("Wizard"));
 
-  // Over-fill prepared beyond cap (no homebrew) at L5.
-  const over = await client.post("/api/character", baseBody(ctx, "Wizard", 5, {
-    spellIds: [...wizCantrips.slice(0, 4), ...wizL1.slice(0, 12)].map((s) => s.id),
-  }));
-  t.statusOneOf("Wizard L5: over-cap prepared rejected", over, [400, 422]);
+  // Derive the L5 spellbook cap from the class progression (data-driven, not hardcoded).
+  const wizBook5 = wizard.spellcasting?.progression?.find((p) => p.classLevel === 5)?.spellbookSize;
+
+  // Gather enough castable Wizard spells (levels 1..3, the max castable at L5) to cover
+  // wizBook5 + 1 submissions. There are well over 15 such spells in the catalog.
+  const wizCastable = ctx.spells.filter(
+    (s) => s.level >= 1 && s.level <= 3 && (s.classes || []).includes("Wizard"),
+  );
+
+  // Positive: exactly wizBook5 levelled spells + cantrips, no homebrew → expect 201.
+  if (wizBook5 != null && wizCastable.length >= wizBook5) {
+    const exact = await client.post("/api/character", baseBody(ctx, "Wizard", 5, {
+      spellIds: [...wizCantrips.slice(0, 3), ...wizCastable.slice(0, wizBook5)].map((s) => s.id),
+    }));
+    if (t.status(`Wizard L5: exactly spellbookSize(${wizBook5}) levelled spells accepted`, exact, 201)) {
+      ctx.track(`/api/character/${exact.body.id}`, client);
+    }
+  }
+
+  // Negative: wizBook5 + 1 levelled spells, no homebrew → expect 400/422.
+  if (wizBook5 != null && wizCastable.length >= wizBook5 + 1) {
+    const over = await client.post("/api/character", baseBody(ctx, "Wizard", 5, {
+      spellIds: [...wizCantrips.slice(0, 3), ...wizCastable.slice(0, wizBook5 + 1)].map((s) => s.id),
+    }));
+    t.statusOneOf(`Wizard L5: spellbookSize+1(${wizBook5 + 1}) levelled spells rejected`, over, [400, 422]);
+  } else if (wizBook5 == null) {
+    t.finding("Wizard L5 spellbookSize not in progression", "could not derive cap — skipped over-cap boundary tests");
+  }
 
   // Off-class-list spell.
   if (nonWizSpell) {

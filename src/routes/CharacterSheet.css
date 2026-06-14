@@ -347,6 +347,13 @@
   margin-top: var(--sp-2);
   line-height: 1.5;
 }
+.sheet__note {
+  font-size: var(--fs-xs);
+  margin-top: var(--sp-2);
+  margin-bottom: var(--sp-2);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
 
 .ability--help {
   cursor: help;

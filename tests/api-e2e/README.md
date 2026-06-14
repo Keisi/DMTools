@@ -69,15 +69,12 @@ suites/suite-c-encounter.mjs
   `dungeonmaster` seed data. Every character/campaign it creates is deleted at
   teardown.
 - **Findings ≠ failures.** A `FINDING` is documented behavior worth a
-  `FRONTEND-REQUEST`, not a bug. Current run surfaces four:
-  1. **Wizard spellbook vs prepared-spell cap** — the required spellbook count is
-     validated against the prepared cap on `levelup/apply`, so advancing a Wizard
-     needs `allowHomebrewSelections`.
-  2. **Creation does not enforce earned-ASI completeness** — a Fighter L8 is
+  `FRONTEND-REQUEST`, not a bug. Current run surfaces three:
+  1. **Creation does not enforce earned-ASI completeness** — a Fighter L8 is
      accepted with fewer than its 3 earned ASIs (only `levelup/apply` forces it).
-  3. **Creation does not enforce minimum spell counts** — a Wizard L11 is accepted
+  2. **Creation does not enforce minimum spell counts** — a Wizard L11 is accepted
      with zero spells (only `levelup/apply` forces exact counts).
-  4. **No flat-modifier status effect in the catalog** — so the
+  3. **No flat-modifier status effect in the catalog** — so the
      "flat folds-in, not double-counted" half of the buffs invariant can't be
      asserted directly (dice + advantage/disadvantage surfacing *is* asserted).
 - **Coverage limits.** Only one subclass per class is seeded (subclass *variety*

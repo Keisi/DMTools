@@ -807,6 +807,12 @@ export interface SpellcastingResponse {
   // Authoritative AND enforced server-side on create / PUT spells / level-up since
   // backend 28ed633 (BACKEND-RESPONSE-prepared-spell-cap.md) — render it, never recompute.
   maxPreparedSpells?: number | null;
+  // Spellbook casters only (Wizard; null for everyone else): the backend-derived cap on STORED
+  // levelled spells = spellbookSize(classLevel) (6/14/…/44). Distinct from maxPreparedSpells (daily
+  // prep). Since INCOMING #28 the storage cap on create / PUT spells / level-up uses THIS for Wizard,
+  // not maxPreparedSpells. Render-only; never recompute. (Not the same as the class-reference
+  // ClassSpellcastingProgressionResponse.spellbookSize already on this file ~L361.)
+  spellbookSize?: number | null;
   spellSlots: SpellSlotResponse[];
   isPactMagic: boolean;
 }
@@ -990,6 +996,9 @@ export interface CharacterResponse extends CharacterDetails {
   equippedArmorProficient?: boolean | null;
   equippedShieldProficient?: boolean | null;
   equippedWeapons: NamedRef[];
+  // Total attacks per Attack action (Extra Attack). Integer, default 1; server-derived as the MAX
+  // across multiclass classes (never a sum — RAW: Extra Attack doesn't stack). INCOMING #30.
+  attacksPerAction: number;
   weaponAttacks: WeaponAttackResponse[];
   weaponProficiencies: WeaponProficienciesResponse;
   armorProficiencies: ArmorProficienciesResponse;
@@ -1427,6 +1436,13 @@ export interface AddStatusEffectRequest {
   // Buffs system (backend mig. 063), both optional.
   remainingRounds?: number | null; // pre-fill from the catalog's defaultDurationRounds
   sourceCombatantId?: string | null; // set for concentration effects (ends with the caster)
+}
+
+// POST .../advantage — convenience grant of a situational advantage/disadvantage token (INCOMING #30).
+export interface GrantAdvantageRequest {
+  target: RollTarget;    // 0=AttackRoll, 1=SavingThrow, 2=AbilityCheck (IncomingAttackRoll=3 NOT supported)
+  state: AdvantageState; // 1=Advantage, 2=Disadvantage (Cancelled=3 invalid)
+  rounds?: number;       // default 1; 1–1000
 }
 
 export interface UpdateCombatantRequest {

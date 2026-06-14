@@ -128,12 +128,4 @@ export async function runSuiteA(client, ctx, t) {
     }
   }
 
-  // Single FINDING for the spellbook-vs-prepared-cap collision (the Wizard's
-  // required spellbook count exceeds the prepared-spell cap on the apply path).
-  if (ctx.spellCapClasses?.size) {
-    t.finding(
-      "Spellbook count exceeds prepared-spell cap on levelup/apply",
-      `needed allowHomebrewSelections to advance: ${[...ctx.spellCapClasses].join(", ")} — the required spellbook size is validated against the prepared cap`,
-    );
-  }
 }

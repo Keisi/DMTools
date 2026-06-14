@@ -165,7 +165,7 @@ export default function CharacterSheetView({
         return <EquippedBlock character={c} />;
       case "attacks":
         return (
-          <AttacksBlock attacks={c.weaponAttacks} modByName={modByName} prof={prof} />
+          <AttacksBlock attacks={c.weaponAttacks} attacksPerAction={c.attacksPerAction} modByName={modByName} prof={prof} />
         );
       case "resources":
         return <ResourcesBlock resources={c.resources} />;
@@ -300,10 +300,12 @@ function Vital({
 
 function AttacksBlock({
   attacks,
+  attacksPerAction,
   modByName,
   prof,
 }: {
   attacks: WeaponAttackResponse[];
+  attacksPerAction: number;
   modByName: Map<string, number>;
   prof: number;
 }) {
@@ -313,6 +315,9 @@ function AttacksBlock({
     <section className="panel sheet__block">
       <h3 className="sheet__block-title">Attacks</h3>
       <hr className="rule" />
+      {(attacksPerAction ?? 1) > 1 && (
+        <p className="sheet__note">Extra Attack — {attacksPerAction} attacks per Attack action.</p>
+      )}
       <ul className="prof-list">
         {attacks.map((a) => (
           <li

@@ -53,22 +53,6 @@ export function baselineCreateBody(cls, ctx) {
   return body;
 }
 
-// POST a create/apply body; if it 400s on the prepared-spell cap (the Wizard
-// spellbook vs. prepared cap collision), retry with allowHomebrewSelections and
-// record the class so the suite can emit a single FINDING.
-async function postWithCapRetry(client, path, body, ctx, className) {
-  let r = await client.post(path, body);
-  if (r.status === 400 && /prepare at most|allowHomebrewSelections/i.test(JSON.stringify(r.body || ""))) {
-    const retry = await client.post(path, { ...body, allowHomebrewSelections: true });
-    if (retry.status < 400) {
-      ctx.spellCapClasses = ctx.spellCapClasses || new Set();
-      ctx.spellCapClasses.add(className);
-      return retry;
-    }
-  }
-  return r;
-}
-
 // Pick ASI legs (sum exactly 2) that keep every score <= 20. Reads the
 // API-reported `effective` from the latest character — never recomputes.
 export function chooseAsi(char) {
@@ -127,7 +111,7 @@ export function buildApply(plan, char, ctx) {
 // (Suite A assertions). Returns { id, char, history:[{target, plan, applyBody}] }.
 export async function walkToMax(client, cls, ctx, opts = {}) {
   const maxLevel = opts.maxLevel || 20;
-  const created = await postWithCapRetry(client, "/api/character", baselineCreateBody(cls, ctx), ctx, cls.name);
+  const created = await client.post("/api/character", baselineCreateBody(cls, ctx));
   if (created.status >= 400) {
     return { id: null, char: null, history: [], error: `create L1: ${created.status} ${JSON.stringify(created.body)}` };
   }
@@ -145,7 +129,7 @@ export async function walkToMax(client, cls, ctx, opts = {}) {
     if (opts.onPlan) opts.onPlan(plan, char, target);
 
     const applyBody = buildApply(plan, char, ctx);
-    const ar = await postWithCapRetry(client, `/api/character/${id}/levelup/apply`, applyBody, ctx, cls.name);
+    const ar = await client.post(`/api/character/${id}/levelup/apply`, applyBody);
     if (ar.status >= 400) {
       return {
         id, char, history,

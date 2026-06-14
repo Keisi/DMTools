@@ -59,6 +59,7 @@ import type {
   UpdateHpRequest,
   UpdateSpellsRequest,
   WeaponResponse,
+  GrantAdvantageRequest,
 } from "./types";
 
 export const auth = {
@@ -373,6 +374,18 @@ export const campaigns = {
   ) =>
     api.del<EncounterResponse>(
       `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}/status-effects/${statusEffectId}`,
+    ),
+  // GUID-free convenience path — grant a situational advantage/disadvantage token (INCOMING #30).
+  // Returns the full EncounterResponse (same applyUpdate path as status-effects).
+  grantAdvantage: (
+    campaignId: string,
+    encounterId: string,
+    combatantId: string,
+    body: GrantAdvantageRequest,
+  ) =>
+    api.post<EncounterResponse>(
+      `/api/campaigns/${campaignId}/encounters/${encounterId}/combatants/${combatantId}/advantage`,
+      body,
     ),
   // Drop every effect this combatant is concentrating on (voluntary / failed save).
   // Same DM-or-owner authz; idempotent; returns the full EncounterResponse.
