@@ -23,11 +23,21 @@
 > - #36: `PATCH exhaustion` L0→L3 → `walkingSpeed 30→15` + three Disadvantage `rollAdvantages`
 >   (targets 0/1/2); restored to 0 after.
 >
-> **Tooling note:** UI click-through screenshots for #33/#34/#36 were **blocked** — spectral's
-> eval actions hang once the React app has loaded (only the pre-navigation localStorage eval
-> succeeds, which is why plain screenshots work but click-driving does not). The CDP-driver
-> fallback in `%TEMP%` is the documented workaround if a future session needs the visuals; the
-> render code for all three is confirmed correct by inspection + the contract is live-verified.
+> **Spectral screenshots — ALL FOUR captured (the hang was solved, not worked-around):**
+> - #35 sheet — Attacks block badges Longsword "Versatile" + greatsword/etc. property tags.
+> - #34 builder — Half-Elf card selected → "Ability Score Increase: +1 to 2 abilities, choose 2"
+>   picker with the 5 ex-CHA chips (Int/Con/Wis/Str/Dex) + the "choose 2" gate hint.
+> - #33/#36 campaign panel (Keisi, exhaustion set to 3) — "HIT DICE D10 10/10 [Spend]" and
+>   "EXHAUSTION 3/6 — Penalties applied … rolls, speed, and max HP below reflect exhaustion",
+>   with the panel header showing the **halved SPEED 15 ft** (derived ladder, ≥2). Restored to 0 after.
+> - Screenshots saved to `.claude/shot-34-halfelf.png` + `.claude/shot-3336-panel.png` (local, untracked).
+>
+> **Tooling fix (important, now in CLAUDE.md):** interaction batches hang on the default
+> stability wait once the React app has loaded — **add `--action-timeout 20`** and native
+> `click` actions complete fine. This supersedes the earlier "spectral can't click here" notes.
+> The batch `screenshot` action writes `C:\tmp\spectral-batch\action-<name>.png` (the `action-`
+> prefix differs from the `--screenshot` flag's `final.png`); selectors are CSS-position only
+> (no text selector).
 >
 > **NEXT:** (a) push to `origin/main` when Kevin says — **push = GitHub Pages prod deploy**, gated
 > on a `/critical-review` marker for HEAD; (b) coordinate with the **backend deploy** — prod Azure

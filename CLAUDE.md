@@ -106,6 +106,30 @@ launch* mechanics from it. What's relevant for this app:
   # screenshot lands at spectral's /tmp == Windows C:\tmp : read C:\tmp\spectral-batch\final.png
   # (use a tall --height to capture the whole sheet; default 720 cuts off below "Inventory")
   ```
+- **`spectral batch` pops a VISIBLE Chrome window every run** — it's headed (no
+  `--headless` option, unlike `spectral browser open` which runs hidden; confirmed
+  2026-06-16). To stop the tab stealing focus, run the **`spectral-quiet`** watcher
+  (skill — say `/spectral-quiet`, or the commands in
+  `~/.claude/skills/spectral-quiet/SKILL.md`) **before** a batch session and **STOP
+  it after** — it's use-then-close, not a permanent daemon. It moves each batch's
+  "Chrome for Testing" window off-screen; `--screenshot` is unaffected (CDP captures
+  the render surface, not the OS window).
+- **INTERACTION BATCHES NEED `--action-timeout` OR THEY HANG (2026-06-16, the fix for the
+  long-running "spectral can't click here" saga).** A batch that *only* navigates +
+  screenshots works fine, but the moment an action runs **after the React app has loaded**
+  (a `click`, or an `eval` against the live DOM), spectral's default per-action stability
+  wait **never resolves** and the whole batch hangs indefinitely (reproduced with both
+  `eval`-`.click()` and the native `click` action). **Cap it: `--action-timeout 20`** (≈20s
+  per action) — the click then registers, the wait gives up gracefully, and the batch
+  completes. Confirmed end-to-end: clicked the Half-Elf race card and the campaign "Sheet"
+  button, screenshots captured. Two more gotchas: (1) the batch **`screenshot` action**
+  writes `C:\tmp\spectral-batch\action-<name>.png` (note the `action-` prefix) — different
+  from the `--screenshot` **flag**, which writes `final.png`; (2) target click selectors by
+  CSS position/class, not text — there is no text selector (e.g. the 5th race card =
+  `.builder__picks button:nth-of-type(5)`; the Sheet button =
+  `.camp__char-item:nth-of-type(1) button.btn:not(.camp__char-copy):not(.camp__char-remove)`).
+  This **supersedes** the older "spectral can't drive interactions / hangs on state-changing
+  actions" notes — it can, with `--action-timeout`.
 - **Character access is owner-scoped** (the IDOR fix): you can only view a character
   under the account that created it; another account's id returns 404. `dungeonmaster` /
   `Passw0rd!23` is a working login.
@@ -325,9 +349,11 @@ the builder race step, modifiers in the ability tooltip, plus subrace choice-Sel
   are pushed to `origin/main` (#31/#32 at `347c167` = a live prod Pages deploy); **#33–#36 were
   consumed + committed 2026-06-16 (not yet pushed)** — see the session entry in `HANDOVER-NEXT.md`.
   All four were live-verified against `:3501` at the contract level + by code inspection (`tsc -b` /
-  `eslint` green); #35 also has a rendered sheet screenshot. (UI click-through screenshots for
-  #33/#34/#36 were blocked by spectral's eval-after-load hang — a known tooling limitation here,
-  not a defect.) The #33–#36 entries below carry per-delivery consumption notes:
+  `eslint` green) **and now have rendered spectral screenshots** (the click-through captures that were
+  first blocked by a spectral hang were unblocked with `--action-timeout` — see the browser-verification
+  section): #35 sheet (weapon-property badges), #34 builder (Half-Elf choose-2 picker), #33/#36 campaign
+  panel (hit-dice pool + exhaustion "penalties applied" hint + halved speed). The #33–#36 entries below
+  carry per-delivery consumption notes:
   - **#19 resource tracking** (mig 064) — per-combatant `resources`/`spellSlots`/`pactSlot`
     pools; `components/CombatantPools.tsx` renders pip tracks + set-semantics steppers +
     Short/Long Rest on DM + player cards. Endpoints `…/resources/{key}`,

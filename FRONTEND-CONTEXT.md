@@ -42,7 +42,8 @@ backend lives at `C:\Users\keisi\source\repos\DMTool` — read its `CLAUDE.md`,
   **INCOMING #33–#36 are CONSUMED + committed 2026-06-16 (pending push)** — #33 hit-dice,
   #34 Half-Elf ability choice, #35 weapon properties, #36 exhaustion penalties DERIVED
   (supersedes #32's store-only note); all four live-verified against `:3501` at the contract
-  level (#35 also screenshot-verified). Trust the newest INCOMING entry
+  level AND spectral screenshot-verified (the interaction hang was solved with `--action-timeout`).
+  Trust the newest INCOMING entry
   + `CLAUDE.md` over this line. **Split-brain:** prod Azure backend is still behind
   (mig 069-ish) → everything from #25/#29/#30 onward (migs 071–077) is local-only until
   the backend is deployed + those migrations run in prod.
