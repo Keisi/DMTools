@@ -106,8 +106,37 @@ export const SelectionType = {
   EldritchInvocation: 7,
   Tool: 8,
   Cantrip: 9,
+  // INCOMING #34 — race-sourced "choose N abilities, +1 each" (Half-Elf). Option ids
+  // point into the Stats catalog; each pick implies +1 to that ability.
+  AbilityScoreIncrease: 10,
 } as const;
 export type SelectionType = (typeof SelectionType)[keyof typeof SelectionType];
+
+// Where a Selection is sourced from (backend SelectionSourceType). Informational on
+// the frontend — we read each source's `selections[]` directly (Race/Class/Background/
+// Subclass), so the only value we name is the one INCOMING #34 added.
+export const SelectionSourceType = {
+  Race: 5,
+} as const;
+export type SelectionSourceType =
+  (typeof SelectionSourceType)[keyof typeof SelectionSourceType];
+
+// INCOMING #35 — weapon properties (numeric over the wire). Display-only; the
+// attack/damage math is already folded server-side.
+export const WeaponProperty = {
+  Ammunition: 1,
+  Finesse: 2,
+  Heavy: 3,
+  Light: 4,
+  Loading: 5,
+  Range: 6,
+  Reach: 7,
+  Special: 8,
+  Thrown: 9,
+  TwoHanded: 10,
+  Versatile: 11,
+} as const;
+export type WeaponProperty = (typeof WeaponProperty)[keyof typeof WeaponProperty];
 
 export const EncumbranceLevel = {
   Unencumbered: 0,
@@ -264,6 +293,10 @@ export interface RaceResponse {
   damageResistances: RaceDamageResistanceResponse[];
   traits: { name: string; description?: string | null }[];
   subraces: SubraceResponse[];
+  // Race-sourced choices (INCOMING #34). [] for every SRD race except Half-Elf, which
+  // carries one `{ type: AbilityScoreIncrease(10), choose: 2, level: 1, options: the 5
+  // abilities excluding CHA }`. Options point into the Stats catalog; each pick = +1.
+  selections: SelectionResponse[];
 }
 
 export interface SkillResponse {
@@ -493,6 +526,11 @@ export interface WeaponResponse {
   damage?: string | null;
   isRanged: boolean;
   isFinesse: boolean;
+  // INCOMING #35 — display-only (the attack/damage math already folds these). `properties`
+  // is the numeric WeaponProperty set; `versatileDamage` is the 2H die (e.g. "1d10"), null
+  // when not versatile. Optional so a pre-#35 (prod-behind) backend that omits them is safe.
+  properties?: WeaponProperty[];
+  versatileDamage?: string | null;
 }
 
 export interface ArmorCategoryResponse {
@@ -641,6 +679,11 @@ export interface CharacterRequest extends CharacterDetails {
   // class (INCOMING #20). Omit to keep bare spellIds (tags come back null).
   spellPicks?: SpellPickRequest[] | null;
   featIds?: string[] | null;
+  // Race-sourced ability increases (Half-Elf "+1 to two", INCOMING #34). Stat ids, each
+  // implying +1; count must match the race's AbilityScoreIncrease selection `choose`
+  // (2 for Half-Elf), subset-of its options, can't pick the fixed ability (CHA).
+  // SelectionValidator-gated server-side; allowHomebrewSelections relaxes it.
+  abilityIncreaseChoices?: string[] | null;
   backgroundId?: string | null;
   editionId?: string | null; // locked after creation
   languageIds?: string[] | null;
@@ -753,6 +796,9 @@ export interface AbilityScoreResponse {
   subraceModifier: number;
   featModifier: number;
   improvementModifier: number;
+  // Chosen race-sourced +1s (Half-Elf "choose two", INCOMING #34). Part of the fold:
+  // effective = base + racial + subrace + feat + improvement + racialChoice.
+  racialChoiceModifier: number;
   effective: number;
   // Server-derived floor((effective - 10) / 2) — render this, never recompute
   // (BACKEND-RESPONSE-rules-enforcement-audit.md item 4).
@@ -1530,6 +1576,15 @@ export interface CampaignResourceState {
   recharge: ResourceRecharge; // 0 None / 1 ShortRest / 2 LongRest
 }
 
+// Hit-dice pool, per die type (INCOMING #33). Pooled by die type per 5e multiclass
+// (Fighter 3 / Wizard 2 → a d10 pool of 3 and a d6 pool of 2); sorted by die size desc.
+// `max` is derived from the character; `remaining` is stored. Long rest recovers some.
+export interface CampaignHitDiceState {
+  dieType: HitDie; // 4/6/8/10/12
+  remaining: number;
+  max: number;
+}
+
 export interface CampaignStatusEffectState {
   statusEffectId: string; // catalog id — use for DELETE
   name: string;
@@ -1541,15 +1596,19 @@ export interface CampaignStatusEffectState {
 export interface CampaignCharacterSheetResponse {
   character: CharacterResponse; // full derived sheet WITH per-campaign status effects
                                 // already applied (AC / roll advantages reflect them) —
-                                // never re-apply statusEffects[] on top of it.
+                                // never re-apply statusEffects[] on top of it. Since
+                                // INCOMING #36 it ALSO reflects the exhaustion penalty
+                                // ladder driven by exhaustionLevel (disadvantage via
+                                // rollAdvantages, halved speed/maxHp) — render as-is.
   currentHp: number;            // always concrete (stored, or derived max if unset)
-  maxHp: number;                // derived (== character.maxHitPoints)
+  maxHp: number;                // derived (== character.maxHitPoints, exhaustion-halved at ≥4)
   tempHp: number;
   inspiration: number;          // token count; RAW cap 1 (backend GameRules:InspirationMax)
-  exhaustionLevel: number;      // 0–6; no direct setter — only long-rest decrements it
+  exhaustionLevel: number;      // 0–6; penalties now derived into `character` (#36). 6 = death.
   spellSlots: CampaignSpellSlotState[];
   resources: CampaignResourceState[];
   statusEffects: CampaignStatusEffectState[];
+  hitDice: CampaignHitDiceState[]; // INCOMING #33
 }
 
 // ---- Request bodies ----
@@ -1583,8 +1642,24 @@ export interface UpdateCampaignResourceRequest {
 }
 
 // PATCH exhaustion — set the 5e exhaustion level (INCOMING #32). Validated [0, 6]; direct set.
-// Store-only: the backend does NOT derive mechanical penalties, so the embedded `character`
-// block is unaffected — render the level as a stepper/badge only.
+// Since INCOMING #36 the penalty ladder IS derived: the returned sheet's `character` reflects
+// disadvantage (rollAdvantages), halved speed (≥2) / speed 0 (≥5), halved maxHitPoints (≥4).
+// Render the level + the derived numbers; death at level 6 is the client's own check.
 export interface UpdateCampaignExhaustionRequest {
   level: number;
+}
+
+// POST spend-hit-dice (INCOMING #33) — decrement `count` dice of `dieType` and heal by
+// (rolledTotal ?? count*avg(dieType)) + conMod*count, clamped to [0, maxHp]. Omit rolledTotal
+// to use the 5e average. 400 if dieType isn't one of the character's pools or count > remaining.
+export interface SpendHitDiceRequest {
+  dieType: HitDie; // 4/6/8/10/12
+  count: number;
+  rolledTotal?: number | null;
+}
+
+// PATCH hit-dice/{dieType} (INCOMING #33) — DM override of a pool's remaining, clamped to
+// [0, max]. Unknown die for this character → 400.
+export interface UpdateCampaignHitDiceRequest {
+  remaining: number;
 }

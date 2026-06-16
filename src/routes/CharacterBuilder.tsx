@@ -48,6 +48,7 @@ import {
   STEPS,
   StepNav,
   SubraceSelections,
+  RaceAbilitySelection,
   toggleCapped,
   ZERO_COINS,
   type AbilityMode,
@@ -118,6 +119,8 @@ export default function CharacterBuilder() {
   // cantripIds/languageIds so each picker validates its own budget independently.
   const [subraceCantripIds, setSubraceCantripIds] = useState<string[]>([]);
   const [subraceLanguageIds, setSubraceLanguageIds] = useState<string[]>([]);
+  // Race-sourced ability increases (Half-Elf "+1 to two", INCOMING #34). Stat ids.
+  const [abilityIncreaseChoices, setAbilityIncreaseChoices] = useState<string[]>([]);
   const [backgroundId, setBackgroundId] = useState<string | null>(null);
   const [languageIds, setLanguageIds] = useState<string[]>([]);
   const [featIds, setFeatIds] = useState<string[]>([]);
@@ -199,6 +202,13 @@ export default function CharacterBuilder() {
         setAlignment(ch.alignment);
         setRaceId(ch.race?.id ?? null);
         setSubraceId(ch.subrace?.id ?? null);
+        // Recover Half-Elf-style race ability increases: a stat with racialChoiceModifier
+        // > 0 was one of the chosen +1s (INCOMING #34; each pick is +1, distinct).
+        setAbilityIncreaseChoices(
+          ch.abilityScores
+            .filter((a) => (a.racialChoiceModifier ?? 0) > 0)
+            .map((a) => a.statId),
+        );
         setPicks(
           ch.classes.map((c) => ({
             classId: c.classId,
@@ -418,6 +428,15 @@ export default function CharacterBuilder() {
     () => selectedSubrace?.featureSelections.find((s) => s.type === SelectionType.Language) ?? null,
     [selectedSubrace],
   );
+  // Race ability-increase selection (Half-Elf "+1 to two", type 10). Race-level, not
+  // subrace — shows even for races with no subraces.
+  const raceAbilitySelection = useMemo(
+    () =>
+      races
+        .find((r) => r.id === raceId)
+        ?.selections.find((s) => s.type === SelectionType.AbilityScoreIncrease) ?? null,
+    [races, raceId],
+  );
 
   // Proficiency grants unioned across the chosen classes (by category id + item id).
   const proficiency = useMemo(() => {
@@ -618,9 +637,16 @@ export default function CharacterBuilder() {
     isEdit ||
     ((!subraceCantripSelection || subraceCantripIds.length === subraceCantripSelection.choose) &&
       (!subraceLanguageSelection || subraceLanguageIds.length === subraceLanguageSelection.choose));
+  // Race ability-increase pick must be fully made before leaving the Race step
+  // (relaxed on edit, like the subrace picks).
+  const raceAbilityComplete =
+    isEdit ||
+    !raceAbilitySelection ||
+    abilityIncreaseChoices.length === raceAbilitySelection.choose;
+  const raceStepComplete = subraceComplete && raceAbilityComplete;
 
   const canAdvance = [
-    !!raceId && subraceComplete, // Race
+    !!raceId && raceStepComplete, // Race
     classesValid, // Class
     abilitiesComplete, // Abilities
     skillsComplete, // Skills
@@ -656,6 +682,9 @@ export default function CharacterBuilder() {
       ? `${bgLanguageSelection?.choose} background language${bgLanguageSelection?.choose === 1 ? "" : "s"} (${languageIds.length}/${bgLanguageSelection?.choose})`
       : null,
     !subraceComplete ? "your subrace choices" : null,
+    !raceAbilityComplete
+      ? `${raceAbilitySelection?.choose} race ability increase${raceAbilitySelection?.choose === 1 ? "" : "s"} (${abilityIncreaseChoices.length}/${raceAbilitySelection?.choose})`
+      : null,
     !choicesComplete
       ? `class choices (fighting style ${fightingStyleIds.length}/${subFeature.fsBudget}, expertise ${expertiseSkillIds.length}/${subFeature.exBudget}, metamagic ${metamagicIds.length}/${subFeature.mmBudget}, invocations ${eldritchInvocationIds.length}/${subFeature.eiBudget})`
       : null,
@@ -668,7 +697,7 @@ export default function CharacterBuilder() {
   // Per-step validity (optional steps are always satisfied). Drives the StepNav
   // coloring: a prior step is only "done" (green) if it actually passes.
   const stepValid = [
-    !!raceId && subraceComplete,
+    !!raceId && raceStepComplete,
     classesValid,
     abilitiesComplete,
     skillsComplete,
@@ -683,7 +712,13 @@ export default function CharacterBuilder() {
 
   // Reason the current step's Next is blocked (shown inline near the nav).
   const stepReason = [
-    !raceId ? "Pick a race to continue." : "",
+    !raceId
+      ? "Pick a race to continue."
+      : !raceAbilityComplete
+        ? `Choose ${raceAbilitySelection?.choose} ability score increase${raceAbilitySelection?.choose === 1 ? "" : "s"}.`
+        : !subraceComplete
+          ? "Complete your subrace choices."
+          : "",
     !classesValid
       ? picks.length === 0
         ? "Add at least one class."
@@ -810,6 +845,9 @@ export default function CharacterBuilder() {
   function toggleSubraceLanguage(id: string) {
     setSubraceLanguageIds((prev) => toggleCapped(prev, id, subraceLanguageSelection?.choose));
   }
+  function toggleAbilityIncrease(id: string) {
+    setAbilityIncreaseChoices((prev) => toggleCapped(prev, id, raceAbilitySelection?.choose));
+  }
   function toggleFeat(id: string) {
     setFeatIds((prev) => toggleCapped(prev, id, undefined));
   }
@@ -906,6 +944,10 @@ export default function CharacterBuilder() {
       description: description.trim() || undefined,
       raceId: raceId!,
       subraceId: subraceId ?? undefined,
+      // Race-sourced +1s (Half-Elf, INCOMING #34); omit when the race has no such choice.
+      abilityIncreaseChoices: abilityIncreaseChoices.length
+        ? abilityIncreaseChoices
+        : undefined,
       classes: picks.map((p) => ({
         classId: p.classId,
         level: p.level,
@@ -1098,7 +1140,13 @@ export default function CharacterBuilder() {
                   setSubraceId(null);
                   setSubraceCantripIds([]);
                   setSubraceLanguageIds([]);
+                  setAbilityIncreaseChoices([]);
                 }}
+              />
+              <RaceAbilitySelection
+                selection={raceAbilitySelection}
+                chosen={abilityIncreaseChoices}
+                onToggle={toggleAbilityIncrease}
               />
               {selectedRace && selectedRace.subraces.length > 0 && (
                 <div className="builder__subrace">
@@ -1299,6 +1347,11 @@ export default function CharacterBuilder() {
             spellNames={spellPlan.spellPool
               .filter((s) => spellIds.includes(s.id))
               .map((s) => s.name)}
+            raceAbilityIncreaseNames={
+              raceAbilitySelection?.options
+                .filter((o) => abilityIncreaseChoices.includes(o.optionId))
+                .map((o) => o.name) ?? []
+            }
             subraceCantripNames={
               subraceCantripSelection?.options
                 .filter((o) => subraceCantripIds.includes(o.optionId))

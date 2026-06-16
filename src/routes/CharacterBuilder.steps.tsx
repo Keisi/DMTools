@@ -662,6 +662,47 @@ export function SubraceSelections({
   );
 }
 
+// Race-sourced "choose N abilities, +1 each" picker (Half-Elf, INCOMING #34). The
+// options ARE the abilities (excluding the fixed one, e.g. CHA), so we just chip them
+// and cap at `selection.choose`. The +1 fold + validation are server-side.
+export function RaceAbilitySelection({
+  selection,
+  chosen,
+  onToggle,
+}: {
+  selection: SelectionResponse | null;
+  chosen: string[];
+  onToggle: (id: string) => void;
+}) {
+  if (!selection) return null;
+  return (
+    <div className="builder__subrace">
+      <h4 className="builder__section-title">Ability Score Increase</h4>
+      <div className="builder__bg-langs">
+        <h4 className="builder__equip-title">
+          +1 to {selection.choose} abilities — choose {selection.choose} ({chosen.length}/
+          {selection.choose})
+        </h4>
+        <div className="builder__chips">
+          {selection.options.map((o) => (
+            <button
+              key={o.optionId}
+              type="button"
+              className={
+                "builder__chip" +
+                (chosen.includes(o.optionId) ? " builder__chip--on" : "")
+              }
+              onClick={() => onToggle(o.optionId)}
+            >
+              {o.name}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function BackgroundStep({
   backgrounds,
   selectedId,
@@ -1623,6 +1664,7 @@ export function Review({
   improvements,
   cantripNames,
   spellNames,
+  raceAbilityIncreaseNames,
   subraceCantripNames,
   subraceLanguageNames,
   armorName,
@@ -1652,6 +1694,8 @@ export function Review({
   improvements: { name: string; amount: number }[];
   cantripNames: string[];
   spellNames: string[];
+  // Race-sourced ability increases (Half-Elf "+1 to two", INCOMING #34).
+  raceAbilityIncreaseNames: string[];
   // Subrace-specific picks (High Elf cantrip + extra language).
   subraceCantripNames: string[];
   subraceLanguageNames: string[];
@@ -1733,6 +1777,11 @@ export function Review({
       )}
       {spellNames.length > 0 && (
         <p className="text-muted">Spells: {spellNames.join(", ")}</p>
+      )}
+      {raceAbilityIncreaseNames.length > 0 && (
+        <p className="text-muted">
+          Race ability increase: {raceAbilityIncreaseNames.map((n) => `${n} +1`).join(", ")}
+        </p>
       )}
       {subraceCantripNames.length > 0 && (
         <p className="text-muted">

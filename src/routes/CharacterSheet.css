@@ -354,6 +354,12 @@
   color: var(--text-muted);
   line-height: 1.5;
 }
+/* Weapon property labels in the Attacks block (INCOMING #35) */
+.sheet__weapon-props {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  font-style: italic;
+}
 
 .ability--help {
   cursor: help;

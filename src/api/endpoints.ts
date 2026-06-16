@@ -58,6 +58,8 @@ import type {
   AddCampaignStatusEffectRequest,
   UpdateCampaignResourceRequest,
   UpdateCampaignExhaustionRequest,
+  SpendHitDiceRequest,
+  UpdateCampaignHitDiceRequest,
   UpdateCombatantHpRequest,
   UpdateCombatantRequest,
   UpdateCombatantResourceRequest,
@@ -519,6 +521,25 @@ export const campaignCharacterState = {
   ) =>
     api.patch<CampaignCharacterSheetResponse>(
       `/api/campaigns/${campaignId}/characters/${characterId}/exhaustion`,
+      body,
+    ),
+  spendHitDice: (
+    campaignId: string,
+    characterId: string,
+    body: SpendHitDiceRequest,
+  ) =>
+    api.post<CampaignCharacterSheetResponse>(
+      `/api/campaigns/${campaignId}/characters/${characterId}/spend-hit-dice`,
+      body,
+    ),
+  updateHitDice: (
+    campaignId: string,
+    characterId: string,
+    dieType: number,
+    body: UpdateCampaignHitDiceRequest,
+  ) =>
+    api.patch<CampaignCharacterSheetResponse>(
+      `/api/campaigns/${campaignId}/characters/${characterId}/hit-dice/${dieType}`,
       body,
     ),
 };

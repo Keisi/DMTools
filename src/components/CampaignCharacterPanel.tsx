@@ -13,6 +13,7 @@ import type {
   CampaignSpellSlotState,
   CampaignResourceState,
   CampaignStatusEffectState,
+  CampaignHitDiceState,
   StatusEffectResponse,
 } from "../api/types";
 import { ResourceRecharge } from "../api/types";
@@ -243,6 +244,26 @@ export default function CampaignCharacterPanel({
     if (level === sheet.exhaustionLevel) return; // no-op at the clamp edges
     void mutate(() =>
       campaignCharacterState.updateExhaustion(campaignId, characterId, { level }),
+    );
+  }
+
+  // ---- Hit-dice actions (INCOMING #33) ----
+  // Spend decrements the pool AND heals (server rolls the average + CON); the returned
+  // sheet reflects both. Restore is a DM override of `remaining` with no HP change.
+  function handleSpendHitDie(h: CampaignHitDiceState) {
+    void mutate(() =>
+      campaignCharacterState.spendHitDice(campaignId, characterId, {
+        dieType: h.dieType,
+        count: 1,
+      }),
+    );
+  }
+
+  function handleRestoreHitDie(h: CampaignHitDiceState) {
+    void mutate(() =>
+      campaignCharacterState.updateHitDice(campaignId, characterId, h.dieType, {
+        remaining: h.remaining + 1,
+      }),
     );
   }
 
@@ -510,8 +531,18 @@ export default function CampaignCharacterPanel({
                 </button>
               )}
               {sheet.exhaustionLevel === 0 && <span className="ccp__exhaustion-hint">None</span>}
+              {sheet.exhaustionLevel === 6 && (
+                <span className="ccp__exhaustion-dead" title="Exhaustion level 6 is death (5e).">
+                  Dead (exhaustion)
+                </span>
+              )}
+              {sheet.exhaustionLevel > 0 && sheet.exhaustionLevel < 6 && (
+                <span className="ccp__exhaustion-hint">
+                  Penalties applied — the sheet's rolls, speed, and max HP below reflect exhaustion.
+                </span>
+              )}
               <span className="ccp__exhaustion-hint" title="Also reduced by 1 on a Long Rest.">
-                (also reduced by Long Rest)
+                (reduced by Long Rest)
               </span>
             </div>
           </div>
@@ -567,6 +598,52 @@ export default function CampaignCharacterPanel({
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* ---- Hit dice (INCOMING #33) ---- */}
+          {sheet.hitDice.length > 0 && (
+            <div className="ccp__section">
+              <p className="ccp__section-title">Hit Dice</p>
+              {sheet.hitDice.map((h: CampaignHitDiceState) => (
+                <div
+                  key={h.dieType}
+                  className="ccp__pool-row"
+                  title={`${h.remaining}/${h.max} d${h.dieType} hit dice · Spend 1 to heal (the server rolls the die average + CON); recovered on a long rest`}
+                >
+                  <span className="ccp__pool-label">d{h.dieType}</span>
+                  <PipTrack
+                    remaining={h.remaining}
+                    max={h.max}
+                    disabled
+                    interactive={false}
+                    onMinus={() => {}}
+                    onPlus={() => {}}
+                  />
+                  {canManage && (
+                    <span className="ccp__hd-controls">
+                      <button
+                        type="button"
+                        className="btn ccp__hd-spend"
+                        disabled={busy || h.remaining <= 0}
+                        onClick={() => handleSpendHitDie(h)}
+                      >
+                        Spend
+                      </button>
+                      <button
+                        type="button"
+                        className="ccp__adj"
+                        disabled={busy || h.remaining >= h.max}
+                        aria-label={`Restore one d${h.dieType} (no healing)`}
+                        title="DM restore — adds one die back, no HP change"
+                        onClick={() => handleRestoreHitDie(h)}
+                      >
+                        +
+                      </button>
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 

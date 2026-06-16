@@ -321,10 +321,13 @@ the builder race step, modifiers in the ability tooltip, plus subrace choice-Sel
 
 ## Backend context you can't see from this repo (synced 2026-06-16)
 
-- **INCOMING #19–#32 are all DONE and wired into the client; #33–#36 are SHIPPED by the
-  backend but NOT yet consumed by the client (DB through migration 077).** #19–#32 are all
-  pushed to `origin/main` (#31/#32 pushed this session, `347c167` = a live prod Pages deploy).
-  #33–#36 (listed after #32 below) are the next frontend consumption batch:
+- **INCOMING #19–#36 are all DONE and wired into the client (DB through migration 077).** #19–#32
+  are pushed to `origin/main` (#31/#32 at `347c167` = a live prod Pages deploy); **#33–#36 were
+  consumed + committed 2026-06-16 (not yet pushed)** — see the session entry in `HANDOVER-NEXT.md`.
+  All four were live-verified against `:3501` at the contract level + by code inspection (`tsc -b` /
+  `eslint` green); #35 also has a rendered sheet screenshot. (UI click-through screenshots for
+  #33/#34/#36 were blocked by spectral's eval-after-load hang — a known tooling limitation here,
+  not a defect.) The #33–#36 entries below carry per-delivery consumption notes:
   - **#19 resource tracking** (mig 064) — per-combatant `resources`/`spellSlots`/`pactSlot`
     pools; `components/CombatantPools.tsx` renders pip tracks + set-semantics steppers +
     Short/Long Rest on DM + player cards. Endpoints `…/resources/{key}`,
@@ -382,31 +385,42 @@ the builder race step, modifiers in the ability tooltip, plus subrace choice-Sel
     sorted desc); `POST …/spend-hit-dice` (`{dieType,count,rolledTotal?}` — heals
     `(rolledTotal ?? count*avg) + conMod*count`, clamped) + `PATCH …/hit-dice/{dieType}` (`{remaining}`
     DM override); **long-rest now ALSO recovers `max(1,floor(totalLevel/2))` dice largest-first** (short
-    rest still HP-neutral). Surface in `CampaignCharacterPanel`. **NOT YET CONSUMED.**
+    rest still HP-neutral). Surface in `CampaignCharacterPanel`. **CONSUMED 2026-06-16** —
+    `CampaignCharacterPanel` renders the per-die hit-dice pools + a spend control
+    (`campaignCharacterState.spendHitDice` / `setHitDice`); live `POST spend-hit-dice` → 200,
+    pool `10/10 → 9/10`.
   - **#34 Half-Elf "+1 to two abilities"** (mig 076) — `SelectionType.AbilityScoreIncrease=10` +
     `SelectionSourceType.Race=5`; `RaceResponse.selections[]` (Half-Elf carries
     `{type:10,choose:2,level:1,options: the 5 abilities ex-CHA}`, other SRD races empty);
     `CharacterRequest.abilityIncreaseChoices?: string[]` (stat ids, +1 each, SelectionValidator-gated —
     400 on wrong count / out-of-pool / picking CHA); `AbilityScoreResponse.racialChoiceModifier` is a new
     breakdown component (`effective = base + racial + subrace + feat + improvement + racialChoice`). Builder
-    Race step gets a choose-2 ability picker + tooltip itemizes it. **NOT YET CONSUMED.**
+    Race step gets a choose-2 ability picker + tooltip itemizes it. **CONSUMED 2026-06-16** —
+    `RaceAbilitySelection` picker in the Race step (chips, `choose`-capped), `abilityIncreaseChoices`
+    sent on create + recovered on edit from `racialChoiceModifier`; live `/api/races` confirms
+    Half-Elf carries `{type:10,choose:2}` with the 5 ex-CHA options, other SRD races empty.
   - **#35 weapon properties** (mig 077) — `WeaponResponse.properties: WeaponProperty[]` (numeric:
     Ammunition1/Finesse2/Heavy3/Light4/Loading5/Range6/Reach7/Special8/Thrown9/TwoHanded10/Versatile11) +
     `versatileDamage: string|null` (2H die, e.g. "1d10"). Display-only — attack/damage math unchanged. To
     badge the sheet Attacks block, **join the attack back to `/api/weapons`** (no attack-line echo was added).
-    **NOT YET CONSUMED.**
+    **CONSUMED 2026-06-16** — `CharacterSheetView` joins `weaponAttacks` → `/api/weapons` (`weaponsById`),
+    maps numeric `properties` through `WEAPON_PROPERTY_LABELS`, and renders `versatileDamage` as "(2H …)";
+    **live-screenshot verified** (E2E Paladin Ten sheet — Longsword `[11]` Versatile + `1d10`, Greataxe `[3,10]`).
   - **#36 exhaustion penalties DERIVED** (no migration) — **SUPERSEDES #32's store-only note.** The campaign
     sheet's derived `character` now folds the cumulative 2014 SRD ladder from `exhaustionLevel` via channels
     we ALREADY render: `rollAdvantages` (Disadvantage on AbilityCheck ≥1, Attack+Save ≥3), halved speeds ≥2 /
     speed 0 ≥5, halved `maxHitPoints` ≥4; death is the client's own `exhaustionLevel === 6` check. **No new
     wire fields.** Drop the `CampaignCharacterPanel` "render level only" caveat; in campaign context do NOT
-    also apply the catalog Exhaustion status-effect (double-counts). **NOT YET CONSUMED.**
+    also apply the catalog Exhaustion status-effect (double-counts). **CONSUMED 2026-06-16** — the panel's
+    "render level only" caveat is gone; it now shows a "Penalties applied — the sheet's rolls, speed, and
+    max HP below reflect exhaustion" hint and reads the derived `character`; live `PATCH exhaustion` L0→L3
+    confirmed `walkingSpeed 30→15` + three Disadvantage `rollAdvantages` (targets 0/1/2).
   - **The buffs-system rule still holds:** **flat** roll modifiers are pre-folded into the
     derived numbers — render-only, NEVER re-apply; only **dice** + **advantage/disadvantage**
     surface via `CharacterResponse.rollModifiers`/`rollAdvantages` (the no-double-counting
     invariant). Badges carry `remainingRounds`/`sourceCombatantId`/`consumedOnUse`.
-- **No outstanding backend→ requests — the queue is empty; the open work is now FRONTEND-side
-  (consume #33–#36, none wired yet).** Three requests were filed 2026-06-15
+- **No outstanding backend→ requests — the queue is empty; #33–#36 are now consumed + committed
+  (2026-06-16), pending push.** Three requests were filed 2026-06-15
   (`FRONTEND-REQUEST-exhaustion-penalty-derivation.md` / `-halfelf-choose-ability-increase.md` /
   `-weapon-properties.md`) and the backend closed all three the **same cycle** as INCOMING #34/#35/#36,
   plus an unprompted **#33 hit-dice** delivery. Nothing is waiting on the backend.

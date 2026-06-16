@@ -1,5 +1,42 @@
 # Handover — DMTool-FrontEnd (for the next session)
 
+> ## ✅ SESSION 2026-06-16 — INCOMING #33–#36 consumed + COMMITTED (NOT yet pushed)
+>
+> The four shipped-but-unconsumed backend deliveries were wired into the client (the work was
+> already on disk uncommitted at session start; this session verified, documented, and committed it).
+> **`npm run lint` + `tsc -b` both green.**
+>
+> - **#33 hit-dice** — `CampaignCharacterPanel` renders per-die pools + a spend control
+>   (`campaignCharacterState.spendHitDice` / `setHitDice` in `endpoints.ts`).
+> - **#34 Half-Elf "+1 to two abilities"** — `RaceAbilitySelection` picker in the builder Race step;
+>   `abilityIncreaseChoices` sent on create + recovered on edit from `racialChoiceModifier`.
+> - **#35 weapon properties** — `CharacterSheetView` joins `weaponAttacks → /api/weapons`
+>   (`weaponsById`), badges numeric `properties` via `WEAPON_PROPERTY_LABELS`, renders `versatileDamage`.
+> - **#36 exhaustion derived** — dropped the `CampaignCharacterPanel` "render level only" caveat;
+>   it now shows a "penalties applied" hint and reads the derived `character`.
+>
+> **Live-verification pass against `:3501` (contract-level, authoritative):**
+> - #33: `POST spend-hit-dice` → 200, pool `d10 10/10 → 9/10`.
+> - #34: `/api/races` → Half-Elf carries `{type:10,choose:2}` + 5 ex-CHA options; other races empty.
+> - #35: `/api/weapons` → 33/37 with `properties`, 6 with `versatileDamage` (Longsword `[11]`+`1d10`,
+>   Greataxe `[3,10]`); **rendered sheet screenshot captured** (E2E Paladin Ten).
+> - #36: `PATCH exhaustion` L0→L3 → `walkingSpeed 30→15` + three Disadvantage `rollAdvantages`
+>   (targets 0/1/2); restored to 0 after.
+>
+> **Tooling note:** UI click-through screenshots for #33/#34/#36 were **blocked** — spectral's
+> eval actions hang once the React app has loaded (only the pre-navigation localStorage eval
+> succeeds, which is why plain screenshots work but click-driving does not). The CDP-driver
+> fallback in `%TEMP%` is the documented workaround if a future session needs the visuals; the
+> render code for all three is confirmed correct by inspection + the contract is live-verified.
+>
+> **NEXT:** (a) push to `origin/main` when Kevin says — **push = GitHub Pages prod deploy**, gated
+> on a `/critical-review` marker for HEAD; (b) coordinate with the **backend deploy** — prod Azure
+> backend is behind, so #33–#36 endpoints/columns (migs 074–077) are local-only until it ships +
+> migrations run. The new code is defensively guarded (optional fields), so unaffected races/weapons
+> degrade gracefully, but the hit-dice / Half-Elf / exhaustion paths only light up post-deploy.
+>
+> ---
+>
 > ## ✅ SESSION 2026-06-14 (later) — INCOMING #27–#30 consumed + PUSHED (HEAD `1eb0f13` on `origin/main`)
 >
 > Backend shipped INCOMING #27–#30; all consumed, committed, and **pushed to production**

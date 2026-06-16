@@ -231,6 +231,28 @@
   color: var(--text-faint);
 }
 
+/* Exhaustion level 6 = death (INCOMING #36) */
+.ccp__exhaustion-dead {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--c-crimson-400);
+}
+
+/* ---- Hit-dice controls (INCOMING #33) ---- */
+.ccp__hd-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.ccp__hd-spend {
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+}
+
 /* ---- Pip track (spell slots + resources) ---- */
 .ccp__pool-row {
   display: flex;

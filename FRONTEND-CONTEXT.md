@@ -39,9 +39,10 @@ backend lives at `C:\Users\keisi\source\repos\DMTool` — read its `CLAUDE.md`,
   (backend→us, in THIS repo) and `FRONTEND-REQUEST-*.md` files (us→backend, in
   the BACKEND repo). DB through **migration 077** as of 2026-06-16. INCOMING
   #19–#32 are all shipped + consumed (#31/#32 pushed this session, `347c167`).
-  **INCOMING #33–#36 are SHIPPED by the backend but NOT yet consumed by the client**
-  — #33 hit-dice, #34 Half-Elf ability choice, #35 weapon properties, #36 exhaustion
-  penalties DERIVED (supersedes #32's store-only note). Trust the newest INCOMING entry
+  **INCOMING #33–#36 are CONSUMED + committed 2026-06-16 (pending push)** — #33 hit-dice,
+  #34 Half-Elf ability choice, #35 weapon properties, #36 exhaustion penalties DERIVED
+  (supersedes #32's store-only note); all four live-verified against `:3501` at the contract
+  level (#35 also screenshot-verified). Trust the newest INCOMING entry
   + `CLAUDE.md` over this line. **Split-brain:** prod Azure backend is still behind
   (mig 069-ish) → everything from #25/#29/#30 onward (migs 071–077) is local-only until
   the backend is deployed + those migrations run in prod.
@@ -51,8 +52,8 @@ backend lives at `C:\Users\keisi\source\repos\DMTool` — read its `CLAUDE.md`,
 > — this section lags. As of 2026-06-16 the **backend→ queue is EMPTY**: the three
 > requests filed 2026-06-15 (exhaustion-penalty-derivation / halfelf-choose-ability-increase /
 > weapon-properties) were all closed same-cycle as INCOMING #34/#35/#36 (+ bonus #33 hit-dice).
-> The open work is now **frontend-side** — consume #33–#36 (none wired yet). The entries below
-> are older and may already be partly addressed; defer to `CLAUDE.md`.
+> #33–#36 are now **consumed + committed (2026-06-16), pending push** — nothing waiting either way.
+> The entries below are older and may already be partly addressed; defer to `CLAUDE.md`.
 - **`FRONTEND-REQUEST-scope-b-invitation-discovery.md`** (2026-06-10, NEW) — **invited
   players can't discover their invitations.** `GET /api/campaigns` excludes Invited
   (status 1) members (returns `[]`) and `GET /{id}` 404s for them, so the only path is

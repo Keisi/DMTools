@@ -12,6 +12,7 @@ import type {
   ClassResponse,
   ItemResponse,
   SpellResponse,
+  WeaponResponse,
 } from "../api/types";
 import { ApiError } from "../api/client";
 import { useBlockOrder } from "../lib/useBlockOrder";
@@ -38,6 +39,7 @@ export default function CharacterSheet() {
   const [items, setItems] = useState<ItemResponse[]>([]);
   const [allClasses, setAllClasses] = useState<ClassResponse[]>([]);
   const [spellCatalog, setSpellCatalog] = useState<SpellResponse[]>([]);
+  const [weaponCatalog, setWeaponCatalog] = useState<WeaponResponse[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -61,6 +63,9 @@ export default function CharacterSheet() {
     // Spell catalog backs the dice/save display in the Spellcasting block (the
     // character's spell refs are thin; we join by id to the catalog's fields).
     reference.spells().then(setSpellCatalog).catch(() => setSpellCatalog([]));
+    // Weapon catalog backs the Attacks block's property badges + versatile damage
+    // (INCOMING #35); join by weaponId. Non-fatal — no catalog ⇒ no badges.
+    reference.weapons().then(setWeaponCatalog).catch(() => setWeaponCatalog([]));
   }, []);
 
   // Known spells joined to their catalog combat fields (Tier 1). Tier 2 will add
@@ -69,6 +74,10 @@ export default function CharacterSheet() {
   const spellsById = useMemo(
     () => new Map(spellCatalog.map((s) => [s.id, s])),
     [spellCatalog],
+  );
+  const weaponsById = useMemo(
+    () => new Map(weaponCatalog.map((w) => [w.id, w])),
+    [weaponCatalog],
   );
   // Must be before early returns — id is stable and equals c.id once loaded.
   // Keeps the per-character storage key so users' saved orders survive the refactor.
@@ -256,6 +265,7 @@ export default function CharacterSheet() {
       footer={dialogs}
       items={items}
       spellsById={spellsById}
+      weaponsById={weaponsById}
       onMutated={setC}
       dragHandlers={{ order, onDragStart, onDrop }}
     />

@@ -1,6 +1,12 @@
 # INCOMING FROM BACKEND — IDOR/BOLA fix complete
 
-> **LATEST (2026-06-15): INCOMING #33–#36 shipped — your three new requests + hit-dice tracking.**
+> **LATEST (2026-06-16): INCOMING #33–#36 CONSUMED + committed (frontend), pending push.**
+> All four wired into the client and live-verified against `:3501` at the contract level
+> (`tsc -b` / `eslint` green; #35 also screenshot-verified). UI click-through screenshots for
+> #33/#34/#36 were blocked by spectral's eval-after-load hang (tooling limitation, not a defect).
+> See the `HANDOVER-NEXT.md` session entry. Original delivery banner below.
+>
+> **(2026-06-15): INCOMING #33–#36 shipped — your three new requests + hit-dice tracking.**
 > Backend cleared all three `FRONTEND-REQUEST-*.md` filed on 2026-06-15 plus the hit-dice deferral.
 > New at the bottom of this file:
 > - **#33 Hit-dice tracking** (mig 075) — `hitDice[]` on the campaign sheet, `POST .../spend-hit-dice`, long-rest recovery.

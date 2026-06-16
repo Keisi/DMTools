@@ -18,6 +18,7 @@ import {
   ResourceRecharge,
   RollModifierKind,
   SkillProficiencyLevel,
+  WeaponProperty,
   type CharacterFeatureResponse,
   type CharacterResourceResponse,
   type CharacterResponse,
@@ -34,6 +35,7 @@ import {
   type SpellResponse,
   type SpellcastingResponse,
   type WeaponAttackResponse,
+  type WeaponResponse,
 } from "../api/types";
 import { ApiError } from "../api/client";
 import {
@@ -97,6 +99,7 @@ export default function CharacterSheetView({
   footer,
   items = [],
   spellsById,
+  weaponsById,
   onMutated,
   dragHandlers,
 }: {
@@ -111,6 +114,9 @@ export default function CharacterSheetView({
   items?: ItemResponse[];
   // Known-spell → catalog join for the Spellcasting block's dice/save display.
   spellsById?: Map<string, SpellResponse>;
+  // Weapon catalog join for the Attacks block's property badges + versatile damage
+  // (INCOMING #35; absent ⇒ no badges, attack/damage numbers are unaffected).
+  weaponsById?: Map<string, WeaponResponse>;
   // Inventory mutation callback (route's setC). Absent ⇒ inventory is read-only.
   onMutated?: (updated: CharacterResponse) => void;
   // Drag wiring; absent ⇒ blocks render in natural order with no handles.
@@ -165,7 +171,7 @@ export default function CharacterSheetView({
         return <EquippedBlock character={c} />;
       case "attacks":
         return (
-          <AttacksBlock attacks={c.weaponAttacks} attacksPerAction={c.attacksPerAction} modByName={modByName} prof={prof} />
+          <AttacksBlock attacks={c.weaponAttacks} attacksPerAction={c.attacksPerAction} modByName={modByName} prof={prof} weaponsById={weaponsById} />
         );
       case "resources":
         return <ResourcesBlock resources={c.resources} />;
@@ -298,16 +304,33 @@ function Vital({
   );
 }
 
+// Display labels for the numeric WeaponProperty set (INCOMING #35). Render-only.
+const WEAPON_PROPERTY_LABELS: Record<number, string> = {
+  [WeaponProperty.Ammunition]: "Ammunition",
+  [WeaponProperty.Finesse]: "Finesse",
+  [WeaponProperty.Heavy]: "Heavy",
+  [WeaponProperty.Light]: "Light",
+  [WeaponProperty.Loading]: "Loading",
+  [WeaponProperty.Range]: "Range",
+  [WeaponProperty.Reach]: "Reach",
+  [WeaponProperty.Special]: "Special",
+  [WeaponProperty.Thrown]: "Thrown",
+  [WeaponProperty.TwoHanded]: "Two-Handed",
+  [WeaponProperty.Versatile]: "Versatile",
+};
+
 function AttacksBlock({
   attacks,
   attacksPerAction,
   modByName,
   prof,
+  weaponsById,
 }: {
   attacks: WeaponAttackResponse[];
   attacksPerAction: number;
   modByName: Map<string, number>;
   prof: number;
+  weaponsById?: Map<string, WeaponResponse>;
 }) {
   if (attacks.length === 0) return null;
   const anyNonProf = attacks.some((a) => !a.isProficient);
@@ -319,34 +342,47 @@ function AttacksBlock({
         <p className="sheet__note">Extra Attack — {attacksPerAction} attacks per Attack action.</p>
       )}
       <ul className="prof-list">
-        {attacks.map((a) => (
-          <li
-            key={a.weaponId}
-            className="prof-list__row tip"
-            data-tooltip={attackTip(a, modByName, prof)}
-          >
-            <span className={"dot" + (a.isProficient ? " dot--on" : "")} />
-            <span className="prof-list__name">
-              {a.name}
-              {!a.isProficient && (
-                <span className="sheet__warn">
-                  {" "}
-                  ⚠ not proficient
-                </span>
-              )}
-            </span>
-            <span className="prof-list__val">
-              {fmtMod(a.attackBonus)}
-              {a.damageDice && (
-                <span className="text-faint">
-                  {" "}
-                  · {a.damageDice}
-                  {a.damageBonus !== 0 ? fmtMod(a.damageBonus) : ""}
-                </span>
-              )}
-            </span>
-          </li>
-        ))}
+        {attacks.map((a) => {
+          const w = weaponsById?.get(a.weaponId);
+          const propLabels = (w?.properties ?? [])
+            .map((p) => WEAPON_PROPERTY_LABELS[p])
+            .filter(Boolean);
+          return (
+            <li
+              key={a.weaponId}
+              className="prof-list__row tip"
+              data-tooltip={attackTip(a, modByName, prof)}
+            >
+              <span className={"dot" + (a.isProficient ? " dot--on" : "")} />
+              <span className="prof-list__name">
+                {a.name}
+                {!a.isProficient && (
+                  <span className="sheet__warn">
+                    {" "}
+                    ⚠ not proficient
+                  </span>
+                )}
+                {propLabels.length > 0 && (
+                  <span className="sheet__weapon-props">
+                    {" "}
+                    {propLabels.join(" · ")}
+                  </span>
+                )}
+              </span>
+              <span className="prof-list__val">
+                {fmtMod(a.attackBonus)}
+                {a.damageDice && (
+                  <span className="text-faint">
+                    {" "}
+                    · {a.damageDice}
+                    {a.damageBonus !== 0 ? fmtMod(a.damageBonus) : ""}
+                    {w?.versatileDamage && ` (2H ${w.versatileDamage}${a.damageBonus !== 0 ? fmtMod(a.damageBonus) : ""})`}
+                  </span>
+                )}
+              </span>
+            </li>
+          );
+        })}
       </ul>
       {anyNonProf && (
         <p className="text-faint sheet__warn-note">
