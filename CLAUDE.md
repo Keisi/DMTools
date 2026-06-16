@@ -312,17 +312,19 @@ negotiates down to **SSE — that's normal, not a bug**. `/hubs` is proxied in
 `vite.config.ts` with `ws: true`; callbacks live in refs so re-renders don't
 rebuild the connection.
 
-Backend features that are **not modeled** — don't build UI for them: Half-Elf
-"choose +1 to two", weapon properties (finesse/heavy/…), and spell slots as
-anything but a single int. (Subraces ARE modeled — picker in the builder race
-step, modifiers in the ability tooltip, plus subrace choice-Selections — High Elf
-cantrip + extra language — and auto-granted racial spells; see INCOMING #25.)
+Backend features still **not modeled** — don't build UI for them: spell slots as
+anything but a single int. (Half-Elf "choose +1 to two" and weapon properties are
+now MODELED by the backend — INCOMING #34/#35 — but **not yet consumed by the
+client**; see the backend-context section below. Subraces ARE modeled — picker in
+the builder race step, modifiers in the ability tooltip, plus subrace choice-Selections
+— High Elf cantrip + extra language — and auto-granted racial spells; see INCOMING #25.)
 
-## Backend context you can't see from this repo (synced 2026-06-14)
+## Backend context you can't see from this repo (synced 2026-06-16)
 
-- **INCOMING #19–#32 are all DONE and wired into the client (DB through migration 074).**
-  #19–#30 are pushed to `origin/main`; **#31 + #32 are committed to `main` locally (`0793aae`,
-  `006235d`) but NOT yet pushed** (push = prod deploy — Kevin's call):
+- **INCOMING #19–#32 are all DONE and wired into the client; #33–#36 are SHIPPED by the
+  backend but NOT yet consumed by the client (DB through migration 077).** #19–#32 are all
+  pushed to `origin/main` (#31/#32 pushed this session, `347c167` = a live prod Pages deploy).
+  #33–#36 (listed after #32 below) are the next frontend consumption batch:
   - **#19 resource tracking** (mig 064) — per-combatant `resources`/`spellSlots`/`pactSlot`
     pools; `components/CombatantPools.tsx` renders pip tracks + set-semantics steppers +
     Short/Long Rest on DM + player cards. Endpoints `…/resources/{key}`,
@@ -373,16 +375,41 @@ cantrip + extra language — and auto-granted racial spells; see INCOMING #25.)
     fields that first shipped read-only are now interactive: `campaignCharacterState.updateResource`
     (`PATCH resources/{key}`, key URL-encoded for the colon slug; ±1 pip/numeric like the #19 combatant
     tracker) and `.updateExhaustion` (`PATCH exhaustion`, 0–6 stepper). Both DM-or-owner, both return the
-    full sheet (`applySheet`). **Exhaustion is store-only server-side** — the derived `character` block does
-    NOT reflect exhaustion penalties (render the level only; modeling the penalty table is a deferred ask).
+    full sheet (`applySheet`). **(Exhaustion was store-only here — SUPERSEDED by INCOMING #36: the campaign
+    sheet's derived `character` now reflects the penalty ladder. Drop the "render level only" caveat when #36 is consumed.)**
+  - **#33 hit-dice tracking** (mig 075) — `CampaignCharacterSheetResponse.hitDice[]`
+    (`{dieType,remaining,max}`; `dieType` = HitDie 4/6/8/10/12, pooled by die type per multiclass,
+    sorted desc); `POST …/spend-hit-dice` (`{dieType,count,rolledTotal?}` — heals
+    `(rolledTotal ?? count*avg) + conMod*count`, clamped) + `PATCH …/hit-dice/{dieType}` (`{remaining}`
+    DM override); **long-rest now ALSO recovers `max(1,floor(totalLevel/2))` dice largest-first** (short
+    rest still HP-neutral). Surface in `CampaignCharacterPanel`. **NOT YET CONSUMED.**
+  - **#34 Half-Elf "+1 to two abilities"** (mig 076) — `SelectionType.AbilityScoreIncrease=10` +
+    `SelectionSourceType.Race=5`; `RaceResponse.selections[]` (Half-Elf carries
+    `{type:10,choose:2,level:1,options: the 5 abilities ex-CHA}`, other SRD races empty);
+    `CharacterRequest.abilityIncreaseChoices?: string[]` (stat ids, +1 each, SelectionValidator-gated —
+    400 on wrong count / out-of-pool / picking CHA); `AbilityScoreResponse.racialChoiceModifier` is a new
+    breakdown component (`effective = base + racial + subrace + feat + improvement + racialChoice`). Builder
+    Race step gets a choose-2 ability picker + tooltip itemizes it. **NOT YET CONSUMED.**
+  - **#35 weapon properties** (mig 077) — `WeaponResponse.properties: WeaponProperty[]` (numeric:
+    Ammunition1/Finesse2/Heavy3/Light4/Loading5/Range6/Reach7/Special8/Thrown9/TwoHanded10/Versatile11) +
+    `versatileDamage: string|null` (2H die, e.g. "1d10"). Display-only — attack/damage math unchanged. To
+    badge the sheet Attacks block, **join the attack back to `/api/weapons`** (no attack-line echo was added).
+    **NOT YET CONSUMED.**
+  - **#36 exhaustion penalties DERIVED** (no migration) — **SUPERSEDES #32's store-only note.** The campaign
+    sheet's derived `character` now folds the cumulative 2014 SRD ladder from `exhaustionLevel` via channels
+    we ALREADY render: `rollAdvantages` (Disadvantage on AbilityCheck ≥1, Attack+Save ≥3), halved speeds ≥2 /
+    speed 0 ≥5, halved `maxHitPoints` ≥4; death is the client's own `exhaustionLevel === 6` check. **No new
+    wire fields.** Drop the `CampaignCharacterPanel` "render level only" caveat; in campaign context do NOT
+    also apply the catalog Exhaustion status-effect (double-counts). **NOT YET CONSUMED.**
   - **The buffs-system rule still holds:** **flat** roll modifiers are pre-folded into the
     derived numbers — render-only, NEVER re-apply; only **dice** + **advantage/disadvantage**
     surface via `CharacterResponse.rollModifiers`/`rollAdvantages` (the no-double-counting
     invariant). Badges carry `remainingRounds`/`sourceCombatantId`/`consumedOnUse`.
-- **No outstanding backend requests — the queue is empty.** The last two
-  (`FRONTEND-REQUEST-campaign-resource-set.md` + `FRONTEND-REQUEST-campaign-exhaustion-set.md`, the #31
-  read-only follow-ups) shipped as INCOMING #32 and are consumed (above). Exhaustion **penalty derivation**
-  is a known deferred ask — file a fresh request if/when DMs want the mechanical penalty table applied.
+- **No outstanding backend→ requests — the queue is empty; the open work is now FRONTEND-side
+  (consume #33–#36, none wired yet).** Three requests were filed 2026-06-15
+  (`FRONTEND-REQUEST-exhaustion-penalty-derivation.md` / `-halfelf-choose-ability-increase.md` /
+  `-weapon-properties.md`) and the backend closed all three the **same cycle** as INCOMING #34/#35/#36,
+  plus an unprompted **#33 hit-dice** delivery. Nothing is waiting on the backend.
 
 - **The backend has a real xUnit suite now** (`DMTool.Tests`, run with
   `dotnet test DMTool.slnx` in the backend repo) covering the domain rules in
@@ -391,15 +418,18 @@ cantrip + extra language — and auto-granted racial spells; see INCOMING #25.)
   unarmed/unarmored). When you file a `FRONTEND-REQUEST-*.md` for rule
   enforcement, the rule + tests land there — asking is cheap; don't work around
   missing rules client-side.
-- **DB baseline fold is at migration 057** (2026-06-11); migrations 058–074
-  (buffs 061–063, resource pools 064, hide-turn-order 065, session-enforce 066,
-  spell source-class 067, wizard spellbook 068, subrace selections 069, High Elf cantrip
-  DC 071, Extra Attack table 072, advantage buffs seed 073, per-campaign character state 074)
-  sit on top of it.
-  **Production note:** the Azure App Service backend + its DB are NOT yet migrated past 069 —
-  #25, #29/#30, #31 (and the #28 validation change) work locally only until that deploy +
-  migrations 071/072/073/074 run in prod. The frontend `0793aae` (#31) is likewise unpushed,
-  so prod is unaffected until both the push and the prod migrations happen.
+- **DB baseline fold is at migration 057** (2026-06-11); migrations 058–077 sit on top of it
+  (buffs 061–063, resource pools 064, hide-turn-order 065, session-enforce 066, spell source-class
+  067, wizard spellbook 068, subrace selections 069, High Elf cantrip DC 071, Extra Attack 072,
+  advantage buffs 073, per-campaign state 074, hit-dice 075, Half-Elf ability choice 076, weapon
+  properties 077). Backend pushed through 077 to `origin/master`.
+  **Production note (SPLIT-BRAIN — action required on next deploy):** the frontend is now pushed to
+  `origin/main` (`347c167`, this session = a live GitHub Pages prod deploy), but the Azure App Service
+  backend + its DB are **still behind**. Everything from #25/#29/#30 onward (migrations **071–077**)
+  works **locally only** until the backend is deployed and migrations 071/072/073/074/075/076/077 are
+  run in prod. So **prod currently runs a frontend whose backend lacks those endpoints/columns** for the
+  affected features — deploy the backend and run the migrations to close the gap. (The #33–#36 client
+  work being unbuilt means those specific contracts aren't called from prod yet anyway.)
 - **Hub auth is enforced server-side** (backend commit 2026-06-11):
   `JoinEncounter` verifies encounter access before the group join, and DM-only
   pushes go to a separate `encounter-{id}-dm` group. If live updates stop for a

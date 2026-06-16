@@ -1,10 +1,19 @@
 # INCOMING FROM BACKEND — IDOR/BOLA fix complete
 
-> **✅ LATEST (2026-06-14): INCOMING #32 CONSUMED by the frontend (commit `006235d`, not yet pushed).**
-> The campaign resource + exhaustion setters are wired — `CampaignCharacterPanel` resource pips and the
-> exhaustion 0–6 stepper are now live (DM-or-owner), verified end-to-end. Both #31 follow-up requests are
-> closed; **no outstanding backend requests.** (Backend shipped #32 at `origin/master` `a809f8e`; full detail
-> at the bottom of this file.) Exhaustion remains store-only — the panel renders the level only, by design.
+> **LATEST (2026-06-15): INCOMING #33–#36 shipped — your three new requests + hit-dice tracking.**
+> Backend cleared all three `FRONTEND-REQUEST-*.md` filed on 2026-06-15 plus the hit-dice deferral.
+> New at the bottom of this file:
+> - **#33 Hit-dice tracking** (mig 075) — `hitDice[]` on the campaign sheet, `POST .../spend-hit-dice`, long-rest recovery.
+> - **#34 Half-Elf ability choice** (mig 076) — `SelectionType.AbilityScoreIncrease (10)` + `SelectionSourceType.Race (5)`, `Race.selections`, `CharacterRequest.abilityIncreaseChoices`, new `racialChoiceModifier` breakdown component.
+> - **#35 Weapon properties** (mig 077) — `WeaponResponse.properties` (`WeaponProperty[]`, numeric) + `versatileDamage`.
+> - **#36 Exhaustion penalties** (no migration) — **SUPERSEDES the #32 "store-only" note below**: the campaign sheet's embedded `character` now DERIVES the 5e exhaustion ladder (disadvantage via `rollAdvantages`, halved speeds, halved `maxHitPoints`). Render the moved numbers; no new fields.
+>
+> DB is through **077**; next is 078. 500 unit tests green, build clean. Push state noted per entry.
+>
+> ---
+> Prior banner (2026-06-14): INCOMING #32 CONSUMED by the frontend (commit `006235d`). Campaign resource +
+> exhaustion setters wired. (Backend shipped #32 at `origin/master` `a809f8e`.) NOTE: #36 below changes the
+> exhaustion behavior the #32 note described.
 
 **To:** the DMTool-FrontEnd session
 **From:** the backend session (`C:\Users\keisi\source\repos\DMTool`)
@@ -2484,3 +2493,120 @@ existing `SetExhaustionAsync`. IIS pool restarted. Backend committed + pushed to
 (DM-or-owner), both through the existing `applySheet` state-replace path. Verified live (Layout Preview /
 Keisi): exhaustion 0→1 and Channel Divinity spend persisted; reset to defaults afterward. Both #31 follow-up
 requests closed — **no outstanding frontend→backend requests.**
+---
+
+# INCOMING #33 — Hit-dice tracking (migration 075) DONE
+
+Closes the hit-dice deferral noted with #31/#32. Hit dice are now a tracked per-campaign pool, same
+model as spell slots / class resources: **remaining stored, max derived live from the character.**
+
+## Contract — `CampaignCharacterSheetResponse` gains `hitDice[]` (last field)
+```
+hitDice: { dieType: number; remaining: number; max: number }[]
+```
+- `dieType` is the **HitDie enum value** (numeric): 4=d4, 6=d6, 8=d8, 10=d10, 12=d12. Pooled by die type
+  per 5e multiclass rules (Fighter 3 / Wizard 2 → one d10 pool of 3 and one d6 pool of 2).
+- Sorted by die size descending.
+
+## Endpoints (all DM-or-owner, return the full `CampaignCharacterSheetResponse`)
+- **`POST api/campaigns/{campaignId}/characters/{characterId}/spend-hit-dice`**
+  ```
+  { "dieType": 10, "count": 2, "rolledTotal": 13 }   // rolledTotal optional
+  ```
+  Decrements that die's `remaining` by `count` and raises `currentHp` by
+  `(rolledTotal ?? count * average(dieType)) + conMod * count` (average = die/2+1; floored at 0; clamped to maxHp).
+  Omit `rolledTotal` to use the 5e average. **400** if `dieType` isn't one of the character's pools or `count > remaining`.
+- **`PATCH api/campaigns/{campaignId}/characters/{characterId}/hit-dice/{dieType}`** `{ "remaining": 3 }`
+  Direct DM override, clamped to [0, max]. Unknown die for this character → **400**.
+- **`POST .../long-rest`** now ALSO recovers spent hit dice: `max(1, floor(totalLevel/2))` dice, largest-die-first.
+  (Short rest stays HP-neutral — only pact slots + ShortRest resources, as before.)
+
+## Status
+Build clean; **+11 unit tests** for the pure pool calc (`CampaignHitDiceTests`). Migration 075 applied +
+idempotent. The controller/repo paths follow the proven #31 (074) pattern (not separately unit-tested,
+same as #31). Backend committed + pushed to `origin/master` (2026-06-15).
+
+---
+
+# INCOMING #34 — Half-Elf "+1 to two abilities" (migration 076) DONE
+
+Closes `FRONTEND-REQUEST-halfelf-choose-ability-increase.md`. Modeled as a race-sourced `Selection`.
+
+## New enum members (enums are NUMBERS over the wire)
+- `SelectionType.AbilityScoreIncrease = 10` — option ids point into the **Stats** catalog; each pick = **+1**.
+- `SelectionSourceType.Race = 5`.
+
+## `RaceResponse.selections: SelectionResponse[]` — now present
+Races surface their Selections (mirrors class/background/subrace). **Half-Elf** carries one:
+`{ type: 10, choose: 2, level: 1, options: [{optionId, name}, ...] }` where options are the 5 abilities
+**excluding Charisma** (CHA is the fixed +2). Other SRD races return an empty `selections` array.
+
+## `CharacterRequest.abilityIncreaseChoices?: string[]`
+Stat ids, each implying +1. Validated server-side via the shared `SelectionValidator`:
+count = the race's Selection `choose` (2 for Half-Elf), subset-of the options, level 1.
+`allowHomebrewSelections` relaxes count/subset (the usual escape hatch). **400** on wrong count /
+out-of-pool / picking CHA.
+
+## `AbilityScoreResponse.racialChoiceModifier: number` — new breakdown component
+`effective = base + racialModifier + subraceModifier + featModifier + improvementModifier + racialChoiceModifier`.
+Itemize the chosen +1s in your ability tooltip alongside the others.
+
+## Status
+Build clean; **new unit tests** (`HalfElfAbilityChoiceTests`). Migration 076 applied + idempotent.
+Live-verified: `GET /api/races` Half-Elf shows +2 CHA fixed + the choose-2 selection (CHA excluded).
+Backend committed + pushed to `origin/master` (2026-06-15).
+
+---
+
+# INCOMING #35 — Weapon properties on the response (migration 077) DONE
+
+Closes `FRONTEND-REQUEST-weapon-properties.md`. **Display data only — no change to attack/damage math.**
+
+## `WeaponResponse` gains two fields (appended)
+```
+properties: WeaponProperty[];   // numeric enum
+versatileDamage: string | null; // the 2H die, e.g. "1d10"; null = not versatile
+```
+`WeaponProperty` (numeric): `Ammunition=1, Finesse=2, Heavy=3, Light=4, Loading=5, Range=6, Reach=7,
+Special=8, Thrown=9, TwoHanded=10, Versatile=11`. `WeaponCreateRequest` accepts optional `properties` +
+`versatileDamage` for homebrew.
+
+## Notes
+- Populated for all 37 SRD weapons from the 2014 SRD (CC-BY). Live-verified: Longsword →
+  `properties:[11]`, `versatileDamage:"1d10"`; Rapier → `[2]` (Finesse); Greataxe → `[3,10]` (Heavy, TwoHanded).
+- The optional attack-line echo was **not** added — to render badges on the Attacks block, join the
+  attack's weapon back to the `/api/weapons` catalog (file a request if you want them echoed on `WeaponAttack`).
+
+## Status
+Build clean; migration 077 applied + idempotent (72 property rows, 6 versatile weapons). Live-verified.
+Backend committed + pushed to `origin/master` (2026-06-15).
+
+---
+
+# INCOMING #36 — Exhaustion penalties are now DERIVED (no migration) DONE — SUPERSEDES #32's store-only note
+
+Closes `FRONTEND-REQUEST-exhaustion-penalty-derivation.md`. **This reverses the #32 caveat**: the campaign
+sheet's embedded `character` now reflects the cumulative 2014 SRD exhaustion ladder, driven by the existing
+`exhaustionLevel` scalar. **No new wire fields** — the penalties surface through channels you already render.
+
+## The ladder (cumulative), surfaced on the campaign sheet's `character`
+| Level | Effect | Where it shows |
+|---|---|---|
+| >=1 | Disadvantage on ability checks (skills, initiative, passive) | `rollAdvantages` entry `AbilityCheck` = Disadvantage |
+| >=2 | Speed halved (rounded down to nearest 5) | `walkingSpeed` / swim / climb / fly |
+| >=3 | Disadvantage on attack rolls AND saving throws | `rollAdvantages` `AttackRoll` + `SavingThrow` |
+| >=4 | HP maximum halved | `character.maxHitPoints` + sheet `maxHp` (and `currentHp` clamps) |
+| >=5 | Speed 0 | speeds = 0 |
+| 6 | Death | no derivation — check `exhaustionLevel === 6` yourself |
+
+- Disadvantage flows through the **existing `rollAdvantages` net-cancelling path** (5e presence-not-count),
+  so a Bless/advantage buff on the same slice correctly cancels exhaustion's disadvantage.
+- **Campaign context only.** The base (non-campaign) character sheet carries no exhaustion and is unchanged.
+  The `exhaustionLevel` scalar is authoritative — in campaign context do not ALSO apply the seeded
+  "Exhaustion" status-effect from the catalog (that path is for combatants), or it double-counts.
+- Drop the "render level only" caveat in `CampaignCharacterPanel` — the moved numbers surface automatically.
+
+## Status
+Build clean; **+23 unit tests** (`ExhaustionLadderTests`: each threshold, Bless-cancels-exhaustion, speed/HP folds).
+No migration (the `exhaustionLevel` column already exists from #31). Backend committed + pushed to
+`origin/master` (2026-06-15).
