@@ -1,5 +1,28 @@
 # Handover — DMTool-FrontEnd (for the next session)
 
+> ## ⏳ SESSION 2026-06-17 — #33–#36 reviewed + ready to push; PUSH BLOCKED on credential
+>
+> Picks up directly from the 2026-06-16 entry below. State now:
+> - **4 commits ahead of `origin/main`, unpushed:** `b3a25df` (docs) → `43f300c` (feature, real
+>   source) → `9ef1054` (docs) → `a758d7b` (critical-review report). Tree clean.
+> - **Critical review PASSED** (all 3 phases: precheck delta +0/-0, build_errors 0, no codescan
+>   findings on the 9 changed files, adversarial clean, hindsight ACCEPT). Report at
+>   `projectnotes/critical-review/2026-06-17/incoming-33-36-push.json`. **Push-gate marker stamped
+>   for HEAD `a758d7b`** (`.claude/.critical-review-done-main-a758d7b`).
+> - **PUSH IS BLOCKED — credential, not code.** `git push origin main` → **403**: GCM resolved
+>   github.com to the **work** account (`Kevin-Azuelo-BOND`), which lacks access to the **personal**
+>   repo `Keisi/DMTools`. Pinned the repo to the personal account (`git config
+>   credential.https://github.com.username Keisi`), but the retry hung on an interactive auth prompt
+>   (GCM has no cached `Keisi` token). **To finish: a human runs `git push origin main` interactively
+>   so the GitHub browser/device login for `Keisi` completes** (the username pin is already in place,
+>   so GCM will prompt for `Keisi` specifically and cache it). Marker is valid for `a758d7b`; if any
+>   new commit lands first, re-run `/critical-review` (new SHA invalidates the marker).
+> - **Push = GitHub Pages prod deploy. SPLIT-BRAIN still applies:** prod Azure backend is behind
+>   (migs 071–077 local-only), so #33–#36 light up in prod only after the backend deploys + migrations
+>   run. The new client code is defensively guarded, so it degrades gracefully until then.
+>
+> ---
+>
 > ## ✅ SESSION 2026-06-16 — INCOMING #33–#36 consumed + COMMITTED (NOT yet pushed)
 >
 > The four shipped-but-unconsumed backend deliveries were wired into the client (the work was
