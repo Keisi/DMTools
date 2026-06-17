@@ -1,0 +1,46 @@
+{
+  "date": "2026-06-14",
+  "pass": 1,
+  "strategy": "PASS",
+  "scope": "unstaged->committed 1eb0f13",
+  "task": "Consume backend INCOMING #28 (Wizard spellbook cap), #29 (no-op), #30 (attacksPerAction + advantage endpoint/buttons); emoji->text labels",
+  "files_reviewed": [
+    "src/api/types.ts",
+    "src/api/endpoints.ts",
+    "src/routes/CharacterSheetView.tsx",
+    "src/routes/CharacterSheet.css",
+    "src/routes/EncounterView.tsx",
+    "tests/api-e2e/lib/levelup.mjs",
+    "tests/api-e2e/suites/suite-a-levelup.mjs",
+    "tests/api-e2e/suites/suite-b-creation.mjs",
+    "tests/api-e2e/README.md"
+  ],
+  "summary": {
+    "build": "tsc -b 0 errors; vite build clean",
+    "lint": "eslint clean (exit 0)",
+    "oby_precheck": { "introduced": 0, "fixed": 0, "net": 0, "build_errors": 0, "direction": "stable" },
+    "e2e_harness": "2041 PASS / 0 FAIL against live backend (:3501)"
+  },
+  "findings": {
+    "blocking": [],
+    "serious": [],
+    "recommendations": [
+      "Advantage quick-grant buttons cover Attack + Saving Throw only, not Ability Check (target 2). Acceptable simplification; tooltips clear. Deferred."
+    ],
+    "edge_cases": [
+      "attacksPerAction rendered with (?? 1) guard so a prod backend not yet on the #30 deploy renders nothing rather than NaN. Intentional."
+    ]
+  },
+  "hindsight": {
+    "rewrite": [],
+    "adjust": [],
+    "accept": [
+      "Additive optional types matching the backend INCOMING contract exactly",
+      "grantAdvantage mirrors the existing addCombatantStatusEffect endpoint + handler pattern; single applyUpdate state path",
+      "harness over-cap test reworked data-driven (reads spellbookSize from progression), not hardcoded"
+    ]
+  },
+  "tech_debt_delta": { "health_score_delta": 0, "note": "delta 0 anti-patterns per oby precheck; EncounterView long-function flag is pre-existing baseline, not introduced" },
+  "deploy_note": "Validation/behaviour of #28/#29/#30 is live only against a backend on migrations 071/072/073; prod Azure not yet redeployed. Frontend changes are additive/defensive and safe to ship ahead of that.",
+  "new_pitfalls": []
+}

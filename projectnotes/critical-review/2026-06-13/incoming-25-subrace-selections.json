@@ -1,0 +1,36 @@
+{
+  "date": "2026-06-13",
+  "commit": "0942095",
+  "task": "Consume INCOMING #25 — subrace selections + racial spells",
+  "pass": 1,
+  "strategy": "PASS",
+  "scope": "HEAD commit (4 source files + 3 docs)",
+  "files_reviewed": [
+    "src/api/types.ts",
+    "src/routes/CharacterBuilder.tsx",
+    "src/routes/CharacterBuilder.steps.tsx",
+    "src/routes/CharacterSheetView.tsx"
+  ],
+  "summary": {
+    "codescan": { "grade": "A", "critical": 0, "high": 0, "medium": 1, "note": "the 1 medium (jwt-in-localstorage, client.ts:18) is a pre-existing baseline anti-pattern, not in any changed file" },
+    "dependency_vulns": 0,
+    "oby_verify_delta": 0,
+    "hindsight": { "verdict": "pass", "signals": 0, "decision_points": 0 }
+  },
+  "findings": { "blocking": [], "serious": [], "recommendations": [], "edge_cases": [] },
+  "phase2_adversarial": [
+    "Payload merge uses Set-dedup for both spellIds and languageIds — no double-send; subrace cantrip rides bare spellIds (null source), which the backend exempts from class-membership validation (verified live: High Elf Fighter Acid Splash accepted, src=null).",
+    "subraceComplete gate wired into BOTH canAdvance[0] and stepValid[0]; relaxed on edit (allowHomebrewSelections covers re-submission).",
+    "Subrace picks kept as separate state (subraceCantripIds / subraceLanguageIds) so each validates its own choose budget independently of the bg-language picker.",
+    "Edit-mode recovery loads races via the same Promise.all; language recovered from ch.languages ∩ subrace pool; cantrip moved out of cantripIds into subraceCantripIds. Known simplification (commented): High Elf Wizard class vs racial cantrip indistinguishable from shared wizard pool — harmless, edit re-submits a deduped flat list.",
+    "Racial spell DCs rendered as-is from server (saveDc / spellAttackBonus); never recomputed (derived-not-stored rule). Block visibility + early-return include racialSpells so non-casters (Drow/Forest Gnome Fighter) still show the block.",
+    "Race/subrace onPick handlers clear both subrace arrays — no stale picks leak across a switch."
+  ],
+  "verification": {
+    "npm_build": "pass (tsc -b clean, vite built)",
+    "npm_lint": "pass (clean)",
+    "spectral_live": "High Elf builder pickers + Next-gating; Drow (3 racial spells DC14) + Forest Gnome (Minor Illusion DC12) sheets; High Elf Fighter cantrip+language write-path round-trip"
+  },
+  "tech_debt_delta": { "lines_added": 365, "lines_removed": 23, "health_score_delta": 0, "note": "all additive; no new anti-patterns" },
+  "new_pitfalls": []
+}

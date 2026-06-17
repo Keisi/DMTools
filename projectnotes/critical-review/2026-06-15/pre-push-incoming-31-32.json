@@ -1,0 +1,35 @@
+{
+  "date": "2026-06-15",
+  "pass": 1,
+  "scope": "origin/main..HEAD (unpushed commits 0793aae #31 + 006235d #32 + 2 docs syncs)",
+  "strategy": "PASS",
+  "summary": {
+    "build": "npm run build green (tsc -b + vite); oby build-check is os-193 false-negative",
+    "lint": "eslint clean (no output)",
+    "codescan": { "critical": 0, "high": 0, "medium": 0 },
+    "oby_verify": { "delta": 0, "duplicates": 0, "complete": "46% — false-negative (no test runner by design)" },
+    "hindsight": { "rewrite": 0, "adjust": 0, "accept": 1, "verdict": "ACCEPT" }
+  },
+  "files_reviewed": [
+    "src/api/endpoints.ts",
+    "src/api/types.ts",
+    "src/components/CampaignCharacterPanel.tsx",
+    "src/routes/CampaignDetail.tsx"
+  ],
+  "findings": {
+    "blocking": [],
+    "serious": [],
+    "recommendations": [
+      "Inspiration Grant button disables on hardcoded `inspiration >= 1`. DEFERRED: the cap (GameRules:InspirationMax) is not exposed on CampaignCharacterSheetResponse to derive from; the disable is advisory-only (backend grant is the real cap gate) and matches the RAW default of 1. File a FRONTEND-REQUEST to expose the max if DMs ever raise it server-side."
+    ],
+    "edge_cases": []
+  },
+  "phase2_notes": [
+    "Contract boundary (endpoints.ts/types.ts) matches HANDOFF-TO-FRONTEND-2026-06-14 field-for-field: paths, encodeURIComponent on resource key, DM-only grant, RAW-SET HP semantics documented.",
+    "HP math correct: handleDamage absorbs temp HP first then floors current at 0; handleHeal clamps to maxHp; set paths send absolute, server clamps.",
+    "Double-submit guarded by `busy` flag disabling all controls during a mutation (addresses the stale-closure note in CLAUDE.md).",
+    "Auth surfaces align with backend: Sheet button + canManage = isDm || ownerId===userId; grantInspiration = isDm only. Backend 404s/enforces regardless (advisory UX)."
+  ],
+  "deploy_caveat": "Prod Azure backend is not migrated past 069; #31/#32 (mig 074) endpoints work locally only. Pushing the frontend lights up UI that calls endpoints absent in prod until the backend is deployed + migrations 071-074 run. Confirmed with Kevin before push.",
+  "new_pitfalls": []
+}
