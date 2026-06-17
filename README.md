@@ -28,4 +28,10 @@ Start the DMTool backend (IIS `:3501` or `dotnet run`) for live data.
 - `src/api/` — typed HTTP client + endpoint modules.
 - `src/auth/` — JWT auth context.
 
+## Deploy (production)
+Production hosting is **MonsterASP.NET** (IIS) at https://dmtool.runasp.net. The full
+FTP deploy runbook — prod build (`VITE_API_BASE`), the SPA `web.config` rewrite, and the
+HTTPS/control-panel steps — is in **`DEPLOYMENT.md`**. (Hosting credentials live in the
+`.env` at the personal repos root, outside git.)
+
 See **`FRONTEND-CONTEXT.md`** for the full backend API map, conventions, and gotchas.
