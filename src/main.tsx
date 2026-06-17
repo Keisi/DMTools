@@ -15,9 +15,15 @@ import { installTooltipPositioner } from "./lib/tooltips";
 // Keep edge-hugging tooltips on-screen (CSS pseudo-tooltips can't self-flip).
 installTooltipPositioner();
 
+// The app is served under Vite's base path (/DMTools/ on GitHub Pages, / locally).
+// React Router must know it, or every navigation (RequireAuth -> /login, the catch-all
+// -> /vault) resolves against the site root and escapes the base. Strip the trailing
+// slash BASE_URL carries; fall back to "/" locally (RR rejects an empty basename).
+const routerBasename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={routerBasename}>
       <AuthProvider>
         <App />
       </AuthProvider>
