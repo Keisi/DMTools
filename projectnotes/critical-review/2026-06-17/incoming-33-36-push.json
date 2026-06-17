@@ -1,0 +1,45 @@
+{
+  "date": "2026-06-17",
+  "pass": 1,
+  "scope": "origin/main..HEAD (3 commits: 43f300c source + b3a25df/9ef1054 docs)",
+  "head": "9ef1054",
+  "strategy": "PASS",
+  "summary": {
+    "codescan": { "critical": 0, "high": 0, "medium": 0, "note": "no findings on the 9 changed src files; full-project scan times out (env)" },
+    "oby_precheck": { "introduced": 0, "fixed": 0, "net": 0, "build_errors": 0 },
+    "oby_health": { "grade": "F-baseline", "note": "pre-existing scaffold baseline; this diff introduced 0 new (precheck net 0)" },
+    "gates": { "tsc_b": "green", "eslint": "green" },
+    "hindsight": { "rewrite": 0, "adjust": 0, "accept": 1 }
+  },
+  "files_reviewed": [
+    "src/api/endpoints.ts", "src/api/types.ts",
+    "src/components/CampaignCharacterPanel.tsx", "src/components/CampaignCharacterPanel.css",
+    "src/routes/CharacterBuilder.steps.tsx", "src/routes/CharacterBuilder.tsx",
+    "src/routes/CharacterSheet.tsx", "src/routes/CharacterSheet.css", "src/routes/CharacterSheetView.tsx"
+  ],
+  "findings": { "blocking": [], "serious": [], "recommendations": [], "edge_cases": [] },
+  "phase2_adversarial": {
+    "result": "clean",
+    "notes": [
+      "Additive consumption of already-shipped backend contracts (#33-#36); no new architecture.",
+      "New endpoints (spendHitDice/updateHitDice) mirror the existing campaignCharacterState pattern exactly.",
+      "All panel mutations route through the shared mutate()/applySheet() path (busy+error+state-replace) - same as #31/#32.",
+      "Edge cases gated: Spend disabled at remaining<=0, Restore disabled at remaining>=max, controls gated by canManage (DM-or-owner).",
+      "Defensive optional-field handling: weapon properties (?? []), attacksPerAction (?? 1), all new wire fields optional so a prod-behind backend degrades gracefully.",
+      "#36 caveat correctly removed; no double-count (catalog Exhaustion status-effect not also applied in campaign context)."
+    ]
+  },
+  "hindsight": {
+    "verdict": "ACCEPT",
+    "decision_points": [],
+    "notes": "No new storage/deps/CLI decisions; reuses the endpoint group, mutate pattern, PipTrack, and WEAPON_PROPERTY_LABELS map. Right for the forward future."
+  },
+  "verification": {
+    "live_api_3501": "all 4 contracts verified (spend-hit-dice 200 + pool decrement; races Half-Elf type:10 choose:2; weapons properties+versatileDamage; exhaustion ladder -> speed+rollAdvantages)",
+    "spectral_screenshots": "#35 sheet, #34 builder picker, #33/#36 campaign panel - all captured"
+  },
+  "tech_debt_delta": { "lines_added_src": 387, "complexity_delta": "neutral (pattern reuse)", "health_score_delta": 0 },
+  "new_pitfalls": [
+    "spectral batch interaction actions hang on the default per-action stability wait once a React SPA has loaded; cap with --action-timeout (now documented in CLAUDE.md)."
+  ]
+}
