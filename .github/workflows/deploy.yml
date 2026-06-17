@@ -30,7 +30,7 @@ jobs:
       - run: npm run build
         env:
           GITHUB_ACTIONS: "true"
-          VITE_API_BASE: https://dmtool20260607231301-afesh0b7g0ehh6h7.southeastasia-01.azurewebsites.net
+          VITE_API_BASE: https://dmtoolapi.runasp.net
 
       - uses: actions/upload-pages-artifact@v3
         with:
