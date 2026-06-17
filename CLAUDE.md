@@ -72,8 +72,15 @@ session-naming. A CodeBridge PreToolUse hook gates `git push` on a
 critical-review marker for HEAD (`.claude/.critical-review-done-main-<sha7>` —
 untracked/local, never commit them). **Pushing to `main` is a production
 deploy**: `.github/workflows/deploy.yml` builds (Node 22, `npm ci` + `npm run
-build` with base path `/DMTools/` and `VITE_API_BASE` = the Azure App Service
-backend) and publishes to GitHub Pages on every push.
+build` with base path `/DMTools/` and `VITE_API_BASE` = `https://dmtoolapi.runasp.net`
+— the MonsterASP API; the old Azure App Service backend was **retired 2026-06-18**) and
+publishes to GitHub Pages on every push. **Editing `deploy.yml` needs a GitHub PAT with
+the `workflow` scope** — the `.env` `GITHUB_TOKEN` lacks it, so the 2026-06-18 repoint was
+done via the github.com web editor (a normal `git push` of a workflow-file change is
+rejected). Routing is now base-aware (commit `f95c8b4`): `BrowserRouter
+basename={import.meta.env.BASE_URL}` + `public/404.html` stashes the FULL `/DMTools/...`
+path before bouncing to `/DMTools/` — fixes the deep-link/refresh bug where routes escaped
+the base to `keisi.github.io/login`.
 
 The backend must be running for live data: IIS at `http://localhost:3501`, or
 Kestrel via `dotnet run --project DMTool --launch-profile http` (`:5157`).
@@ -463,25 +470,25 @@ the builder race step, modifiers in the ability tooltip, plus subrace choice-Sel
   067, wizard spellbook 068, subrace selections 069, High Elf cantrip DC 071, Extra Attack 072,
   advantage buffs 073, per-campaign state 074, hit-dice 075, Half-Elf ability choice 076, weapon
   properties 077). Backend pushed through 077 to `origin/master`.
-  **Production note (SPLIT-BRAIN — action required on next deploy):** the frontend is now pushed to
-  `origin/main` (`347c167`, this session = a live GitHub Pages prod deploy), but the Azure App Service
-  backend + its DB are **still behind**. Everything from #25/#29/#30 onward (migrations **071–077**)
-  works **locally only** until the backend is deployed and migrations 071/072/073/074/075/076/077 are
-  run in prod. So **prod currently runs a frontend whose backend lacks those endpoints/columns** for the
-  affected features — deploy the backend and run the migrations to close the gap. (The #33–#36 client
-  work being unbuilt means those specific contracts aren't called from prod yet anyway.)
+  **Production status (2026-06-18 — SPLIT-BRAIN RESOLVED):** the backend is deployed to **MonsterASP**
+  (`https://dmtoolapi.runasp.net`) with its SQL DB **seeded through migration 077** (verified live via
+  `GET /api/admin/db/status` → 40/40 scripts applied), HTTPS active (Let's Encrypt), and CORS allowing
+  `https://keisi.github.io`. The GitHub Pages frontend now points `VITE_API_BASE` at that API, so the
+  prod frontend and backend are **aligned** — the old Azure/migration split-brain is closed. (Backend DB
+  seeding is now automatic via an in-process migrator — see backend `docs/DEPLOYMENT.md` + CLAUDE.md.)
 - **Hub auth is enforced server-side** (backend commit 2026-06-11):
   `JoinEncounter` verifies encounter access before the group join, and DM-only
   pushes go to a separate `encounter-{id}-dm` group. If live updates stop for a
   user, check their campaign membership/access before debugging the client.
-- **A production pairing exists:** the backend also runs on Azure App Service
-  (`dmtool20260607231301-…southeastasia-01.azurewebsites.net`); this repo's
-  GitHub Pages deploy builds against it (`VITE_API_BASE` in
-  `.github/workflows/deploy.yml`). When `VITE_API_BASE` is set there is no Vite
-  proxy — the backend's production CORS origins (`CorsOptions`) must allow the
-  Pages origin. The Azure DevOps `azure-pipelines.yml` is a second,
-  **manual-trigger** deploy to Azure Static Web Apps; neither pipeline runs
-  `npm run lint` — local lint is the only lint gate.
+- **Production pairing (2026-06-18):** the backend runs on **MonsterASP**
+  (`https://dmtoolapi.runasp.net`, ASP.NET Core 10, in-process IIS — and it negotiates real
+  **WebSockets** for the SignalR hub, unlike the SSE-only local box); this repo's GitHub Pages deploy
+  builds against it (`VITE_API_BASE` in `.github/workflows/deploy.yml`). When `VITE_API_BASE` is set
+  there is no Vite proxy — the backend's production CORS origins (`CorsOptions`, in the host
+  `appsettings.Production.json`) must include the Pages origin `https://keisi.github.io` (added +
+  verified 2026-06-18). The Azure DevOps `azure-pipelines.yml` is a stale second pipeline (Azure Static
+  Web Apps) — retire or ignore it. Neither pipeline runs `npm run lint` — local lint is the only lint
+  gate. (The earlier Azure App Service backend `dmtool20260607231301-…azurewebsites.net` is retired.)
 - **Handoff protocol:** `FRONTEND-REQUEST-*.md` files go in the **backend repo
   root** (the backend session doesn't read this repo; copies here are reference
   only). The backend replies in `INCOMING-FROM-BACKEND.md` (here) and drops
