@@ -2650,3 +2650,56 @@ sheet's embedded `character` now reflects the cumulative 2014 SRD exhaustion lad
 Build clean; **+23 unit tests** (`ExhaustionLadderTests`: each threshold, Bless-cancels-exhaustion, speed/HP folds).
 No migration (the `exhaustionLevel` column already exists from #31). Backend committed + pushed to
 `origin/master` (2026-06-15).
+
+---
+
+# INCOMING #37 — First-sprint API hardening (Half-Elf +1, RFC-7807 500s, auth 429) DONE — live 2026-06-20
+
+Recorded retroactively: this contract shipped and is live, but the note was missed when it landed
+(the prior handover referenced "#37" without writing it). No action needed beyond the 429 item below.
+
+- **Half-Elf "+1 to two abilities of choice" now flows through derived stats** — HP/AC/attacks/initiative/
+  encumbrance reflect the racial picks. No shape change; values are simply +1 where a pick matches a stat.
+- **Unhandled 500s now carry a JSON body** (RFC-7807 ProblemDetails) instead of an empty response.
+  Existing 400 model-validation behaviour is unchanged.
+- **NEW 429 on `/api/auth/login` and `/api/auth/register`** — per-IP sliding window (10/min) with a
+  `Retry-After` header. **Frontend TODO (still open): surface a friendly message on 429** at login/register.
+
+## Status
+Shipped + live on prod (backend `master d8795f6`, 2026-06-20). Live-verified: 9×401 then 429 at the window.
+
+---
+
+# INCOMING #38 — DM-as-player roster + optional encounter session + session recap DONE — 2026-06-20
+
+Three changes from the 2026-06-20 E2E follow-up sprint (Q-1, D-1/Q-2, recap export). Contracts were
+locked before implementation and live-smoke-verified after.
+
+1. **Q-1 — DM can roster their OWN character.** `POST /api/campaigns/{id}/characters` now also accepts a
+   `characterId` owned by the campaign owner (DM) — by ownership, since the DM is `CreatedBy`, never a
+   `CampaignMembership` row. **No request/response shape change.** Frontend: the DM's "register a
+   character" dropdown now also offers the DM's own unregistered, non-retired characters (a "My
+   characters" optgroup), alongside member characters.
+
+2. **D-1 + Q-2 — encounter `sessionId` is now OPTIONAL.** On `POST /api/campaigns/{id}/encounters`, omit
+   `sessionId` and the server find-or-creates the campaign's auto **"General"** session and assigns it.
+   The response `sessionId` is **always non-null** (the General session id), so `EncounterResponse`/
+   `CreateEncounterRequest` typing is unaffected. A supplied `sessionId` is still validated
+   (cross-campaign / archived → 400). **This relaxes the earlier "session required" rejection** — the
+   frontend may now create session-less "quick encounters" (done: optional session picker).
+
+3. **Session recap (NEW endpoint).** `GET /api/campaigns/{campaignId}/sessions/{sessionId}/recap`
+   (**DM-only**; 404 for a non-owner or a session that does not belong to the campaign). Shapes:
+   - `SessionRecapResponse { sessionId, sessionName, description?, date?, campaignId, campaignName,
+     characterIds: Guid[], encounters: SessionRecapEncounter[], generatedAt }`
+   - `SessionRecapEncounter { encounterId, name, description?, status (numeric EncounterStatus),
+     roundNumber, log: CombatLogEntryResponse[] }` — **`log` is OLDEST-FIRST** (ascending Seq).
+   Reuses the existing `CombatLogEntryResponse` record (no new log shape). Frontend:
+   `campaigns.sessionRecap(campaignId, sessionId)` + a per-session "Export recap" button that downloads a
+   Markdown recap (built from each entry's server-rendered `message`).
+
+## Status
+Live-smoke-verified against a local instance: recap → 200 with the exact shape above and oldest-first log;
+quick-encounter (no sessionId) auto-bound to the "General" session; bogus session → 404; no-auth → 401.
+Backend committed + pushed to `origin/master`; frontend committed + pushed to GitHub + Pages-deployed;
+backend deployed to MonsterASP (2026-06-20).

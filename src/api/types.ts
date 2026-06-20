@@ -1663,3 +1663,27 @@ export interface SpendHitDiceRequest {
 export interface UpdateCampaignHitDiceRequest {
   remaining: number;
 }
+
+// ---- Session recap export (Feature 3) ----
+// GET /api/campaigns/{campaignId}/sessions/{sessionId}/recap (DM-only)
+
+export interface SessionRecapEncounter {
+  encounterId: string;
+  name: string;
+  description?: string | null;
+  status: EncounterStatus;
+  roundNumber: number;
+  log: CombatLogEntryResponse[]; // entries OLDEST-FIRST
+}
+
+export interface SessionRecapResponse {
+  sessionId: string;
+  sessionName: string;
+  description?: string | null;
+  date?: string | null;        // ISO-8601
+  campaignId: string;
+  campaignName: string;
+  characterIds: string[];
+  encounters: SessionRecapEncounter[];
+  generatedAt: string;         // ISO-8601
+}

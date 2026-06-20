@@ -8,17 +8,85 @@ import type {
   SessionResponse,
   CharacterResponse,
   EncounterSummaryResponse,
+  SessionRecapResponse,
 } from "../api/types";
 import { CampaignMemberStatus, EncounterStatus } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
+import { useToast } from "../context/ToastContext";
 import CampaignCharacterPanel from "../components/CampaignCharacterPanel";
 import "./CampaignDetail.css";
+
+// Trigger a client-side download of `content` as a text file named `filename`.
+function downloadTextFile(content: string, filename: string) {
+  const blob = new Blob([content], { type: "text/plain; charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Slugify a session name for use in a filename (spaces → hyphens, strip specials).
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/[\s_]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+// Render a SessionRecapResponse as a human-readable Markdown document.
+function buildRecapMarkdown(recap: SessionRecapResponse): string {
+  const lines: string[] = [];
+
+  // Header
+  lines.push(`# ${recap.sessionName}`);
+  if (recap.date) {
+    lines.push(`**Date:** ${new Date(recap.date).toLocaleDateString()}`);
+  }
+  lines.push(`**Campaign:** ${recap.campaignName}`);
+  lines.push(`**Roster:** ${recap.characterIds.length} character${recap.characterIds.length !== 1 ? "s" : ""}`);
+  lines.push(`**Generated:** ${new Date(recap.generatedAt).toLocaleString()}`);
+  lines.push("");
+
+  if (recap.encounters.length === 0) {
+    lines.push("_No encounters this session._");
+  } else {
+    for (const enc of recap.encounters) {
+      const statusLabel =
+        enc.status === EncounterStatus.Pending
+          ? "Pending"
+          : enc.status === EncounterStatus.Active
+            ? "Active"
+            : "Ended";
+      lines.push(`## ${enc.name}`);
+      lines.push(`**Status:** ${statusLabel} | **Rounds:** ${enc.roundNumber}`);
+      if (enc.description) lines.push(`_${enc.description}_`);
+      lines.push("");
+
+      if (enc.log.length === 0) {
+        lines.push("_No log entries._");
+      } else {
+        // Entries arrive OLDEST-FIRST per contract.
+        for (const entry of enc.log) {
+          const ts = new Date(entry.created).toLocaleTimeString();
+          lines.push(`- **Round ${entry.roundNumber}** [${ts}] ${entry.message}`);
+        }
+      }
+      lines.push("");
+    }
+  }
+
+  return lines.join("\n");
+}
 
 export default function CampaignDetail() {
   const { id = "" } = useParams<{ id: string }>();
   const { userId } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
 
   const [campaign, setCampaign] = useState<CampaignResponse | null>(null);
   const [members, setMembers] = useState<CampaignMemberResponse[]>([]);
@@ -52,6 +120,7 @@ export default function CampaignDetail() {
   const [encName, setEncName] = useState("");
   const [encSession, setEncSession] = useState("");
   const [creatingEnc, setCreatingEnc] = useState(false);
+  const [exportingRecapId, setExportingRecapId] = useState<string | null>(null);
   const [statePanelChar, setStatePanelChar] =
     useState<{ id: string; name: string; ownerId: string } | null>(null);
 
@@ -223,8 +292,9 @@ export default function CampaignDetail() {
       await campaigns.registerCharacter(id, { characterId: registerCharId });
       setRegisterCharId("");
       setCampChars(await campaigns.characters(id));
+      toast.success("Character registered.");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Register failed.");
+      toast.error(err instanceof ApiError ? err.message : "Register failed.");
     } finally {
       setRegistering(false);
     }
@@ -305,21 +375,37 @@ export default function CampaignDetail() {
 
   async function handleCreateEncounter(e: React.FormEvent) {
     e.preventDefault();
-    // A session is now required (issue #6) — encounters live inside sessions.
-    if (!encName.trim() || !encSession) return;
+    // Session is optional — omit it when empty and the backend files it under
+    // the campaign's auto "General" session.
+    if (!encName.trim()) return;
     setCreatingEnc(true);
     try {
       const enc = await campaigns.createEncounter(id, {
         name: encName.trim(),
-        sessionId: encSession,
+        ...(encSession ? { sessionId: encSession } : {}),
       });
       setEncounters((prev) => [enc, ...prev]);
       setEncName("");
       setEncSession("");
       navigate(`/campaigns/${id}/encounters/${enc.id}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Create encounter failed.");
+      toast.error(err instanceof ApiError ? err.message : "Create encounter failed.");
       setCreatingEnc(false);
+    }
+  }
+
+  async function handleExportRecap(session: SessionResponse) {
+    setExportingRecapId(session.id);
+    try {
+      const recap = await campaigns.sessionRecap(id, session.id);
+      const md = buildRecapMarkdown(recap);
+      const filename = `${slugify(session.name) || session.id}-recap.md`;
+      downloadTextFile(md, filename);
+      toast.success("Recap exported.");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Export failed.");
+    } finally {
+      setExportingRecapId(null);
     }
   }
 
@@ -618,10 +704,12 @@ export default function CampaignDetail() {
           </ul>
         )}
 
-        {/* DMs register *member* characters, never their own; members register
-            their own (only once the campaign is active). The backend rejects a DM
-            registering an owned character with a 400, so don't offer it here. */}
-        {(isDm ? unregisteredMemberChars.length > 0 : isActive && unregisteredMyChars.length > 0) && (
+        {/* DMs can register member characters AND their own unregistered characters.
+            Members register their own (only once the campaign is active). */}
+        {(isDm
+          ? unregisteredMemberChars.length > 0 || unregisteredMyChars.length > 0
+          : isActive && unregisteredMyChars.length > 0
+        ) && (
           <form className="camp__register-form" onSubmit={handleRegisterChar}>
             <select
               className="input camp__register-sel"
@@ -629,7 +717,7 @@ export default function CampaignDetail() {
               onChange={(e) => setRegisterCharId(e.target.value)}
             >
               <option value="">— register a character —</option>
-              {!isDm && unregisteredMyChars.length > 0 && (
+              {unregisteredMyChars.length > 0 && (
                 <optgroup label="My characters">
                   {unregisteredMyChars.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
@@ -682,6 +770,15 @@ export default function CampaignDetail() {
                         onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}
                       >
                         {expandedSession === s.id ? "Close" : "Roster"}
+                      </button>
+                    )}
+                    {isDm && (
+                      <button
+                        className="btn"
+                        disabled={exportingRecapId === s.id}
+                        onClick={() => handleExportRecap(s)}
+                      >
+                        {exportingRecapId === s.id ? "Exporting…" : "Export recap"}
                       </button>
                     )}
                     {isDm && (
@@ -802,10 +899,8 @@ export default function CampaignDetail() {
               className="input camp__enc-session-sel"
               value={encSession}
               onChange={(e) => setEncSession(e.target.value)}
-              required
-              disabled={sessions.length === 0}
             >
-              <option value="">— select a session —</option>
+              <option value="">— no session (quick encounter) —</option>
               {sessions.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
@@ -813,13 +908,13 @@ export default function CampaignDetail() {
             <button
               className="btn btn--primary"
               type="submit"
-              disabled={creatingEnc || !encName.trim() || !encSession}
+              disabled={creatingEnc || !encName.trim()}
             >
               {creatingEnc ? "Creating…" : "+ Encounter"}
             </button>
-            {sessions.length === 0 && (
+            {!encSession && (
               <p className="text-muted camp__enc-hint">
-                Create a session first — encounters live inside sessions.
+                No session? We'll file it under the campaign's General session.
               </p>
             )}
           </form>

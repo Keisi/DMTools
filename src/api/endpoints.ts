@@ -68,6 +68,7 @@ import type {
   UpdateSpellsRequest,
   WeaponResponse,
   GrantAdvantageRequest,
+  SessionRecapResponse,
 } from "./types";
 
 export const auth = {
@@ -437,6 +438,13 @@ export const campaigns = {
   deleteLogEntry: (campaignId: string, encounterId: string, seq: number) =>
     api.del<void>(
       `/api/campaigns/${campaignId}/encounters/${encounterId}/log/${seq}`,
+    ),
+
+  // Session recap export (Feature 3, DM-only).
+  // GET /api/campaigns/{campaignId}/sessions/{sessionId}/recap
+  sessionRecap: (campaignId: string, sessionId: string) =>
+    api.get<SessionRecapResponse>(
+      `/api/campaigns/${campaignId}/sessions/${sessionId}/recap`,
     ),
 };
 
