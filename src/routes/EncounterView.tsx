@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { campaigns, characters as charApi, reference } from "../api/endpoints";
 import type {
@@ -21,6 +21,7 @@ import {
 } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
+import { useToast } from "../context/ToastContext";
 import { useEncounterHub, HubStatus } from "../hooks/useEncounterHub";
 import { useCombatLog } from "../hooks/useCombatLog";
 import { summarizeRiders } from "../lib/sheetTips";
@@ -133,6 +134,7 @@ export default function EncounterView() {
   const [modalSheet, setModalSheet] = useState<CharacterResponse | null>(null);
   const [modalSheetError, setModalSheetError] = useState<string | null>(null);
 
+  const toast = useToast();
   const isDm = dmUserId === userId;
   const activeMemberIds = new Set(
     members.filter((m) => m.status === CampaignMemberStatus.Active).map((m) => m.userId),
@@ -261,6 +263,42 @@ export default function EncounterView() {
     };
   }, []);
 
+  // Keyboard shortcut: press "n" to advance the turn while combat is active.
+  // Guard: skip if a text input / textarea / select / contenteditable is focused
+  // to avoid triggering while the DM is typing initiative or HP values.
+  //
+  // Implementation: a stable ref holds a function pointer that is refreshed every
+  // render. The keydown listener is registered once (empty dep array) and calls
+  // through the ref so it always sees current state without re-subscribing.
+  const nextTurnShortcutFn = useRef<() => void>(() => {});
+  useEffect(() => {
+    // isActive, actionBusy, isDm, handleNextTurn are all re-captured every render
+    // via this assignment, so the listener never goes stale.
+    nextTurnShortcutFn.current = () => {
+      if (!isActive || actionBusy || !isDm) return;
+      void handleNextTurn();
+    };
+  }); // intentionally no deps — refresh every render
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      // Only fire on bare "n" with no modifier keys.
+      if (e.key !== "n" || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      // Skip when typing in any focusable text surface.
+      const tag = (e.target as HTMLElement).tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        (e.target as HTMLElement).isContentEditable
+      ) return;
+      e.preventDefault();
+      nextTurnShortcutFn.current();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []); // register once; calls through ref which is refreshed each render
+
   async function handleStart() {
     const missing = (encounter?.combatants ?? [])
       .filter((c) => c.initiative === null || c.initiative === undefined)
@@ -280,9 +318,9 @@ export default function EncounterView() {
       setInitInputs(freshInputs);
       setError(null);
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Failed to start encounter.",
-      );
+      const msg = err instanceof ApiError ? err.message : "Failed to start encounter.";
+      setError(msg);
+      toast.error(msg);
     }
     setActionBusy(false);
   }
@@ -291,10 +329,11 @@ export default function EncounterView() {
     setActionBusy(true);
     try {
       applyUpdate(await campaigns.nextTurn(campaignId, encounterId));
+      toast.success("Turn advanced.");
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Failed to advance turn.",
-      );
+      const msg = err instanceof ApiError ? err.message : "Failed to advance turn.";
+      setError(msg);
+      toast.error(msg);
     }
     setActionBusy(false);
   }

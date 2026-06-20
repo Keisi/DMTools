@@ -1,5 +1,38 @@
 # INCOMING FROM BACKEND — IDOR/BOLA fix complete
 
+> **LATEST (2026-06-20): INCOMING #37 — security/ops hardening (no frontend contract change).**
+> Four backend fixes applied (working tree, not yet committed). No response shape or status-code
+> changes affect the frontend, with one exception noted below.
+>
+> **#37 — Security & ops hardening (2026-06-20)**
+>
+> Changes in `DMTool` (API project) and `DMTool.Entities`:
+>
+> 1. **Half-Elf `EffectiveAbilityScore(string)` bug fixed** — the string-code overload now
+>    includes `RacialChoiceModifierForStat` (same as the list overload). Half-Elf characters'
+>    HP, AC, attacks, initiative, and encumbrance now correctly reflect the two +1 ability picks.
+>    **Contract impact:** none — the response shape is unchanged. The *values* of `maxHitPoints`,
+>    `armorClass`, weapon attack bonuses, and `encumbrance` will increase by 1 for Half-Elf
+>    characters that have chosen an ability pick matching their CON/DEX/STR respectively. This
+>    is a correctness fix, not a new field.
+>
+> 2. **Global RFC-7807 exception handler added** — unhandled 500s now return a `ProblemDetails`
+>    JSON body (`{ type, title, status, traceId }`). Previously they returned an empty bodyless
+>    500. **Contract impact:** existing 400 validation responses are UNCHANGED (the
+>    exception handler only fires for unhandled exceptions, not model-state errors). If your
+>    error handler was relying on a truly empty 500 body, it will now receive JSON — but since
+>    `ApiError` already parses the body defensively this should be a no-op.
+>
+> 3. **JWT dev-key startup guard** — the app now throws a fatal error at startup if run outside
+>    Development with the placeholder key or a key shorter than 32 bytes. **No frontend impact.**
+>
+> 4. **Auth rate limiting (10 req/min/IP, sliding window)** — `POST /api/auth/login` and
+>    `POST /api/auth/register` now return **HTTP 429 Too Many Requests** (with a `Retry-After`
+>    header and a minimal JSON body) when the limit is exceeded. **Frontend action:** if you do
+>    not already handle 429 in `client.ts`, add a branch in the error path to surface
+>    "Too many attempts — please wait before trying again." to the user. The `ApiError` body
+>    will contain `{ type, title, status: 429 }`.
+
 > **LATEST (2026-06-16): INCOMING #33–#36 CONSUMED + committed (frontend), pending push.**
 > All four wired into the client, live-verified against `:3501` at the contract level
 > (`tsc -b` / `eslint` green), AND **screenshot-verified via spectral** (#35 sheet badges, #34

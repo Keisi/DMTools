@@ -30,10 +30,15 @@ export class ApiError extends Error {
   }
 }
 
+// Default request timeout in milliseconds. Protects against MonsterASP cold-start
+// hangs that would otherwise block the UI indefinitely mid-combat.
+const DEFAULT_TIMEOUT_MS = 20_000;
+
 interface RequestOptions {
   method?: string;
   body?: unknown;
   auth?: boolean; // attach bearer token (default true)
+  signal?: AbortSignal; // caller-supplied cancellation signal (composed with timeout)
 }
 
 // Invoked when an *authenticated* request is rejected with 401 — i.e. the JWT
@@ -46,7 +51,7 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
 }
 
 async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const { method = "GET", body, auth = true } = opts;
+  const { method = "GET", body, auth = true, signal: callerSignal } = opts;
 
   const headers: Record<string, string> = { Accept: "application/json" };
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -55,11 +60,33 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     if (token) headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  // Compose a 20-second timeout with any caller-supplied signal.
+  // AbortSignal.any() (or AbortSignal.timeout() alone when no caller signal) keeps
+  // the cancellation surface clean without leaking AbortController references.
+  const timeoutSignal = AbortSignal.timeout(DEFAULT_TIMEOUT_MS);
+  const signal =
+    callerSignal
+      ? AbortSignal.any([callerSignal, timeoutSignal])
+      : timeoutSignal;
+
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal,
+    });
+  } catch (err) {
+    // Surface timeout/abort as a clear, typed error so callers can display it.
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      throw new ApiError(0, "Request timed out. The server may be starting up — please try again.");
+    }
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new ApiError(0, "Request was cancelled.");
+    }
+    throw err;
+  }
 
   // Session expired/invalid: drop the dead token and let the app redirect to
   // login. Still throw below so the caller's catch runs. Only for authed calls —

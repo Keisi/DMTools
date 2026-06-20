@@ -1,6 +1,7 @@
 /* App shell: top nav + routed content outlet. */
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { ToastProvider } from "../context/ToastContext";
 import "./AppShell.css";
 
 const NAV = [
@@ -14,6 +15,7 @@ export default function AppShell() {
   const navigate = useNavigate();
 
   return (
+    <ToastProvider>
     <div className="shell">
       <header className="shell__nav">
         <div className="shell__nav-inner container">
@@ -60,5 +62,6 @@ export default function AppShell() {
         <Outlet />
       </main>
     </div>
+    </ToastProvider>
   );
 }
