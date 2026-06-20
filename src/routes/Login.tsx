@@ -28,9 +28,13 @@ export default function Login() {
       await fn({ username, password });
       navigate(from, { replace: true });
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Could not reach the server.",
-      );
+      if (err instanceof ApiError && err.status === 429) {
+        setError("Too many attempts. Please wait a minute and try again.");
+      } else {
+        setError(
+          err instanceof ApiError ? err.message : "Could not reach the server.",
+        );
+      }
     } finally {
       setBusy(false);
     }

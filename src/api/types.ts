@@ -1444,6 +1444,7 @@ export interface AddCombatantRequest {
   maxHp: number;
   armorClass: number;
   characterId?: string | null;
+  count?: number | null;
 }
 
 export interface SetInitiativeRequest {

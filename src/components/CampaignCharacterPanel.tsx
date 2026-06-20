@@ -111,6 +111,7 @@ export default function CampaignCharacterPanel({
   const [catalog, setCatalog] = useState<StatusEffectResponse[]>([]);
   const [showPalette, setShowPalette] = useState(false);
   const [paletteRounds, setPaletteRounds] = useState("");
+  const [confirmLongRest, setConfirmLongRest] = useState(false);
 
   // HP stepper local input
   const [hpAmt, setHpAmt] = useState("1");
@@ -301,12 +302,7 @@ export default function CampaignCharacterPanel({
   }
 
   function handleLongRest() {
-    if (
-      !confirm(
-        "Take a Long Rest? This restores all spell slots, class resources, and HP to maximum, clears temp HP, and reduces exhaustion by 1.",
-      )
-    )
-      return;
+    setConfirmLongRest(false);
     void mutate(() => campaignCharacterState.longRest(campaignId, characterId));
   }
 
@@ -783,15 +779,36 @@ export default function CampaignCharacterPanel({
                 >
                   Short Rest
                 </button>
-                <button
-                  type="button"
-                  className="btn ccp__rest-btn"
-                  disabled={busy}
-                  title="Long Rest: all slots and resources restored, HP to max, temp HP cleared, exhaustion −1"
-                  onClick={handleLongRest}
-                >
-                  Long Rest
-                </button>
+                {confirmLongRest ? (
+                  <div className="enc__end-confirm">
+                    <span className="enc__end-confirm-label">Take a Long Rest?</span>
+                    <button
+                      type="button"
+                      className="btn enc__end-confirm-yes"
+                      disabled={busy}
+                      onClick={handleLongRest}
+                    >
+                      Confirm
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setConfirmLongRest(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn ccp__rest-btn"
+                    disabled={busy}
+                    title="Long Rest: all slots and resources restored, HP to max, temp HP cleared, exhaustion −1"
+                    onClick={() => setConfirmLongRest(true)}
+                  >
+                    Long Rest
+                  </button>
+                )}
               </div>
             </div>
           )}

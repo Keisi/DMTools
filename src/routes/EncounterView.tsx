@@ -95,12 +95,14 @@ export default function EncounterView() {
   const [allyMaxHp, setAllyMaxHp] = useState("");
   const [allyAc, setAllyAc] = useState("");
   const [allyCharId, setAllyCharId] = useState("");
+  const [allyQty, setAllyQty] = useState("1");
   const [allyAdding, setAllyAdding] = useState(false);
 
   // Enemy add form
   const [enemyName, setEnemyName] = useState("");
   const [enemyMaxHp, setEnemyMaxHp] = useState("");
   const [enemyAc, setEnemyAc] = useState("");
+  const [enemyQty, setEnemyQty] = useState("1");
   const [enemyAdding, setEnemyAdding] = useState(false);
 
   const [actionBusy, setActionBusy] = useState(false);
@@ -110,6 +112,7 @@ export default function EncounterView() {
   // 'initiative' = single turn-order-sorted list, no add forms.
   const [viewMode, setViewMode] = useState<ViewMode>(() => loadView(encounterId));
   const [endConfirm, setEndConfirm] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
   const [initiativeWarning, setInitiativeWarning] = useState<string[] | null>(null);
 
   // Set when a live EncounterArchived push arrives for a viewer who didn't
@@ -385,7 +388,6 @@ export default function EncounterView() {
   }
 
   async function handleDelete() {
-    if (!confirm("Archive this encounter? This cannot be undone.")) return;
     setActionBusy(true);
     try {
       await campaigns.deleteEncounter(campaignId, encounterId);
@@ -414,6 +416,35 @@ export default function EncounterView() {
         rolled[c.id] = c.initiative !== null ? String(c.initiative) : "";
       });
       setInitInputs(rolled);
+      setInitiativeWarning(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to set initiatives.");
+    }
+    setActionBusy(false);
+  }
+
+  async function handleRollUnsetInitiatives() {
+    const combatants = encounter?.combatants ?? [];
+    const unsetIds = combatants
+      .filter((c) => c.initiative === null || c.initiative === undefined)
+      .map((c) => c.id);
+    if (unsetIds.length === 0) return;
+    setActionBusy(true);
+    try {
+      const enc = await campaigns.rollInitiatives(campaignId, encounterId, {
+        combatantIds: unsetIds,
+      });
+      applyUpdate(enc);
+      // Force-overwrite only the newly rolled combatants in initInputs.
+      setInitInputs((prev) => {
+        const next = { ...prev };
+        enc.combatants.forEach((c) => {
+          if (unsetIds.includes(c.id) && c.initiative !== null) {
+            next[c.id] = String(c.initiative);
+          }
+        });
+        return next;
+      });
       setInitiativeWarning(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to set initiatives.");
@@ -585,11 +616,13 @@ export default function EncounterView() {
     setAllyAdding(true);
     const prev = encounter?.combatants ?? [];
     try {
+      const count = parseInt(allyQty, 10);
       const enc = await campaigns.addCombatant(campaignId, encounterId, {
         name: allyName.trim(),
         maxHp,
         armorClass: ac,
         characterId: allyCharId || null,
+        count: !isNaN(count) && count > 1 ? count : null,
       });
       assignNewCombatantSide(prev, enc, "ally");
       applyUpdate(enc);
@@ -597,6 +630,7 @@ export default function EncounterView() {
       setAllyMaxHp("");
       setAllyAc("");
       setAllyCharId("");
+      setAllyQty("1");
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : "Failed to add combatant.",
@@ -613,17 +647,20 @@ export default function EncounterView() {
     setEnemyAdding(true);
     const prev = encounter?.combatants ?? [];
     try {
+      const count = parseInt(enemyQty, 10);
       const enc = await campaigns.addCombatant(campaignId, encounterId, {
         name: enemyName.trim(),
         maxHp,
         armorClass: ac,
         characterId: null,
+        count: !isNaN(count) && count > 1 ? count : null,
       });
       assignNewCombatantSide(prev, enc, "enemy");
       applyUpdate(enc);
       setEnemyName("");
       setEnemyMaxHp("");
       setEnemyAc("");
+      setEnemyQty("1");
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : "Failed to add combatant.",
@@ -1601,9 +1638,22 @@ export default function EncounterView() {
                   className="btn tip"
                   disabled={actionBusy || encounter.combatants.length === 0}
                   onClick={handleRandomizeInitiatives}
-                  data-tooltip="Roll d20 for every combatant"
+                  data-tooltip="Roll d20 for every combatant (overwrites existing values)"
                 >
                   {actionBusy ? "Rolling…" : "Roll Initiatives"}
+                </button>
+                <button
+                  className="btn tip"
+                  disabled={
+                    actionBusy ||
+                    encounter.combatants.every(
+                      (c) => c.initiative !== null && c.initiative !== undefined,
+                    )
+                  }
+                  onClick={handleRollUnsetInitiatives}
+                  data-tooltip="Roll d20 only for combatants with no initiative set"
+                >
+                  Roll unset
                 </button>
                 <button
                   className="btn btn--primary"
@@ -1678,13 +1728,32 @@ export default function EncounterView() {
               </>
             )}
             {isEnded && (
-              <button
-                className="btn enc__delete-btn"
-                disabled={actionBusy}
-                onClick={handleDelete}
-              >
-                Archive
-              </button>
+              confirmArchive ? (
+                <div className="enc__end-confirm">
+                  <span className="enc__end-confirm-label">Archive this encounter?</span>
+                  <button
+                    className="btn enc__end-confirm-yes"
+                    disabled={actionBusy}
+                    onClick={() => { setConfirmArchive(false); handleDelete(); }}
+                  >
+                    Archive
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={() => setConfirmArchive(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="btn enc__delete-btn"
+                  disabled={actionBusy}
+                  onClick={() => setConfirmArchive(true)}
+                >
+                  Archive
+                </button>
+              )
             )}
           </div>
         )}
@@ -1797,6 +1866,19 @@ export default function EncounterView() {
                   min="0"
                 />
               </div>
+              <div className="enc__add-field">
+                <label className="enc__add-label">Qty</label>
+                <input
+                  type="number"
+                  className="input enc__add-num"
+                  value={allyCharId ? "1" : allyQty}
+                  onChange={(e) => setAllyQty(e.target.value)}
+                  min="1"
+                  max="100"
+                  disabled={!!allyCharId}
+                  title={allyCharId ? "A linked character cannot be bulk-added" : undefined}
+                />
+              </div>
               {unlinkableCampChars.length > 0 && (
                 <div className="enc__add-field enc__add-field--char">
                   <label className="enc__add-label">Link character</label>
@@ -1866,6 +1948,17 @@ export default function EncounterView() {
                   onChange={(e) => setEnemyAc(e.target.value)}
                   required
                   min="0"
+                />
+              </div>
+              <div className="enc__add-field">
+                <label className="enc__add-label">Qty</label>
+                <input
+                  type="number"
+                  className="input enc__add-num"
+                  value={enemyQty}
+                  onChange={(e) => setEnemyQty(e.target.value)}
+                  min="1"
+                  max="100"
                 />
               </div>
               <button

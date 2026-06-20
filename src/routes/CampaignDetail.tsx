@@ -123,6 +123,8 @@ export default function CampaignDetail() {
   const [exportingRecapId, setExportingRecapId] = useState<string | null>(null);
   const [statePanelChar, setStatePanelChar] =
     useState<{ id: string; name: string; ownerId: string } | null>(null);
+  const [confirmDeleteSessionId, setConfirmDeleteSessionId] = useState<string | null>(null);
+  const [confirmDeleteCampaign, setConfirmDeleteCampaign] = useState(false);
 
   const isDm = !!campaign && campaign.dmUserId === userId;
   const ownMembership = members.find((m) => m.userId === userId);
@@ -339,15 +341,7 @@ export default function CampaignDetail() {
   }
 
   async function handleDeleteSession(sessionId: string) {
-    // INCOMING #23: the backend blocks (409) deleting a session that still holds
-    // live encounters. Warn up front when we can see encounters under it, and
-    // surface the 409's problem-details if the delete is rejected anyway.
-    const held = encounters.filter((e) => e.sessionId === sessionId).length;
-    const msg =
-      held > 0
-        ? `This session has ${held} encounter${held === 1 ? "" : "s"}. Move or delete ${held === 1 ? "it" : "them"} first — a session can't be deleted while it holds live encounters.\n\nTry to delete anyway?`
-        : "Delete this session?";
-    if (!confirm(msg)) return;
+    setConfirmDeleteSessionId(null);
     try {
       await campaigns.deleteSession(id, sessionId);
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
@@ -410,7 +404,7 @@ export default function CampaignDetail() {
   }
 
   async function handleDeleteCampaign() {
-    if (!confirm(`Delete campaign "${campaign?.name}"? This cannot be undone.`)) return;
+    setConfirmDeleteCampaign(false);
     await campaigns.remove(id);
     navigate("/campaigns");
   }
@@ -509,9 +503,27 @@ export default function CampaignDetail() {
             {isDm ? "DM" : "Member"}
           </span>
           {isDm && (
-            <button className="btn camp__delete" onClick={handleDeleteCampaign}>
-              Delete
-            </button>
+            confirmDeleteCampaign ? (
+              <div className="enc__end-confirm">
+                <span className="enc__end-confirm-label">Delete campaign? This cannot be undone.</span>
+                <button
+                  className="btn enc__end-confirm-yes"
+                  onClick={handleDeleteCampaign}
+                >
+                  Delete
+                </button>
+                <button
+                  className="btn"
+                  onClick={() => setConfirmDeleteCampaign(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button className="btn camp__delete" onClick={() => setConfirmDeleteCampaign(true)}>
+                Delete
+              </button>
+            )
           )}
         </div>
       </div>
@@ -782,9 +794,34 @@ export default function CampaignDetail() {
                       </button>
                     )}
                     {isDm && (
-                      <button className="btn camp__session-del" onClick={() => handleDeleteSession(s.id)}>
-                        Delete
-                      </button>
+                      confirmDeleteSessionId === s.id ? (
+                        <div className="enc__end-confirm">
+                          <span className="enc__end-confirm-label">
+                            {(() => {
+                              const held = encounters.filter((e) => e.sessionId === s.id).length;
+                              return held > 0
+                                ? `Has ${held} encounter${held === 1 ? "" : "s"} — delete anyway?`
+                                : "Delete this session?";
+                            })()}
+                          </span>
+                          <button
+                            className="btn enc__end-confirm-yes"
+                            onClick={() => handleDeleteSession(s.id)}
+                          >
+                            Delete
+                          </button>
+                          <button
+                            className="btn"
+                            onClick={() => setConfirmDeleteSessionId(null)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button className="btn camp__session-del" onClick={() => setConfirmDeleteSessionId(s.id)}>
+                          Delete
+                        </button>
+                      )
                     )}
                   </div>
                 </div>
