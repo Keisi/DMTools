@@ -96,6 +96,20 @@ export const FeatureKind = {
 } as const;
 export type FeatureKind = (typeof FeatureKind)[keyof typeof FeatureKind];
 
+// Character-completeness check (see CharacterValidationResponse). Numeric over the wire.
+export const ValidationSeverity = { Info: 0, Warning: 1, Error: 2 } as const;
+export type ValidationSeverity = (typeof ValidationSeverity)[keyof typeof ValidationSeverity];
+
+export const ValidationCategory = {
+  Cantrips: 0,
+  Spells: 1,
+  Subclass: 2,
+  MulticlassPrerequisite: 3,
+  AbilityScoreImprovement: 4,
+  FeaturePick: 5,
+} as const;
+export type ValidationCategory = (typeof ValidationCategory)[keyof typeof ValidationCategory];
+
 export const SelectionType = {
   Skill: 1,
   Subclass: 2,
@@ -1166,6 +1180,23 @@ export interface LevelUpPlanResponse {
   gainedFeatures: CharacterFeatureResponse[];
   gainedResources: CharacterResourceResponse[];
   newSpellSlots: SpellSlotResponse[];
+}
+
+// Completeness check (GET /api/character/{id}/validate). Reports the *chosen* perks a
+// character is missing for its level (cantrips/spells/subclass/multiclass prereq). The
+// create/edit path validates only ceilings, so this is the advisory the sheet surfaces.
+// isValid is false only when an Error-severity issue is present; warnings/info are advisory.
+export interface CharacterValidationIssueResponse {
+  severity: ValidationSeverity;
+  category: ValidationCategory;
+  className?: string | null;
+  expected?: number | null;
+  actual?: number | null;
+  message: string;
+}
+export interface CharacterValidationResponse {
+  isValid: boolean;
+  issues: CharacterValidationIssueResponse[];
 }
 
 export interface LevelUpHitPointChoice {

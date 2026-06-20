@@ -9,6 +9,7 @@ import { Link, useParams } from "react-router-dom";
 import { characters, reference } from "../api/endpoints";
 import type {
   CharacterResponse,
+  CharacterValidationResponse,
   ClassResponse,
   ItemResponse,
   SpellResponse,
@@ -18,6 +19,7 @@ import { ApiError } from "../api/client";
 import { useBlockOrder } from "../lib/useBlockOrder";
 import { BLOCK_KEYS } from "../lib/sheetBlocks";
 import CharacterSheetView from "./CharacterSheetView";
+import ValidationBanner from "../components/ValidationBanner";
 import LevelUpDialog from "./LevelUpDialog";
 import ManageSpellsDialog from "./ManageSpellsDialog";
 import EditHpDialog from "./EditHpDialog";
@@ -27,6 +29,7 @@ import "./CharacterSheet.css";
 export default function CharacterSheet() {
   const { id } = useParams<{ id: string }>();
   const [c, setC] = useState<CharacterResponse | null>(null);
+  const [validation, setValidation] = useState<CharacterValidationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [levelingUp, setLevelingUp] = useState(false);
   const [addingClass, setAddingClass] = useState(false);
@@ -54,6 +57,13 @@ export default function CharacterSheet() {
         ),
       );
   }, [id]);
+
+  // Completeness advisory — refresh whenever the character changes (initial load,
+  // level-up, edit, and spell changes all replace `c`). Non-fatal: no banner on failure.
+  useEffect(() => {
+    if (!c) return;
+    characters.validate(c.id).then(setValidation).catch(() => setValidation(null));
+  }, [c]);
 
   // The item catalog backs the inventory "add" picker; the class catalog backs
   // the Multiclass dialog's "add which class" picker (both loaded once, optional).
@@ -127,6 +137,7 @@ export default function CharacterSheet() {
   // race/class line (the headerActions slot).
   const headerActions = (
     <>
+      <ValidationBanner validation={validation} />
       <div className="sheet__actions">
         <button
           className="btn btn--primary"

@@ -1,0 +1,65 @@
+/* Character completeness banner (ValidationBanner.tsx). Tokens only — see styles/tokens.css. */
+.valbanner {
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  padding: 0.7rem 0.9rem;
+  margin: 0.6rem 0;
+}
+.valbanner--error {
+  border-left-color: var(--c-crimson-500);
+}
+.valbanner--warning {
+  border-left-color: var(--c-gold-500);
+}
+
+.valbanner__title {
+  margin: 0 0 0.45rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.valbanner__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.valbanner__item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+.valbanner__tag {
+  flex: none;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.05rem 0.4rem;
+  border-radius: var(--radius-sm);
+}
+.valbanner__item--error .valbanner__tag {
+  background: var(--c-crimson-500);
+  color: var(--c-parchment-100);
+}
+.valbanner__item--warning .valbanner__tag {
+  background: var(--c-gold-500);
+  color: var(--c-ink-800);
+}
+.valbanner__item--info .valbanner__tag {
+  background: var(--c-ink-500);
+  color: var(--text);
+}
+.valbanner__msg {
+  color: var(--text);
+}
+
+.valbanner__hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-faint);
+}

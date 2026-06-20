@@ -16,6 +16,7 @@ import type {
   CampaignResponse,
   CharacterRequest,
   CharacterResponse,
+  CharacterValidationResponse,
   ClassResponse,
   CopyCharacterRequest,
   CreateCampaignRequest,
@@ -82,6 +83,10 @@ export const characters = {
   // GET /api/character returns full CharacterResponse[] (no summary DTO).
   list: () => api.get<CharacterResponse[]>("/api/character"),
   get: (id: string) => api.get<CharacterResponse>(`/api/character/${id}`),
+  // Completeness check (read-only): the perks the character is missing for its level
+  // (cantrips/spells/subclass/multiclass prereq). Advisory — the create/edit 400s are the gate.
+  validate: (id: string) =>
+    api.get<CharacterValidationResponse>(`/api/character/${id}/validate`),
   create: (body: CharacterRequest) =>
     api.post<CharacterResponse>("/api/character", body),
   // PUT returns 200 + the updated CharacterResponse (backend b2fa276), consistent

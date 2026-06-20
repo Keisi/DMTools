@@ -1,5 +1,34 @@
 # INCOMING FROM BACKEND — IDOR/BOLA fix complete
 
+> **LATEST (2026-06-21): INCOMING #39 — character completeness `GET /api/character/{id}/validate` (new endpoint + types). CONSUMED same session (sheet banner).**
+>
+> New **read-only** endpoint reporting the *chosen* perks a character is missing for its level. The
+> create/edit path validates only ceilings (an under-built character — e.g. a level-10 Wizard with 0
+> cantrips/0 spells, no subclass — can be saved), so this is the advisory that says what's missing.
+>
+> - **Backend:** `CharacterValidator` (`DMTool.Entities/Calculations`, pure calculator) +
+>   `GET /api/character/{id}/validate` (owner-scoped, persists nothing) →
+>   `CharacterValidationResponse { isValid, issues[] }`.
+> - **Issue shape:** `{ severity (0 Info / 1 Warning / 2 Error), category (0 Cantrips / 1 Spells /
+>   2 Subclass / 3 MulticlassPrerequisite), className?, expected?, actual?, message }`. Enums numeric
+>   over the wire, as usual.
+> - **Checks:** known cantrips/spells vs the class progression at its level (prepared casters have no
+>   fixed minimum → skipped; ambiguous multiclass attribution → one Info note, never a guessed
+>   shortfall); subclass due-but-unchosen → Error; multiclass ability prerequisite unmet → Error.
+>   `isValid` is false only when an Error is present (warnings/info are advisory).
+> - **Frontend (done this session):** `characters.validate(id)` in `endpoints.ts`;
+>   `ValidationSeverity` / `ValidationCategory` / `CharacterValidation*Response` in `types.ts`;
+>   `components/ValidationBanner.tsx` rendered on the owner's sheet (`CharacterSheet.tsx`), refetched
+>   whenever the character changes (load / level-up / edit / spell changes).
+> - **NOT enforced on create/edit** — advisory only (allow-but-flag, confirmed). Hard-enforcement remains
+>   an open product decision (would wire into `BuildValidatedAsync`).
+> - **Categories now also include `4 AbilityScoreImprovement` and `5 FeaturePick`** (unspent ASIs/feats;
+>   short Fighting Style / Metamagic / Eldritch Invocation / Expertise picks) — frontend enum updated.
+> - **Related backend fix (level-up Apply):** `POST .../levelup/apply` now returns **400** when a level
+>   grants N>0 new cantrips/spells and the request sends none (was silently accepted → under-learning).
+>   **Frontend action:** confirm `LevelUpDialog` sends the cantrip/spell picks for known/spellbook casters
+>   — an apply that previously "went through with nothing" for such a level will now 400.
+
 > **LATEST (2026-06-20): INCOMING #37 — security/ops hardening (no frontend contract change).**
 > Four backend fixes applied (working tree, not yet committed). No response shape or status-code
 > changes affect the frontend, with one exception noted below.
