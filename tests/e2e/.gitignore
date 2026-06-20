@@ -1,0 +1,6 @@
+# bond-test run artifacts — never commit screenshots or reports
+*.png
+*.jpg
+*.jpeg
+report.json
+*-report.json

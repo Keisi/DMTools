@@ -1,0 +1,26 @@
+{
+  "name": "DMTools prod smoke (login + nav + compendium search)",
+  "baseUrl": "https://keisi.github.io/DMTools/",
+  "description": "Browser regression for the deployed GitHub Pages frontend. Navigates by clicking in-app nav links (not deep-link opens) to exercise client-side routing and avoid the Pages 404.html status. Login uses the seeded dungeonmaster account; read-only — creates no data.",
+  "steps": [
+    { "action": "open", "url": "https://keisi.github.io/DMTools/login", "wait": "networkidle" },
+    { "action": "assertUrl", "contains": "/login" },
+    { "action": "assertSelector", "selector": "input[type=password]" },
+    { "action": "assertNoErrors" },
+    { "action": "fill", "selector": "input:nth-of-type(1)", "value": "dungeonmaster" },
+    { "action": "fill", "selector": "input[type=password]", "value": "<SEED_PASSWORD>" },
+    { "action": "assertValue", "selector": "input:nth-of-type(1)", "value": "dungeonmaster" },
+    { "action": "click", "selector": "button[type=submit]" },
+    { "action": "waitUrl", "contains": "/vault" },
+    { "action": "assertText", "text": "The Vault" },
+    { "action": "assertNoErrors" },
+    { "action": "click", "selector": "a[href=\"/DMTools/compendium\"]" },
+    { "action": "waitUrl", "contains": "/compendium" },
+    { "action": "assertSelector", "selector": "input[placeholder*=\"Search\"]" },
+    { "action": "fill", "selector": "input[placeholder*=\"Search\"]", "value": "fireball" },
+    { "action": "assertText", "text": "Fireball" },
+    { "action": "assertNotText", "text": "Magic Missile" },
+    { "action": "assertNoErrors" },
+    { "action": "screenshot", "path": "dmtools-compendium-fireball.png" }
+  ]
+}
