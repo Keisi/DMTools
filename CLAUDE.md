@@ -494,3 +494,11 @@ the builder race step, modifiers in the ability tooltip, plus subrace choice-Sel
   only). The backend replies in `INCOMING-FROM-BACKEND.md` (here) and drops
   `HANDOFF-TO-FRONTEND-*.md` in its own root. Trust the newest file end-to-end —
   status snapshots go stale fast.
+
+## Repo learnings (persistent knowledge base) — read on demand
+
+`repo-notes/` is a tracked, accumulating store of **non-obvious things learned from real scenarios and issues** that aren't captured above — recurring gotchas, cross-repo flows, diagnostic recipes that worked. The lean index below loads automatically; the note **bodies are read only when relevant**, so the base can grow without taxing every session.
+
+@repo-notes/INDEX.md
+
+**When you finish work that taught you something durable about how DMTool-FrontEnd actually behaves** (a gotcha, a cross-repo flow, a diagnostic recipe) **that isn't already in this file, the code, or git history**, capture it before the session ends: add the substance as `repo-notes/<slug>.md` and a one-line pointer to `repo-notes/INDEX.md`. Keep the index lean (pointer + one-line hook). Don't restate the architecture above, and **don't invent a note when there's nothing durable to add.** See `repo-notes/README.md` for the bar + template.

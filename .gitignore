@@ -38,3 +38,7 @@ dist-ssr
 # distinct from the authored root CLAUDE.md, which stays tracked)
 .claude/CLAUDE.md
 .claude/references/
+
+# Personal Claude Code hooks + local settings (machine-local, never committed)
+.claude/hooks/
+.claude/settings.local.json
