@@ -1,7 +1,4 @@
 {
-  "env": {
-    "CODEBRIDGE_SKIP_CASCADE": "1"
-  },
   "hooks": {
     "PreToolUse": [
       {

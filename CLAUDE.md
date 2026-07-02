@@ -50,27 +50,27 @@ against a live backend walks level-up 1→20 for every class, above-L1 creation 
 convergence, and full encounter scenarios. See `tests/api-e2e/README.md` and the
 plan + per-class/per-level reference in `projectnotes/api-e2e-test-plan.md`.
 
-### Quality gates (oby-first; playbook-derived, trimmed for this personal project)
+### Quality gates (bond-gate; playbook-derived, trimmed for this personal project)
 
-This repo has `.oby/`, so the oby completion-loop applies as the code gate:
-- Per change: `oby verify --files "a.ts,b.tsx"` (comma-separated). The signal is
-  **`delta`** — new issues vs. baseline; aim for `delta: 0`. The scaffold ships
-  ~16 baseline anti-patterns + 31 AST violations (jwt-in-localstorage,
-  fetch-no-timeout, async-error-boundary, …); `oby health` grades **D/~66** off
-  those. They're pre-existing, not per-change — don't chase them under "make the
-  gate green," just don't *add* to the delta.
-- **`oby verify`'s build step is a false negative here** — it can't spawn npm
-  (`os error 193`). **`npm run build` + `npm run lint` are the authoritative
-  build/lint gates** (both must be green before "done"). Run them, not oby's.
+The code gate is **bond-gate** (the old oby completion-loop is retired):
+- Per change: `bond-gate run --file a.ts b.tsx`. A step with no applicable
+  surface is not-applicable = PASS, never a dead-end. The old oby scaffold's
+  baseline anti-patterns (health grade D/~66: jwt-in-localstorage,
+  fetch-no-timeout, …) were pre-existing, not per-change — don't chase them,
+  just don't *add* new findings (`bond-scan run --file <files>` shows them).
+- **`npm run build` + `npm run lint` are the authoritative build/lint gates**
+  (both must be green before "done") — bond-gate's build/test steps run the
+  repo's own npm scripts where they exist.
 
 **What does NOT apply** (the global standard/analyze/worktree playbooks are for
 **work** repos): this is a **personal project**. It IS a git repo — GitHub
 `Keisi/DMTools`, `origin/main`, commit directly to `main` — but none of the
 work-repo machinery applies: no worktrees, feature branches, PRs, parent-branch
-selection, JIRA/`tjira`/ticket triage, tenant/BondFrontEnd machinery, or
-session-naming. A CodeBridge PreToolUse hook gates `git push` on a
-critical-review marker for HEAD (`.claude/.critical-review-done-main-<sha7>` —
-untracked/local, never commit them). **Pushing to `main` is a production
+selection, JIRA/`bond-jira`/ticket triage, tenant/BondFrontEnd machinery, or
+session-naming. (The old CodeBridge PreToolUse push-gate on critical-review
+markers is GONE — CB uninstalled 2026-06-25; any stale
+`.claude/.critical-review-done-main-<sha7>` files are dead leftovers, never
+commit them.) **Pushing to `main` is a production
 deploy**: `.github/workflows/deploy.yml` builds (Node 22, `npm ci` + `npm run
 build` with base path `/DMTools/` and `VITE_API_BASE` = `https://dmtoolapi.runasp.net`
 — the MonsterASP API; the old Azure App Service backend was **retired 2026-06-18**) and
@@ -85,33 +85,23 @@ the base to `keisi.github.io/login`.
 The backend must be running for live data: IIS at `http://localhost:3501`, or
 Kestrel via `dotnet run --project DMTool --launch-profile http` (`:5157`).
 
-## Browser verification (spectral) — project-local notes
+## Browser verification (bond-test) — project-local notes
 
 This is a **personal project**. The global `spectral-jira-playbook` skill is for
 **work** tenants (AMS admin login, JIRA comment/attachment posting, BondFrontEnd
-workflows) — **none of that applies here**. Only borrow the spectral *browser
-launch* mechanics from it. What's relevant for this app:
+workflows) — **none of that applies here**. Browser automation is **bond-test**
+(headless Playwright daemon; ships its own browser, persistent between calls —
+the old spectral PATH/one-shot-daemon/`spectral batch` recipe is retired).
+What's relevant for this app:
 
-- **PATH:** spectral finds Chrome by name on `$PATH`; the installer doesn't add it.
-  Export per Bash call (it doesn't persist): `export PATH="/c/Program Files/Google/Chrome/Application:$PATH"`. (Chrome is also on the user PATH now.)
-- **Liveness:** probe with `spectral browser open --headless about:blank` → `status:ok`. Don't trust `spectral browser status` (`daemon_running:false` is normal — it idles out).
-- **Wedged daemon / "Failed to launch Chrome daemon":** `spectral browser close --force` clears orphaned Chrome instances (it has piled up 30+ here), then re-probe.
-- **The per-call daemon does NOT survive between `spectral browser` invocations here**
-  (2026-06): `open` returns `status:ok`, then the Chrome process self-terminates within
-  seconds, so `open` → `eval` → `navigate` → `screenshot` as separate calls always fails
-  on the 2nd call. **Use `spectral batch` instead — it runs every action in ONE process,
-  which holds.** This is the working verification recipe for this app:
   ```bash
-  spectral browser close --force >/dev/null 2>&1   # clear piled-up orphan Chrome first
+  # Auth = inject the JWT into localStorage key dmtool.jwt (see src/api/client.ts) — no login form needed.
   TOKEN=$(curl -s -X POST http://localhost:3501/api/auth/login -H "Content-Type: application/json" -d '{"username":"dungeonmaster","password":"Passw0rd!23"}' | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
-  ACT=/c/Users/keisi/AppData/Local/Temp/act.json
-  # eval action uses "expression" (not "script"); use JS BACKTICK string literals to
-  # dodge JSON quote-escaping. Auth = inject the JWT into localStorage key dmtool.jwt
-  # (see src/api/client.ts) — no login form needed.
-  printf '[{"action":"eval","expression":"localStorage.setItem(`dmtool.jwt`,`%s`)"},{"action":"navigate","url":"http://localhost:5173/character/<ID>"},{"action":"wait","ms":3000}]' "$TOKEN" > "$ACT"
-  spectral batch "http://localhost:5173/" --actions "$ACT" --screenshot --width 1280 --height 2000
-  # screenshot lands at spectral's /tmp == Windows C:\tmp : read C:\tmp\spectral-batch\final.png
-  # (use a tall --height to capture the whole sheet; default 720 cuts off below "Inventory")
+  bond-test open --fresh "http://localhost:5173/"
+  bond-test eval "localStorage.setItem('dmtool.jwt','$TOKEN')"
+  bond-test open "http://localhost:5173/character/<ID>"   # same context keeps localStorage
+  bond-test wait --ms 3000
+  bond-test screenshot   # png; see bond-test --help for path/size flags (use a tall viewport for full sheets)
   ```
 - **`spectral batch` pops a VISIBLE Chrome window every run** — it's headed (no
   `--headless` option, unlike `spectral browser open` which runs hidden; confirmed
