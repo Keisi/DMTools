@@ -1,0 +1,52 @@
+{
+  "name": "DMTools validation banner (subclass error, fighting-style + ASI warnings)",
+  "baseUrl": "https://keisi.github.io/DMTools/",
+  "description": "Browser coverage for ValidationBanner.tsx on the character sheet. Self-cleaning: logs in as the seed DM, creates a ZZ-VALIDATE Fighter (level 4, no subclass/fighting-style/ASI spent) via a direct API call (eval + fetch with the JWT from localStorage — the 10-step CharacterBuilder wizard is brittle to drive and creation is permissive about completeness, so this is equivalent coverage of the banner itself), forces the Vault to refetch by navigating away and back (client-side nav, no deep-link opens), opens the new character's sheet, and asserts the banner's exact headline + one Error line (subclass) + two Warning lines (fighting style, ability score improvement) match the backend CharacterValidator messages verbatim. Deletes the character via the same API-eval approach at the end (so a green run leaves prod with zero ZZ-VALIDATE characters) and asserts it's gone from the Vault. Navigates by clicking in-app nav links (client-side routing) to avoid the GitHub Pages 404.html status. Asserts 0 console errors throughout. The committed copy keeps the <SEED_PASSWORD> placeholder; substitute it into a local copy before running (see README). Race/class/stat ids are hardcoded seeded SRD guids (Human, Fighter, the 6 default stats) fetched once via curl against the seeded reference data — the seed is stable, so hardcoding is acceptable.",
+  "steps": [
+    { "action": "open", "url": "https://keisi.github.io/DMTools/login", "waitUntil": "networkidle" },
+    { "action": "assertUrl", "contains": "/login" },
+    { "action": "assertSelector", "selector": "input[type=password]" },
+    { "action": "assertNoErrors" },
+    { "action": "fill", "selector": "input:nth-of-type(1)", "value": "dungeonmaster" },
+    { "action": "fill", "selector": "input[type=password]", "value": "<SEED_PASSWORD>" },
+    { "action": "assertValue", "selector": "input:nth-of-type(1)", "equals": "dungeonmaster" },
+    { "action": "click", "selector": "button[type=submit]" },
+    { "action": "waitUrl", "contains": "/vault" },
+    { "action": "assertText", "text": "The Vault" },
+    { "action": "assertNoErrors" },
+
+    { "action": "eval", "expression": "(async () => { const token = localStorage.getItem('dmtool.jwt'); if (!token) throw new Error('no dmtool.jwt in localStorage'); const body = { name: 'ZZ-VALIDATE Fighter', raceId: '5ff0c56b-71b1-4b93-b84b-60865b73403c', classes: [{ classId: 'd133ed02-c24f-4a93-ab89-b69af0521d38', level: 4 }], abilityScores: [ { statId: 'd5478255-644b-4199-a5bd-d840019d9b44', value: 15 }, { statId: '8f5e7212-a86e-4b79-8949-f82ae2fbec62', value: 14 }, { statId: '9b3e7701-6e82-41fd-99ca-a18aebd0cee0', value: 13 }, { statId: '93f11dfb-eb85-4dc5-b75c-1a605c05aee2', value: 10 }, { statId: '9fffd8d9-b4f7-4c92-81c7-c8c18d07f556', value: 10 }, { statId: '3ad24113-0432-4397-959a-449c3b920d08', value: 8 } ], alignment: 4, experience: 0, age: 25 }; const res = await fetch('https://dmtoolapi.runasp.net/api/character', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify(body) }); if (!res.ok) { throw new Error('character create failed: ' + res.status + ' ' + (await res.text())); } const data = await res.json(); window.__zzValidateCharId = data.id; return data.id; })()" },
+    { "action": "assertEval", "expression": "typeof window.__zzValidateCharId === 'string' && window.__zzValidateCharId.length > 10" },
+    { "action": "assertNoErrors" },
+
+    { "action": "click", "selector": ".shell__links a[href=\"/DMTools/compendium\"]" },
+    { "action": "waitUrl", "contains": "/compendium" },
+    { "action": "assertNoErrors" },
+    { "action": "click", "selector": ".shell__links a[href=\"/DMTools/vault\"]" },
+    { "action": "waitUrl", "contains": "/vault" },
+    { "action": "assertText", "text": "ZZ-VALIDATE" },
+    { "action": "assertNoErrors" },
+
+    { "action": "click", "selector": "a.vault__card:has-text(\"ZZ-VALIDATE\")" },
+    { "action": "waitUrl", "contains": "/character/" },
+    { "action": "assertNoErrors" },
+
+    { "action": "assertSelector", "selector": ".valbanner", "timeout": 10000 },
+    { "action": "assertSelector", "selector": ".valbanner--error" },
+    { "action": "assertText", "text": "This character is missing perks for its level" },
+    { "action": "assertText", "text": "Fighter reaches its subclass at level 3 but none is chosen." },
+    { "action": "assertText", "text": "0 of 1 fighting styles chosen." },
+    { "action": "assertText", "text": "0 of 1 earned ability score improvements / feats have been taken." },
+    { "action": "assertEval", "expression": "document.querySelectorAll('.valbanner__item--error').length === 1" },
+    { "action": "assertEval", "expression": "document.querySelectorAll('.valbanner__item--warning').length === 2" },
+    { "action": "assertEval", "expression": "document.querySelector('.valbanner__item--error .valbanner__tag').textContent.trim() === 'Missing'" },
+    { "action": "assertNoErrors" },
+    { "action": "screenshot", "path": "dmtools-validation-banner.png" },
+
+    { "action": "eval", "expression": "(async () => { const token = localStorage.getItem('dmtool.jwt'); const id = window.__zzValidateCharId; if (!id) throw new Error('no character id stashed on window'); const res = await fetch('https://dmtoolapi.runasp.net/api/character/' + id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } }); if (!res.ok && res.status !== 204) { throw new Error('character delete failed: ' + res.status); } return id; })()" },
+    { "action": "click", "selector": ".shell__links a[href=\"/DMTools/vault\"]" },
+    { "action": "waitUrl", "contains": "/vault" },
+    { "action": "assertNotText", "text": "ZZ-VALIDATE" },
+    { "action": "assertNoErrors" }
+  ]
+}

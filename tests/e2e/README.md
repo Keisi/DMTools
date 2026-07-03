@@ -17,6 +17,18 @@ Browser smoke test for the **deployed** frontend (`https://keisi.github.io/DMToo
   fixture cleanup). Asserts **0 console errors** throughout. If a run aborts mid-flow it may leave a
   `ZZ-BONDTEST` campaign on prod — delete it via the UI or `DELETE /api/campaigns/{id}` with a
   `dungeonmaster` JWT.
+- `dmtools-validation-banner.bond-test.json` — drives `ValidationBanner.tsx` on the character sheet,
+  **self-cleaning**: login → create a `ZZ-VALIDATE Fighter` (level 4, no subclass/fighting-style/ASI spent)
+  via a direct `POST /api/character` (an `eval` step using `fetch` + the JWT from `localStorage` — the
+  10-step CharacterBuilder wizard is brittle to drive and creation is permissive about completeness, so this
+  exercises the banner itself, not the wizard) → navigate away and back to force the Vault to refetch → open
+  the new character's sheet → assert the banner's exact headline + the Error line (subclass) + the two
+  Warning lines (fighting style, ability score improvement) match the backend `CharacterValidator` messages
+  verbatim → **delete the character via the same API-eval approach** and assert it's gone from the Vault.
+  Navigates by clicking in-app nav (client-side routing) to avoid the GitHub Pages 404.html status. Asserts
+  **0 console errors** throughout. The committed copy keeps the `<SEED_PASSWORD>` placeholder — same
+  substitution rule as the other two suites. Race/class/stat ids are hardcoded seeded SRD guids (Human,
+  Fighter, the 6 default stats) — the seed is stable, so hardcoding is acceptable.
 
 ## Credentials — fill in before running (NOT committed)
 This repo is **public**, so the seed password is **not** stored here. Before running, replace the
@@ -25,13 +37,14 @@ the backend's seed baseline — ask the maintainer / see the private `.env`). bo
 JSON with **no env-var interpolation**, so the placeholder must be substituted locally. Do **not** commit
 the real value back.
 
-Both suites use the same seed `dungeonmaster` account and the same `<SEED_PASSWORD>` substitution rule below.
+All three suites use the same seed `dungeonmaster` account and the same `<SEED_PASSWORD>` substitution rule below.
 
 ## Run
 ```bash
 # from the DMTools-Frontend repo root, after substituting <SEED_PASSWORD> locally:
 bond-test test run tests/e2e/dmtools-smoke.bond-test.json --out report.json
 bond-test test run tests/e2e/dmtools-encounter-widgets.bond-test.json --out report.json
+bond-test test run tests/e2e/dmtools-validation-banner.bond-test.json --out report.json
 # exits 0 if every step passes, 1 if any fails
 ```
 
